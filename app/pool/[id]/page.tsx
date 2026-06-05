@@ -23,8 +23,6 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const [notFound, setNotFound] = useState(false)
   const [inviteUrl, setInviteUrl] = useState('')
   const [copied, setCopied] = useState(false)
-  const [reminderHours, setReminderHours] = useState(2)
-  const [reminderSet, setReminderSet] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -57,7 +55,6 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
       const pointsMap: Record<string, number> = {}
       scores?.forEach(s => { if (s.points_earned) pointsMap[s.user_id] = (pointsMap[s.user_id] || 0) + s.points_earned })
-
       setLeaderboard((members || []).map(m => ({ ...m, points: pointsMap[m.user_id] || 0 })).sort((a, b) => b.points - a.points))
       setLoading(false)
     }
@@ -68,11 +65,6 @@ export default function PoolPage({ params }: { params: { id: string } }) {
     await navigator.clipboard.writeText(inviteUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }
-
-  function handleSetReminder() {
-    setReminderSet(true)
-    setTimeout(() => setReminderSet(false), 3000)
   }
 
   if (loading) return (
@@ -92,6 +84,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
   return (
     <div style={{minHeight: '100vh', background: '#f7f7f5', fontFamily: "'Inter', system-ui, sans-serif", fontSize: '13px'}}>
+
       {/* Nav */}
       <div style={{background: '#111', color: 'white', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 50}}>
         <a href="/dashboard" style={{fontWeight: 700, fontSize: '13px', color: 'white', textDecoration: 'none'}}>pool'em</a>
@@ -105,84 +98,87 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* Two column layout */}
-      <div style={{display: 'grid', gridTemplateColumns: '240px 1fr', minHeight: 'calc(100vh - 41px)'}}>
+      <div style={{display: 'grid', gridTemplateColumns: '45% 55%', minHeight: 'calc(100vh - 41px)'}}>
 
-        {/* LEFT */}
-        <div style={{background: 'white', borderRight: '1px solid #e0e0db', padding: '16px', display: 'flex', flexDirection: 'column', gap: '0'}}>
-          <div style={{fontWeight: 700, fontSize: '15px', marginBottom: '2px'}}>{pool.name}</div>
-          <div style={{fontSize: '11px', color: '#888', marginBottom: '16px'}}>
-            {pool.tournament_scope?.replace('_', ' ')} · {pkg?.name}
-            {isAdmin && <span style={{color: '#C8102E', marginLeft: '6px', fontWeight: 600}}>admin</span>}
-          </div>
+        {/* LEFT — centered content */}
+        <div style={{background: 'white', borderRight: '1px solid #e0e0db', display: 'flex', justifyContent: 'center', padding: '40px 24px'}}>
+          <div style={{width: 280}}>
 
-          {/* Leaderboard */}
-          <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', marginBottom: '8px'}}>leaderboard</div>
-          <div style={{marginBottom: '16px'}}>
-            {leaderboard.map((member, i) => (
-              <div key={member.id} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '5px 8px', marginBottom: '1px',
-                background: member.user_id === user?.id ? '#fff5f5' : 'transparent',
-                borderLeft: `3px solid ${member.user_id === user?.id ? '#C8102E' : 'transparent'}`,
-              }}>
-                <span style={{fontSize: '12px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555'}}>
-                  {i + 1}. {member.display_name}
-                </span>
-                <span style={{fontSize: '12px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888'}}>
-                  {member.points}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* Scoring */}
-          <div style={{borderTop: '1px solid #eee', paddingTop: '12px', marginBottom: '12px'}}>
-            <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', marginBottom: '6px'}}>scoring</div>
-            <div style={{fontSize: '11px', color: '#555', lineHeight: 1.8}}>
-              {pkg?.scoring.correct_result ? `correct result: ${pkg.scoring.correct_result} pt` : ''}
-              {pkg?.scoring.correct_first_scorer ? <><br />first scorer: {pkg.scoring.correct_first_scorer} pts</> : ''}
-              {pkg?.scoring.correct_exact_score ? <><br />exact score: {pkg.scoring.correct_exact_score} pts</> : ''}
-              <br />deadline: {pool.deadline_type === 'before_each_game' ? 'before kickoff' : 'before tournament'}
+            <div style={{fontWeight: 700, fontSize: '15px', marginBottom: '2px'}}>{pool.name}</div>
+            <div style={{fontSize: '11px', color: '#888', marginBottom: '20px'}}>
+              {pool.tournament_scope?.replace('_', ' ')} · {pkg?.name}
+              {isAdmin && <span style={{color: '#C8102E', marginLeft: '6px', fontWeight: 600}}>admin</span>}
             </div>
-          </div>
 
-          {/* Invite */}
-          {isAdmin && (
-            <div style={{borderTop: '1px solid #eee', paddingTop: '12px', marginBottom: '12px'}}>
-              <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', marginBottom: '6px'}}>invite</div>
-              <div style={{display: 'flex', gap: '4px'}}>
-                <input readOnly value={inviteUrl} onClick={e => (e.target as HTMLInputElement).select()}
-                  style={{fontSize: '10px', border: '1px solid #ddd', padding: '3px 6px', flex: 1, minWidth: 0, color: '#888', background: '#fafafa', fontFamily: 'inherit'}} />
-                <button onClick={handleCopy}
-                  style={{fontSize: '10px', padding: '3px 8px', background: '#111', color: 'white', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit'}}>
-                  {copied ? 'copied!' : 'copy'}
-                </button>
+            {/* Leaderboard */}
+            <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '8px'}}>leaderboard</div>
+            <div style={{marginBottom: '20px'}}>
+              {leaderboard.map((member, i) => (
+                <div key={member.id} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '5px 8px', marginBottom: '1px',
+                  background: member.user_id === user?.id ? '#fff5f5' : 'transparent',
+                  borderLeft: `3px solid ${member.user_id === user?.id ? '#C8102E' : 'transparent'}`,
+                }}>
+                  <span style={{fontSize: '12px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555'}}>
+                    {i + 1}. {member.display_name}
+                  </span>
+                  <span style={{fontSize: '12px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888'}}>
+                    {member.points}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* Scoring */}
+            <div style={{borderTop: '1px solid #eee', paddingTop: '14px', marginBottom: '14px'}}>
+              <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '6px'}}>scoring</div>
+              <div style={{fontSize: '11px', color: '#555', lineHeight: 1.8}}>
+                {pkg?.scoring.correct_result ? `correct result: ${pkg.scoring.correct_result} pt` : ''}
+                {pkg?.scoring.correct_first_scorer ? <><br />first scorer: {pkg.scoring.correct_first_scorer} pts</> : ''}
+                {pkg?.scoring.correct_exact_score ? <><br />exact score: {pkg.scoring.correct_exact_score} pts</> : ''}
+                <br />deadline: {pool.deadline_type === 'before_each_game' ? 'before kickoff' : 'before tournament'}
               </div>
             </div>
-          )}
 
-          {/* Reminder */}
-          <div style={{borderTop: '1px solid #eee', paddingTop: '12px'}}>
-            <ReminderButton
-              poolId={pool.id}
-              userId={user.id}
-              userEmail={user.email || ''}
-            />
+            {/* Invite */}
+            {isAdmin && (
+              <div style={{borderTop: '1px solid #eee', paddingTop: '14px', marginBottom: '14px'}}>
+                <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '6px'}}>invite</div>
+                <div style={{display: 'flex', gap: '4px'}}>
+                  <input readOnly value={inviteUrl} onClick={e => (e.target as HTMLInputElement).select()}
+                    style={{fontSize: '10px', border: '1px solid #ddd', padding: '3px 6px', flex: 1, minWidth: 0, color: '#888', background: '#fafafa', fontFamily: 'inherit'}} />
+                  <button onClick={handleCopy}
+                    style={{fontSize: '10px', padding: '3px 8px', background: '#111', color: 'white', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit'}}>
+                    {copied ? 'copied!' : 'copy'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Reminder */}
+            <div style={{borderTop: '1px solid #eee', paddingTop: '14px'}}>
+              <ReminderButton poolId={pool.id} userId={user.id} userEmail={user.email || ''} />
+            </div>
+
           </div>
         </div>
 
-        {/* RIGHT */}
-        <div style={{padding: '16px'}}>
-          {user && (
-            <FixturesList
-              poolId={pool.id}
-              userId={user.id}
-              packageId={pool.package_id}
-              deadlineType={pool.deadline_type}
-              scope={pool.tournament_scope}
-            />
-          )}
+        {/* RIGHT — centered content */}
+        <div style={{display: 'flex', justifyContent: 'center', padding: '40px 24px'}}>
+          <div>
+            {user && (
+              <FixturesList
+                poolId={pool.id}
+                userId={user.id}
+                packageId={pool.package_id}
+                deadlineType={pool.deadline_type}
+                scope={pool.tournament_scope}
+              />
+            )}
+          </div>
         </div>
+
       </div>
     </div>
   )

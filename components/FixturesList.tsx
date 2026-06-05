@@ -30,6 +30,21 @@ interface Prediction {
   points_earned: number | null
 }
 
+const FLAGS: Record<string, string> = {
+  'Mexico': '🇲🇽', 'South Africa': '🇿🇦', 'South Korea': '🇰🇷', 'Czechia': '🇨🇿',
+  'Canada': '🇨🇦', 'Bosnia and Herzegovina': '🇧🇦', 'Qatar': '🇶🇦', 'Switzerland': '🇨🇭',
+  'USA': '🇺🇸', 'Paraguay': '🇵🇾', 'Haiti': '🇭🇹', 'Scotland': '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
+  'Australia': '🇦🇺', 'Türkiye': '🇹🇷', 'Brazil': '🇧🇷', 'Morocco': '🇲🇦',
+  'Germany': '🇩🇪', 'Curaçao': '🇨🇼', 'Netherlands': '🇳🇱', 'Japan': '🇯🇵',
+  'Sweden': '🇸🇪', 'Tunisia': '🇹🇳', 'Saudi Arabia': '🇸🇦', 'Uruguay': '🇺🇾',
+  'Spain': '🇪🇸', 'Cabo Verde': '🇨🇻', 'Iran': '🇮🇷', 'New Zealand': '🇳🇿',
+  'Belgium': '🇧🇪', 'Egypt': '🇪🇬', 'France': '🇫🇷', 'Senegal': '🇸🇳',
+  'Iraq': '🇮🇶', 'Norway': '🇳🇴', 'Argentina': '🇦🇷', 'Algeria': '🇩🇿',
+  'Austria': '🇦🇹', 'Jordan': '🇯🇴', 'Ghana': '🇬🇭', 'Panama': '🇵🇦',
+  'England': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'Croatia': '🇭🇷', 'Portugal': '🇵🇹', 'Congo DR': '🇨🇩',
+  'Uzbekistan': '🇺🇿', 'Colombia': '🇨🇴', 'Denmark': '🇩🇰', 'Serbia': '🇷🇸',
+}
+
 function formatPT(dateStr: string) {
   return new Date(dateStr).toLocaleString('en-US', {
     timeZone: 'America/Los_Angeles',
@@ -63,11 +78,7 @@ export default function FixturesList({ poolId, userId, packageId, deadlineType }
       const res = await fetch('/api/fixtures')
       const data = await res.json()
       setFixtures(data.fixtures || [])
-
-      const { data: preds } = await supabase
-        .from('predictions').select('*')
-        .eq('pool_id', poolId).eq('user_id', userId)
-
+      const { data: preds } = await supabase.from('predictions').select('*').eq('pool_id', poolId).eq('user_id', userId)
       const map: Record<number, Prediction> = {}
       preds?.forEach((p: Prediction) => { map[p.fixture_id] = p })
       setPredictions(map)
@@ -80,14 +91,12 @@ export default function FixturesList({ poolId, userId, packageId, deadlineType }
     setSaving(fixtureId)
     const supabase = createClient()
     const merged: any = { ...(predictions[fixtureId] || {}), ...update, fixture_id: fixtureId }
-
     const pkg2 = RULE_PACKAGES[packageId as PackageId]
     if (pkg2?.requires.exact_score && merged.predicted_home_score != null && merged.predicted_away_score != null) {
       if (merged.predicted_home_score > merged.predicted_away_score) merged.predicted_result = 'home'
       else if (merged.predicted_home_score < merged.predicted_away_score) merged.predicted_result = 'away'
       else merged.predicted_result = 'draw'
     }
-
     setPredictions(prev => ({ ...prev, [fixtureId]: merged }))
     await supabase.from('predictions').upsert({
       pool_id: poolId, user_id: userId, fixture_id: fixtureId,
@@ -100,14 +109,13 @@ export default function FixturesList({ poolId, userId, packageId, deadlineType }
     setSaving(null)
   }
 
-  function isLocked(fixture: Fixture) {
+  function isLocked(f: Fixture) {
     if (deadlineType === 'before_tournament') return false
-    return new Date(fixture.date) <= new Date()
+    return new Date(f.date) <= new Date()
   }
 
   const sorted = [...fixtures].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
-  // Build pages
   const dateMap: Record<string, Fixture[]> = {}
   const groupMap: Record<string, Fixture[]> = {}
   sorted.forEach(f => {
@@ -119,110 +127,110 @@ export default function FixturesList({ poolId, userId, packageId, deadlineType }
   })
 
   const pages = sortMode === 'date'
-    ? Object.entries(dateMap).map(([label, fixtures]) => ({ label, sub: `${fixtures.length} game${fixtures.length > 1 ? 's' : ''}`, fixtures }))
-    : Object.entries(groupMap).map(([label, fixtures]) => ({
-        label,
-        sub: [...new Set(fixtures.flatMap(f => [f.home_team, f.away_team]))].slice(0, 4).join(' · '),
-        fixtures
-      }))
+    ? Object.entries(dateMap).map(([label, fx]) => ({ label, sub: `${fx.length} game${fx.length > 1 ? 's' : ''}`, fixtures: fx }))
+    : Object.entries(groupMap).map(([label, fx]) => ({ label, sub: [...new Set(fx.flatMap(f => [f.home_team, f.away_team]))].slice(0, 4).join(' · '), fixtures: fx }))
 
   const totalPages = pages.length
-  const safePage = Math.min(currentPage, totalPages - 1)
+  const safePage = Math.min(currentPage, Math.max(0, totalPages - 1))
 
-  function handleSortChange(mode: 'date' | 'group') {
-    setSortMode(mode)
-    setCurrentPage(0)
-  }
-
-  if (loading) return <div style={{color: 'var(--text-dim)', fontSize: '0.875rem'}}>loading fixtures...</div>
-
-  const renderFixture = (fixture: Fixture) => {
+  function FixtureRow({ fixture }: { fixture: Fixture }) {
     const pred = predictions[fixture.id]
     const locked = isLocked(fixture)
     const finished = fixture.status === 'FT'
-    const hasPick = pred?.predicted_result || pred?.predicted_home_score != null
+    const hasPick = !!pred?.predicted_result || pred?.predicted_home_score != null
+
+    const btnStyle = (result: string) => ({
+      flex: 1,
+      padding: '7px 8px',
+      fontSize: '12px',
+      fontWeight: pred?.predicted_result === result ? 700 : 400,
+      cursor: 'pointer',
+      border: 'none',
+      borderRight: result !== 'away' ? '1px solid #e0e0db' : 'none',
+      background: pred?.predicted_result === result ? '#C8102E' : 'white',
+      color: pred?.predicted_result === result ? 'white' : '#333',
+      fontFamily: 'inherit',
+    } as React.CSSProperties)
 
     return (
-      <div key={fixture.id} style={{
-        background: 'white', border: '1px solid #e0e0db',
+      <div style={{
+        background: 'white',
+        border: '1px solid #e0e0db',
         borderLeft: hasPick ? '3px solid #C8102E' : '1px solid #e0e0db',
-        padding: '7px 10px', display: 'flex', alignItems: 'center', gap: '6px',
+        marginBottom: 4,
+        width: 480,
       }}>
-        <div style={{fontSize: '10px', color: '#aaa', minWidth: 85, lineHeight: 1.4}}>
-          {formatPT(fixture.date)}<br />
-          <span style={{color: '#ccc'}}>{fixture.city}</span>
+        {/* Meta row */}
+        <div style={{
+          display: 'flex', justifyContent: 'space-between',
+          padding: '4px 10px',
+          borderBottom: '1px solid #f0f0f0',
+          fontSize: '10px', color: '#aaa',
+        }}>
+          <span>{formatPT(fixture.date)}</span>
+          <span>{fixture.city}</span>
+          {saving === fixture.id && <span>saving...</span>}
+          {pred?.points_earned != null && <span style={{color: '#C8102E', fontWeight: 600}}>+{pred.points_earned} pts</span>}
         </div>
-        <span style={{fontWeight: 600, fontSize: '12px', flex: 1}}>{fixture.home_team}</span>
 
+        {/* Pick row */}
         {finished ? (
-          <span style={{fontWeight: 700, fontSize: '13px', padding: '0 6px'}}>{fixture.home_score}–{fixture.away_score}</span>
+          <div style={{display: 'flex', alignItems: 'center', padding: '7px 10px', gap: 8}}>
+            <span style={{flex: 1, fontWeight: 600, fontSize: '12px'}}>{FLAGS[fixture.home_team]} {fixture.home_team}</span>
+            <span style={{fontWeight: 700, fontSize: '13px', padding: '0 12px'}}>{fixture.home_score}–{fixture.away_score}</span>
+            <span style={{flex: 1, fontWeight: 600, fontSize: '12px', textAlign: 'right'}}>{fixture.away_team} {FLAGS[fixture.away_team]}</span>
+          </div>
         ) : locked ? (
-          <span style={{fontSize: '11px', color: '#aaa', padding: '0 6px'}}>locked</span>
+          <div style={{display: 'flex', alignItems: 'center', padding: '7px 10px', gap: 8}}>
+            <span style={{flex: 1, fontWeight: 600, fontSize: '12px'}}>{FLAGS[fixture.home_team]} {fixture.home_team}</span>
+            <span style={{fontSize: '11px', color: '#aaa', padding: '0 12px'}}>
+              {pred?.predicted_result === 'home' ? fixture.home_team : pred?.predicted_result === 'away' ? fixture.away_team : pred?.predicted_result === 'draw' ? 'draw' : 'no pick'}
+            </span>
+            <span style={{flex: 1, fontWeight: 600, fontSize: '12px', textAlign: 'right'}}>{fixture.away_team} {FLAGS[fixture.away_team]}</span>
+          </div>
+        ) : (pkg?.requires.result || !pkg?.requires.exact_score) ? (
+          <div style={{display: 'flex'}}>
+            <button style={btnStyle('home')} onClick={() => savePrediction(fixture.id, { predicted_result: 'home' })}>
+              {FLAGS[fixture.home_team]} {fixture.home_team}
+            </button>
+            <button style={btnStyle('draw')} onClick={() => savePrediction(fixture.id, { predicted_result: 'draw' })}>
+              draw
+            </button>
+            <button style={btnStyle('away')} onClick={() => savePrediction(fixture.id, { predicted_result: 'away' })}>
+              {fixture.away_team} {FLAGS[fixture.away_team]}
+            </button>
+          </div>
         ) : (
-          <div style={{display: 'flex', gap: 3}}>
-            {(pkg?.requires.result || !pkg?.requires.exact_score) && (['home', 'draw', 'away'] as const).map(result => {
-              const active = pred?.predicted_result === result
-              const label = result === 'home'
-                ? fixture.home_team.split(' ')[0].substring(0, 3).toUpperCase()
-                : result === 'away'
-                ? fixture.away_team.split(' ')[0].substring(0, 3).toUpperCase()
-                : 'D'
-              return (
-                <button key={result} onClick={() => savePrediction(fixture.id, { predicted_result: result })}
-                  style={{
-                    padding: '2px 6px', fontSize: '10px', cursor: 'pointer',
-                    border: `1px solid ${active ? '#C8102E' : '#ddd'}`,
-                    background: active ? '#C8102E' : 'white',
-                    color: active ? 'white' : '#888',
-                    fontWeight: active ? 600 : 400,
-                  }}>
-                  {label}{active ? ' ✓' : ''}
-                </button>
-              )
-            })}
-            {pkg?.requires.exact_score && (
-              <>
-                <input type="number" min="0" max="20" style={{width: 36, textAlign: 'center', border: '1px solid #ddd', padding: '2px 4px', fontSize: '11px'}}
-                  placeholder="0" value={pred?.predicted_home_score ?? ''}
-                  onChange={e => savePrediction(fixture.id, { predicted_home_score: parseInt(e.target.value) || 0 })} />
-                <span style={{color: '#aaa', fontSize: '11px'}}>–</span>
-                <input type="number" min="0" max="20" style={{width: 36, textAlign: 'center', border: '1px solid #ddd', padding: '2px 4px', fontSize: '11px'}}
-                  placeholder="0" value={pred?.predicted_away_score ?? ''}
-                  onChange={e => savePrediction(fixture.id, { predicted_away_score: parseInt(e.target.value) || 0 })} />
-              </>
-            )}
+          <div style={{padding: '7px 10px', display: 'flex', gap: 8, alignItems: 'center'}}>
+            <input type="number" min="0" max="20" style={{width: 40, textAlign: 'center', border: '1px solid #ddd', padding: '4px', fontSize: '12px'}}
+              placeholder="0" value={pred?.predicted_home_score ?? ''}
+              onChange={e => savePrediction(fixture.id, { predicted_home_score: parseInt(e.target.value) || 0 })} />
+            <span style={{color: '#aaa'}}>–</span>
+            <input type="number" min="0" max="20" style={{width: 40, textAlign: 'center', border: '1px solid #ddd', padding: '4px', fontSize: '12px'}}
+              placeholder="0" value={pred?.predicted_away_score ?? ''}
+              onChange={e => savePrediction(fixture.id, { predicted_away_score: parseInt(e.target.value) || 0 })} />
             {pkg?.requires.first_scorer && (
-              <input style={{border: '1px solid #ddd', padding: '2px 6px', fontSize: '10px', width: 120}}
+              <input style={{border: '1px solid #ddd', padding: '4px 8px', fontSize: '11px', flex: 1}}
                 placeholder="first scorer..."
                 value={pred?.predicted_first_scorer_name || ''}
                 onChange={e => savePrediction(fixture.id, { predicted_first_scorer_name: e.target.value })} />
             )}
           </div>
         )}
-
-        <span style={{fontWeight: 600, fontSize: '12px', flex: 1, textAlign: 'right'}}>{fixture.away_team}</span>
-
-        <div style={{minWidth: 30, textAlign: 'right'}}>
-          {saving === fixture.id && <span style={{fontSize: '10px', color: '#aaa'}}>...</span>}
-          {pred?.points_earned != null && <span style={{fontSize: '11px', fontWeight: 600, color: '#C8102E'}}>+{pred.points_earned}</span>}
-        </div>
       </div>
     )
   }
 
+  if (loading) return <div style={{color: '#aaa', fontSize: '13px'}}>loading fixtures...</div>
+
   return (
     <div style={{display: 'flex', flexDirection: 'column', gap: 10}}>
       {/* Controls */}
-      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: 480}}>
         <div style={{display: 'flex', border: '1px solid #ddd', overflow: 'hidden', borderRadius: 3}}>
           {(['date', 'group'] as const).map((mode, i) => (
-            <button key={mode} onClick={() => handleSortChange(mode)}
-              style={{
-                padding: '4px 10px', fontSize: '11px', cursor: 'pointer', border: 'none',
-                borderLeft: i > 0 ? '1px solid #ddd' : 'none', fontFamily: 'inherit',
-                background: sortMode === mode ? '#111' : 'white',
-                color: sortMode === mode ? 'white' : '#888',
-              }}>
+            <button key={mode} onClick={() => { setSortMode(mode); setCurrentPage(0) }}
+              style={{padding: '4px 12px', fontSize: '11px', cursor: 'pointer', border: 'none', borderLeft: i > 0 ? '1px solid #ddd' : 'none', fontFamily: 'inherit', background: sortMode === mode ? '#111' : 'white', color: sortMode === mode ? 'white' : '#888'}}>
               by {mode}
             </button>
           ))}
@@ -230,12 +238,7 @@ export default function FixturesList({ poolId, userId, packageId, deadlineType }
         <div style={{display: 'flex', border: '1px solid #ddd', overflow: 'hidden', borderRadius: 3}}>
           {(['pages', 'list'] as const).map((mode, i) => (
             <button key={mode} onClick={() => setViewMode(mode)}
-              style={{
-                padding: '4px 10px', fontSize: '11px', cursor: 'pointer', border: 'none',
-                borderLeft: i > 0 ? '1px solid #ddd' : 'none', fontFamily: 'inherit',
-                background: viewMode === mode ? '#111' : 'white',
-                color: viewMode === mode ? 'white' : '#888',
-              }}>
+              style={{padding: '4px 12px', fontSize: '11px', cursor: 'pointer', border: 'none', borderLeft: i > 0 ? '1px solid #ddd' : 'none', fontFamily: 'inherit', background: viewMode === mode ? '#111' : 'white', color: viewMode === mode ? 'white' : '#888'}}>
               {mode}
             </button>
           ))}
@@ -244,34 +247,28 @@ export default function FixturesList({ poolId, userId, packageId, deadlineType }
 
       {/* Pager */}
       {viewMode === 'pages' && pages.length > 0 && (
-        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', border: '1px solid #e0e0db', padding: '8px 14px', borderRadius: 3}}>
-          <button onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
-            disabled={safePage === 0}
-            style={{background: 'none', border: '1px solid #ddd', padding: '2px 10px', cursor: safePage === 0 ? 'default' : 'pointer', fontSize: '14px', color: safePage === 0 ? '#ddd' : '#555', borderRadius: 2}}>
-            ‹
-          </button>
+        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', border: '1px solid #e0e0db', padding: '8px 14px', width: 480}}>
+          <button onClick={() => setCurrentPage(p => Math.max(0, p - 1))} disabled={safePage === 0}
+            style={{background: 'none', border: '1px solid #ddd', padding: '2px 10px', cursor: safePage === 0 ? 'default' : 'pointer', fontSize: '14px', color: safePage === 0 ? '#ddd' : '#555'}}>‹</button>
           <div style={{textAlign: 'center'}}>
             <div style={{fontWeight: 600, fontSize: '13px'}}>{pages[safePage]?.label}</div>
             <div style={{fontSize: '10px', color: '#aaa', marginTop: 2}}>{safePage + 1} of {totalPages} · {pages[safePage]?.sub}</div>
           </div>
-          <button onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
-            disabled={safePage === totalPages - 1}
-            style={{background: 'none', border: '1px solid #ddd', padding: '2px 10px', cursor: safePage === totalPages - 1 ? 'default' : 'pointer', fontSize: '14px', color: safePage === totalPages - 1 ? '#ddd' : '#555', borderRadius: 2}}>
-            ›
-          </button>
+          <button onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))} disabled={safePage === totalPages - 1}
+            style={{background: 'none', border: '1px solid #ddd', padding: '2px 10px', cursor: safePage === totalPages - 1 ? 'default' : 'pointer', fontSize: '14px', color: safePage === totalPages - 1 ? '#ddd' : '#555'}}>›</button>
         </div>
       )}
 
       {/* Fixtures */}
-      <div style={{display: 'flex', flexDirection: 'column', gap: 4}}>
+      <div>
         {viewMode === 'pages'
-          ? pages[safePage]?.fixtures.map(renderFixture)
+          ? pages[safePage]?.fixtures.map(f => <FixtureRow key={f.id} fixture={f} />)
           : pages.map(page => (
               <div key={page.label}>
-                <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', padding: '8px 0 4px', borderBottom: '1px solid #e8e8e4', marginBottom: 4}}>
+                <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', padding: '8px 0 4px', borderBottom: '1px solid #e8e8e4', marginBottom: 4, width: 480}}>
                   {page.label} <span style={{fontWeight: 400, textTransform: 'none', color: '#ccc'}}>{page.sub}</span>
                 </div>
-                {page.fixtures.map(renderFixture)}
+                {page.fixtures.map(f => <FixtureRow key={f.id} fixture={f} />)}
                 <div style={{marginBottom: 10}} />
               </div>
             ))
