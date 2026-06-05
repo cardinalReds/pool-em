@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 
@@ -9,6 +9,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [inviteCode, setInviteCode] = useState<string | null>(null)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const invite = params.get('invite') || localStorage.getItem('pending_invite')
+    if (invite) setInviteCode(invite)
+  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -22,19 +29,24 @@ export default function LoginPage() {
       setError(error.message)
       setLoading(false)
     } else if (data.session) {
-      // Explicitly persist the session
       await supabase.auth.setSession({
         access_token: data.session.access_token,
         refresh_token: data.session.refresh_token,
       })
-      window.location.href = '/dashboard'
+      if (inviteCode) {
+        window.location.href = `/pool/join/${inviteCode}`
+      } else {
+        window.location.href = '/dashboard'
+      }
     }
   }
 
   return (
     <div className="card">
       <h2 className="font-display text-3xl text-chalk mb-1 tracking-wider">WELCOME BACK</h2>
-      <p className="text-sm mb-8" style={{color: 'var(--chalk-dim)'}}>Log in to your Pool'em account</p>
+      <p className="text-sm mb-8" style={{color: 'var(--chalk-dim)'}}>
+        {inviteCode ? "Log in to join the pool" : "Log in to your Pool'em account"}
+      </p>
       <form onSubmit={handleLogin} className="flex flex-col gap-4">
         <div>
           <label className="block text-xs font-display tracking-widest mb-2" style={{color: 'var(--chalk-dim)'}}>EMAIL</label>
@@ -51,7 +63,9 @@ export default function LoginPage() {
       </form>
       <p className="text-center text-sm mt-6" style={{color: 'var(--chalk-dim)'}}>
         No account?{' '}
-        <Link href="/auth/signup" className="text-turf-400 hover:text-turf-500">Sign up free</Link>
+        <Link href={inviteCode ? `/auth/signup?invite=${inviteCode}` : '/auth/signup'} className="text-turf-400 hover:text-turf-500">
+          Sign up free
+        </Link>
       </p>
     </div>
   )
