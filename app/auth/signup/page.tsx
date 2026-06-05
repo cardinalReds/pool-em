@@ -22,63 +22,52 @@ export default function SignupPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-
     const supabase = createClient()
     const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
+      email, password,
       options: { data: { display_name: displayName } },
     })
-
     if (error) {
       setError(error.message)
       setLoading(false)
     } else if (data.session) {
-      await supabase.auth.setSession({
-        access_token: data.session.access_token,
-        refresh_token: data.session.refresh_token,
-      })
-      if (inviteCode) {
-        window.location.href = `/pool/join/${inviteCode}`
-      } else {
-        window.location.href = '/dashboard'
-      }
+      await supabase.auth.setSession({ access_token: data.session.access_token, refresh_token: data.session.refresh_token })
+      window.location.href = inviteCode ? `/pool/join/${inviteCode}` : '/dashboard'
     } else {
-      // Email confirmation required
-      setError('Please check your email to confirm your account, then log in.')
+      setError('check your email to confirm your account, then log in.')
       setLoading(false)
     }
   }
 
   return (
     <div className="card">
-      <h2 className="font-display text-3xl text-chalk mb-1 tracking-wider">CREATE ACCOUNT</h2>
-      <p className="text-sm mb-8" style={{color: 'var(--chalk-dim)'}}>
-        {inviteCode ? "Sign up to join the pool" : "Join Pool'em — it's free"}
-      </p>
-      <form onSubmit={handleSignup} className="flex flex-col gap-4">
+      <h2 style={{fontWeight: 700, fontSize: '1.1rem', marginBottom: '0.25rem'}}>
+        {inviteCode ? 'create account to join' : 'create account'}
+      </h2>
+      <p style={{color: 'var(--text-dim)', fontSize: '0.85rem', marginBottom: '1.5rem'}}>free, no credit card</p>
+
+      <form onSubmit={handleSignup} style={{display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
         <div>
-          <label className="block text-xs font-display tracking-widest mb-2" style={{color: 'var(--chalk-dim)'}}>YOUR NAME</label>
-          <input className="input-chalk" type="text" placeholder="What your friends call you" value={displayName} onChange={e => setDisplayName(e.target.value)} required />
+          <label style={{display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.3rem', color: 'var(--text-dim)'}}>your name</label>
+          <input className="input" type="text" placeholder="what your friends call you" value={displayName} onChange={e => setDisplayName(e.target.value)} required />
         </div>
         <div>
-          <label className="block text-xs font-display tracking-widest mb-2" style={{color: 'var(--chalk-dim)'}}>EMAIL</label>
-          <input className="input-chalk" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
+          <label style={{display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.3rem', color: 'var(--text-dim)'}}>email</label>
+          <input className="input" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
         </div>
         <div>
-          <label className="block text-xs font-display tracking-widest mb-2" style={{color: 'var(--chalk-dim)'}}>PASSWORD</label>
-          <input className="input-chalk" type="password" placeholder="Min 6 characters" value={password} onChange={e => setPassword(e.target.value)} minLength={6} required />
+          <label style={{display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.3rem', color: 'var(--text-dim)'}}>password</label>
+          <input className="input" type="password" placeholder="min 6 characters" value={password} onChange={e => setPassword(e.target.value)} minLength={6} required />
         </div>
-        {error && <p className="text-sm text-red-400 bg-red-400/10 px-3 py-2">{error}</p>}
-        <button className="btn-turf w-full mt-2" type="submit" disabled={loading}>
-          {loading ? 'CREATING...' : 'CREATE ACCOUNT'}
+        {error && <p style={{fontSize: '0.8rem', color: 'var(--red)', background: 'var(--red-light)', padding: '0.5rem 0.75rem'}}>{error}</p>}
+        <button className="btn-primary" type="submit" disabled={loading} style={{width: '100%', marginTop: '0.25rem', padding: '0.6rem'}}>
+          {loading ? 'creating...' : 'create account'}
         </button>
       </form>
-      <p className="text-center text-sm mt-6" style={{color: 'var(--chalk-dim)'}}>
-        Already have an account?{' '}
-        <Link href={inviteCode ? `/auth/login?invite=${inviteCode}` : '/auth/login'} className="text-turf-400 hover:text-turf-500">
-          Log in
-        </Link>
+
+      <p style={{textAlign: 'center', fontSize: '0.8rem', marginTop: '1.25rem', color: 'var(--text-dim)'}}>
+        already have an account?{' '}
+        <Link href={inviteCode ? `/auth/login?invite=${inviteCode}` : '/auth/login'} style={{color: 'var(--red)'}}>log in</Link>
       </p>
     </div>
   )

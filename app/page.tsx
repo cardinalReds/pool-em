@@ -5,76 +5,49 @@ import { redirect } from 'next/navigation'
 export default async function Home() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-
   if (user) redirect('/dashboard')
 
   return (
-    <main className="min-h-screen flex flex-col relative overflow-hidden">
-      {/* Background pitch lines */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full border border-white/5" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full border border-white/5" />
-        <div className="absolute top-1/2 left-0 right-0 h-px bg-white/5" />
-        <div className="absolute top-0 bottom-0 left-1/2 w-px bg-white/5" />
+    <div style={{minHeight: '100vh', background: 'var(--bg)'}}>
+      <div style={{borderBottom: '1px solid var(--border)', background: 'white', padding: '0.75rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+        <span style={{fontWeight: 700, fontSize: '1.1rem', color: 'var(--red)'}}>pool'em</span>
+        <div style={{display: 'flex', gap: '0.5rem'}}>
+          <Link href="/auth/login"><button className="btn-ghost">log in</button></Link>
+          <Link href="/auth/signup"><button className="btn-primary">sign up</button></Link>
+        </div>
       </div>
 
-      {/* Nav */}
-      <nav className="relative z-10 flex items-center justify-between px-8 py-6">
-        <span className="font-display text-3xl text-turf-400 tracking-widest">POOL'EM</span>
-        <div className="flex gap-3">
-          <Link href="/auth/login">
-            <button className="btn-ghost text-sm py-2 px-5">LOG IN</button>
-          </Link>
-          <Link href="/auth/signup">
-            <button className="btn-turf text-sm py-2 px-5">SIGN UP</button>
-          </Link>
-        </div>
-      </nav>
-
-      {/* Hero */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center px-6 py-20">
-        <div className="inline-block badge text-turf-400 mb-6">
-          FIFA WORLD CUP 2026
-        </div>
-
-        <h1 className="font-display text-7xl md:text-9xl text-chalk mb-4 leading-none tracking-wide">
-          YOUR POOL.<br />
-          <span className="text-turf-400">YOUR RULES.</span>
+      <div style={{maxWidth: 600, margin: '80px auto', padding: '0 1.5rem'}}>
+        <h1 style={{fontSize: '2rem', fontWeight: 700, marginBottom: '0.5rem'}}>
+          Private prediction pools for the World Cup.
         </h1>
-
-        <p className="text-chalk-dim text-lg md:text-xl max-w-xl mb-12 leading-relaxed" style={{color: 'var(--chalk-dim)'}}>
-          Private prediction pools for you and your crew. Pick winners, call scorers, 
-          settle debates. No house. No rake. Just bragging rights.
+        <p style={{color: 'var(--text-dim)', marginBottom: '2rem', fontSize: '1rem', lineHeight: 1.6}}>
+          Create a pool, set your rules, invite your friends. Picks lock at kickoff. 
+          Leaderboard updates as goals go in. Free, no ads, no nonsense.
         </p>
 
-        <div className="flex flex-col sm:flex-row gap-4">
-          <Link href="/auth/signup">
-            <button className="btn-turf text-lg px-10 py-4">CREATE A POOL</button>
-          </Link>
-          <Link href="/auth/login">
-            <button className="btn-ghost text-lg px-10 py-4">JOIN A POOL</button>
-          </Link>
+        <div style={{display: 'flex', gap: '0.75rem', marginBottom: '3rem'}}>
+          <Link href="/auth/signup"><button className="btn-primary" style={{padding: '0.6rem 1.5rem', fontSize: '0.95rem'}}>create a pool</button></Link>
+          <Link href="/auth/login"><button className="btn-secondary" style={{padding: '0.6rem 1.5rem', fontSize: '0.95rem'}}>join a pool</button></Link>
         </div>
 
-        {/* Feature strip */}
-        <div className="mt-24 grid grid-cols-1 sm:grid-cols-3 gap-px w-full max-w-3xl chalk-line">
+        <div style={{borderTop: '1px solid var(--border)', paddingTop: '2rem', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem'}}>
           {[
-            { label: 'Pick Your Package', desc: 'WLD, exact scores, first scorers — choose your flavor' },
-            { label: 'Invite Your Crew', desc: 'Private pools, shareable link, no account spam' },
-            { label: 'Live Leaderboard', desc: 'Points update as goals go in. No manual work.' },
-          ].map((f) => (
-            <div key={f.label} className="card-dark p-8 text-left">
-              <div className="font-display text-xl text-turf-400 mb-2 tracking-wider">{f.label}</div>
-              <p className="text-sm leading-relaxed" style={{color: 'var(--chalk-dim)'}}>{f.desc}</p>
+            { title: 'pick your rules', desc: 'Win/loss/draw, exact scores, first scorer — or build your own.' },
+            { title: 'invite only', desc: 'Share a link. No spam, no public pools.' },
+            { title: 'auto-scoring', desc: 'Results pulled from API. Points update live.' },
+          ].map(f => (
+            <div key={f.title}>
+              <div style={{fontWeight: 600, marginBottom: '0.3rem', color: 'var(--red)'}}>{f.title}</div>
+              <div style={{color: 'var(--text-dim)', fontSize: '0.85rem', lineHeight: 1.5}}>{f.desc}</div>
             </div>
           ))}
         </div>
-      </div>
 
-      {/* Footer */}
-      <footer className="relative z-10 text-center py-6 text-xs" style={{color: 'var(--chalk-dim)', opacity: 0.4}}>
-        POOL'EM · FOR THE BEAUTIFUL GAME
-      </footer>
-    </main>
+        <div style={{borderTop: '1px solid var(--border)', marginTop: '2rem', paddingTop: '1rem'}}>
+          <span style={{fontSize: '0.75rem', color: 'var(--text-faint)'}}>FIFA World Cup 2026 · June 11 – July 19</span>
+        </div>
+      </div>
+    </div>
   )
 }

@@ -11,9 +11,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     async function load() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        setDisplayName(user.user_metadata?.display_name || user.email?.split('@')[0] || 'Player')
-      }
+      if (user) setDisplayName(user.user_metadata?.display_name || user.email?.split('@')[0] || '')
     }
     load()
   }, [])
@@ -25,25 +23,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <nav className="sticky top-0 z-50 border-b" style={{background: 'var(--pitch)', borderBottomColor: 'rgba(245,240,232,0.1)'}}>
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/dashboard" className="font-display text-2xl text-turf-400 tracking-widest">
-            POOL'EM
-          </Link>
-          <div className="flex items-center gap-6">
-            <span className="text-sm" style={{color: 'var(--chalk-dim)'}}>{displayName}</span>
-            <button
-              onClick={handleLogout}
-              className="text-xs font-display tracking-widest"
-              style={{color: 'var(--chalk-dim)'}}
-            >
-              LOG OUT
-            </button>
-          </div>
+    <div style={{minHeight: '100vh', background: 'var(--bg)'}}>
+      <div style={{borderBottom: '1px solid var(--border)', background: 'white', padding: '0.75rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 50}}>
+        <Link href="/dashboard" style={{fontWeight: 700, fontSize: '1.1rem', color: 'var(--red)'}}>pool'em</Link>
+        <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
+          <span style={{fontSize: '0.8rem', color: 'var(--text-dim)'}}>{displayName}</span>
+          <button onClick={handleLogout} style={{fontSize: '0.8rem', color: 'var(--text-dim)', background: 'none', border: 'none', cursor: 'pointer'}}>log out</button>
         </div>
-      </nav>
-      <main className="flex-1 max-w-6xl mx-auto w-full px-6 py-8">
+      </div>
+      <main style={{maxWidth: 900, margin: '0 auto', padding: '2rem 1.5rem'}}>
         {children}
       </main>
     </div>

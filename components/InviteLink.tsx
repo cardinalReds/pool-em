@@ -12,19 +12,11 @@ export default function InviteLink({ url }: { url: string }) {
   }
 
   return (
-    <div className="flex gap-2">
-      <input
-        className="input-chalk text-xs flex-1"
-        value={url}
-        readOnly
-        onClick={e => (e.target as HTMLInputElement).select()}
-      />
-      <button
-        onClick={handleCopy}
-        className="btn-turf text-xs py-2 px-3 whitespace-nowrap"
-        style={{fontSize: '0.75rem'}}
-      >
-        {copied ? 'COPIED!' : 'COPY'}
+    <div style={{display: 'flex', gap: '0.4rem'}}>
+      <input className="input" value={url} readOnly onClick={e => (e.target as HTMLInputElement).select()}
+        style={{fontSize: '0.7rem', flex: 1}} />
+      <button className="btn-primary" onClick={handleCopy} style={{whiteSpace: 'nowrap', padding: '0.4rem 0.75rem', fontSize: '0.75rem'}}>
+        {copied ? 'copied!' : 'copy'}
       </button>
     </div>
   )

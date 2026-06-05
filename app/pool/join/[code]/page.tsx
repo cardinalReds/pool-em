@@ -14,73 +14,41 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
     async function load() {
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
-
-      // Save invite code to localStorage so we can redirect after login
       localStorage.setItem('pending_invite', params.code)
 
-      const { data: pool } = await supabase
-        .from('pools')
-        .select('*')
-        .eq('invite_code', params.code)
-        .single()
-
+      const { data: pool } = await supabase.from('pools').select('*').eq('invite_code', params.code).single()
       if (!pool) { setNotFound(true); setLoading(false); return }
       setPool(pool)
 
       if (session?.user) {
         setUser(session.user)
-        // Check if already a member
-        const { data: existing } = await supabase
-          .from('pool_members')
-          .select('id')
-          .eq('pool_id', pool.id)
-          .eq('user_id', session.user.id)
-          .single()
-
-        if (existing) {
-          localStorage.removeItem('pending_invite')
-          window.location.href = `/pool/${pool.id}`
-          return
-        }
+        const { data: existing } = await supabase.from('pool_members').select('id').eq('pool_id', pool.id).eq('user_id', session.user.id).single()
+        if (existing) { localStorage.removeItem('pending_invite'); window.location.href = `/pool/${pool.id}`; return }
       }
-
       setLoading(false)
     }
     load()
   }, [params.code])
 
   async function handleJoin() {
-    if (!user) {
-      window.location.href = `/auth/signup?invite=${params.code}`
-      return
-    }
-
+    if (!user) { window.location.href = `/auth/signup?invite=${params.code}`; return }
     setJoining(true)
     const supabase = createClient()
-    const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'Player'
-
     await supabase.from('pool_members').insert({
-      pool_id: pool.id,
-      user_id: user.id,
-      display_name: displayName,
+      pool_id: pool.id, user_id: user.id,
+      display_name: user.user_metadata?.display_name || user.email?.split('@')[0] || 'Player',
     })
-
     localStorage.removeItem('pending_invite')
     window.location.href = `/pool/${pool.id}`
   }
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <span className="font-display text-turf-400 tracking-widest animate-pulse">LOADING...</span>
-    </div>
-  )
+  if (loading) return <div style={{minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.875rem', color: 'var(--text-dim)'}}>loading...</div>
 
   if (notFound) return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="card text-center max-w-md">
-        <div className="font-display text-5xl mb-4">🚫</div>
-        <h2 className="font-display text-3xl text-chalk tracking-wider mb-2">INVALID LINK</h2>
-        <p style={{color: 'var(--chalk-dim)'}}>This invite link doesn't exist or has expired.</p>
+    <div style={{minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+      <div className="card" style={{maxWidth: 360, textAlign: 'center'}}>
+        <p style={{fontWeight: 600, marginBottom: '0.5rem'}}>invalid invite link</p>
+        <p style={{color: 'var(--text-dim)', fontSize: '0.875rem'}}>this link doesn't exist or has expired.</p>
       </div>
     </div>
   )
@@ -88,30 +56,28 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
   const displayName = user?.user_metadata?.display_name || user?.email?.split('@')[0]
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="card max-w-md w-full text-center">
-        <div className="badge text-turf-400 text-xs inline-block mb-4">YOU'VE BEEN INVITED</div>
-        <h2 className="font-display text-4xl text-chalk tracking-wider mb-2">{pool.name}</h2>
-        <p className="mb-8" style={{color: 'var(--chalk-dim)'}}>
-          {user
-            ? <>You're joining as <strong className="text-chalk">{displayName}</strong></>
-            : <>Create an account or log in to join this pool.</>
-          }
-        </p>
-        {user ? (
-          <button className="btn-turf w-full text-lg" onClick={handleJoin} disabled={joining}>
-            {joining ? 'JOINING...' : "LET'S GO →"}
-          </button>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <a href={`/auth/signup?invite=${params.code}`}>
-              <button className="btn-turf w-full text-lg">CREATE ACCOUNT</button>
-            </a>
-            <a href={`/auth/login?invite=${params.code}`}>
-              <button className="btn-ghost w-full text-lg">LOG IN</button>
-            </a>
-          </div>
-        )}
+    <div style={{minHeight: '100vh', background: 'var(--bg)'}}>
+      <div style={{borderBottom: '1px solid var(--border)', background: 'white', padding: '0.75rem 2rem'}}>
+        <span style={{fontWeight: 700, fontSize: '1.1rem', color: 'var(--red)'}}>pool'em</span>
+      </div>
+      <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4rem 1rem'}}>
+        <div className="card" style={{maxWidth: 380, width: '100%'}}>
+          <p style={{fontSize: '0.7rem', fontWeight: 600, color: 'var(--red)', textTransform: 'uppercase', marginBottom: '0.5rem'}}>you've been invited</p>
+          <h2 style={{fontWeight: 700, fontSize: '1.25rem', marginBottom: '0.4rem'}}>{pool.name}</h2>
+          <p style={{color: 'var(--text-dim)', fontSize: '0.875rem', marginBottom: '1.5rem'}}>
+            {user ? <>joining as <strong style={{color: 'var(--text)'}}>{displayName}</strong></> : <>create an account or log in to join.</>}
+          </p>
+          {user ? (
+            <button className="btn-primary" onClick={handleJoin} disabled={joining} style={{width: '100%', padding: '0.6rem'}}>
+              {joining ? 'joining...' : "let's go →"}
+            </button>
+          ) : (
+            <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
+              <a href={`/auth/signup?invite=${params.code}`}><button className="btn-primary" style={{width: '100%', padding: '0.6rem'}}>create account</button></a>
+              <a href={`/auth/login?invite=${params.code}`}><button className="btn-secondary" style={{width: '100%', padding: '0.6rem'}}>log in</button></a>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -15,25 +15,11 @@ export default function DashboardPage() {
     async function load() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
-      
-      if (!user) {
-        window.location.href = '/auth/login'
-        return
-      }
-      
+      if (!user) { window.location.href = '/auth/login'; return }
       setUser(user)
 
-      const { data: admin } = await supabase
-        .from('pools')
-        .select('*')
-        .eq('admin_id', user.id)
-        .order('created_at', { ascending: false })
-
-      const { data: member } = await supabase
-        .from('pool_members')
-        .select('*, pools(*)')
-        .eq('user_id', user.id)
-        .order('joined_at', { ascending: false })
+      const { data: admin } = await supabase.from('pools').select('*').eq('admin_id', user.id).order('created_at', { ascending: false })
+      const { data: member } = await supabase.from('pool_members').select('*, pools(*)').eq('user_id', user.id).order('joined_at', { ascending: false })
 
       setAdminPools(admin || [])
       setMemberPools((member || []).filter(m => (m.pools as any)?.admin_id !== user.id))
@@ -42,58 +28,46 @@ export default function DashboardPage() {
     load()
   }, [])
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-40">
-        <span className="font-display text-turf-400 tracking-widest animate-pulse">LOADING...</span>
-      </div>
-    )
-  }
+  if (loading) return <div style={{padding: '2rem', color: 'var(--text-dim)', fontSize: '0.875rem'}}>loading...</div>
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-10">
+      <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem'}}>
         <div>
-          <h1 className="font-display text-5xl text-chalk tracking-wider">YOUR POOLS</h1>
-          <p className="text-sm mt-1" style={{color: 'var(--chalk-dim)'}}>FIFA World Cup 2026</p>
+          <h1 style={{fontWeight: 700, fontSize: '1.25rem'}}>your pools</h1>
+          <p style={{color: 'var(--text-dim)', fontSize: '0.8rem', marginTop: '0.2rem'}}>FIFA World Cup 2026</p>
         </div>
-        <Link href="/pool/create">
-          <button className="btn-turf">+ NEW POOL</button>
-        </Link>
+        <Link href="/pool/create"><button className="btn-primary">+ new pool</button></Link>
       </div>
 
       {adminPools.length > 0 && (
-        <section className="mb-10">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="font-display text-xl tracking-wider" style={{color: 'var(--chalk-dim)'}}>POOLS I RUN</span>
-            <div className="flex-1 h-px" style={{background: 'rgba(245,240,232,0.1)'}} />
+        <section style={{marginBottom: '2rem'}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem'}}>
+            <span className="section-label">pools i run</span>
+            <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.75rem'}}>
             {adminPools.map(pool => <PoolCard key={pool.id} pool={pool} role="admin" />)}
           </div>
         </section>
       )}
 
       {memberPools.length > 0 && (
-        <section className="mb-10">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="font-display text-xl tracking-wider" style={{color: 'var(--chalk-dim)'}}>POOLS I'M IN</span>
-            <div className="flex-1 h-px" style={{background: 'rgba(245,240,232,0.1)'}} />
+        <section style={{marginBottom: '2rem'}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem'}}>
+            <span className="section-label">pools i'm in</span>
+            <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.75rem'}}>
             {memberPools.map(m => <PoolCard key={m.id} pool={(m.pools as any)} role="member" />)}
           </div>
         </section>
       )}
 
       {adminPools.length === 0 && memberPools.length === 0 && (
-        <div className="text-center py-24">
-          <div className="font-display text-6xl text-turf-400 mb-4">⚽</div>
-          <h2 className="font-display text-3xl text-chalk mb-3 tracking-wider">NO POOLS YET</h2>
-          <p className="mb-8" style={{color: 'var(--chalk-dim)'}}>Create your first pool or ask a friend for their invite link.</p>
-          <Link href="/pool/create">
-            <button className="btn-turf">CREATE YOUR FIRST POOL</button>
-          </Link>
+        <div style={{textAlign: 'center', padding: '4rem 0', borderTop: '1px solid var(--border)'}}>
+          <p style={{color: 'var(--text-dim)', marginBottom: '1rem'}}>no pools yet.</p>
+          <Link href="/pool/create"><button className="btn-primary">create your first pool</button></Link>
         </div>
       )}
     </div>
@@ -104,15 +78,15 @@ function PoolCard({ pool, role }: { pool: any, role: 'admin' | 'member' }) {
   const pkg = RULE_PACKAGES[pool.package_id as keyof typeof RULE_PACKAGES]
   return (
     <Link href={`/pool/${pool.id}`}>
-      <div className="card hover:border-turf-400/30 transition-all cursor-pointer group">
-        <div className="flex items-start justify-between mb-3">
-          <span className="badge text-turf-400 text-xs">{role === 'admin' ? 'ADMIN' : 'MEMBER'}</span>
-          <span className="text-xs" style={{color: 'var(--chalk-dim)'}}>{pool.tournament_scope?.replace('_', ' ').toUpperCase()}</span>
+      <div className="card" style={{cursor: 'pointer', transition: 'border-color 0.1s'}}
+        onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--text-dim)')}
+        onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem'}}>
+          <span style={{fontSize: '0.7rem', color: role === 'admin' ? 'var(--red)' : 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase'}}>{role}</span>
+          <span style={{fontSize: '0.7rem', color: 'var(--text-faint)'}}>{pool.tournament_scope?.replace('_', ' ')}</span>
         </div>
-        <h3 className="font-display text-2xl text-chalk tracking-wider mb-1 group-hover:text-turf-400 transition-colors">
-          {pool.name}
-        </h3>
-        <p className="text-sm" style={{color: 'var(--chalk-dim)'}}>{pkg?.name || pool.package_id}</p>
+        <div style={{fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.25rem'}}>{pool.name}</div>
+        <div style={{fontSize: '0.75rem', color: 'var(--text-dim)'}}>{pkg?.name || pool.package_id}</div>
       </div>
     </Link>
   )
