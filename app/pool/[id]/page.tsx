@@ -15,6 +15,48 @@ function getSessionFromCookie() {
   } catch { return null }
 }
 
+
+function DeletePool({ poolId }: { poolId: string }) {
+  const [confirming, setConfirming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDelete() {
+    setDeleting(true)
+    const supabase = createClient()
+    await supabase.from('predictions').delete().eq('pool_id', poolId)
+    await supabase.from('pool_members').delete().eq('pool_id', poolId)
+    await supabase.from('reminders').delete().eq('pool_id', poolId)
+    await supabase.from('pools').delete().eq('id', poolId)
+    window.location.href = '/dashboard'
+  }
+
+  return (
+    <div>
+      <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '8px'}}>danger zone</div>
+      {!confirming ? (
+        <button onClick={() => setConfirming(true)}
+          style={{fontSize: '11px', padding: '5px 10px', width: '100%', background: 'white', color: '#C8102E', border: '1px solid #C8102E', cursor: 'pointer', fontFamily: 'inherit'}}>
+          delete pool
+        </button>
+      ) : (
+        <div>
+          <p style={{fontSize: '11px', color: '#555', marginBottom: '8px'}}>this will delete all picks and members. are you sure?</p>
+          <div style={{display: 'flex', gap: '6px'}}>
+            <button onClick={() => setConfirming(false)}
+              style={{flex: 1, fontSize: '11px', padding: '5px', background: 'white', color: '#555', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit'}}>
+              cancel
+            </button>
+            <button onClick={handleDelete} disabled={deleting}
+              style={{flex: 1, fontSize: '11px', padding: '5px', background: '#C8102E', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
+              {deleting ? 'deleting...' : 'yes, delete'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function PoolPage({ params }: { params: { id: string } }) {
   const [pool, setPool] = useState<any>(null)
   const [user, setUser] = useState<any>(null)
@@ -157,9 +199,16 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             )}
 
             {/* Reminder */}
-            <div style={{borderTop: '1px solid #eee', paddingTop: '14px'}}>
+            <div style={{borderTop: '1px solid #eee', paddingTop: '14px', marginBottom: '14px'}}>
               <ReminderButton poolId={pool.id} userId={user.id} userEmail={user.email || ''} />
             </div>
+
+            {/* Delete pool — admin only */}
+            {isAdmin && (
+              <div style={{borderTop: '1px solid #eee', paddingTop: '14px'}}>
+                <DeletePool poolId={pool.id} />
+              </div>
+            )}
 
           </div>
         </div>
