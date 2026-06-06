@@ -22,7 +22,13 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
 
       if (session?.user) {
         setUser(session.user)
-        const { data: existing } = await supabase.from('pool_members').select('id').eq('pool_id', pool.id).eq('user_id', session.user.id).single()
+        // Use maybeSingle() instead of single() to avoid 406 when no row exists
+        const { data: existing } = await supabase
+          .from('pool_members')
+          .select('id')
+          .eq('pool_id', pool.id)
+          .eq('user_id', session.user.id)
+          .maybeSingle()
         if (existing) { localStorage.removeItem('pending_invite'); window.location.href = `/pool/${pool.id}`; return }
       }
       setLoading(false)
