@@ -35,48 +35,115 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
     setJoining(true)
     const supabase = createClient()
     await supabase.from('pool_members').insert({
-      pool_id: pool.id, user_id: user.id,
+      pool_id: pool.id,
+      user_id: user.id,
       display_name: user.user_metadata?.display_name || user.email?.split('@')[0] || 'Player',
     })
     localStorage.removeItem('pending_invite')
     window.location.href = `/pool/${pool.id}`
   }
 
-  if (loading) return <div style={{minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.875rem', color: 'var(--text-dim)'}}>loading...</div>
+  function venmoUrl() {
+    if (!pool?.venmo_handle || !pool?.buy_in_amount) return null
+    const note = encodeURIComponent(`${pool.name} buy-in`)
+    return `venmo://paycharge?txn=pay&recipients=${pool.venmo_handle}&amount=${pool.buy_in_amount}&note=${note}`
+  }
+
+  function venmoWebUrl() {
+    if (!pool?.venmo_handle || !pool?.buy_in_amount) return null
+    const note = encodeURIComponent(`${pool.name} buy-in`)
+    return `https://venmo.com/${pool.venmo_handle}?txn=pay&amount=${pool.buy_in_amount}&note=${note}`
+  }
+
+  if (loading) return (
+    <div style={{minHeight: '100vh', background: '#f7f7f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', color: '#888'}}>
+      loading...
+    </div>
+  )
 
   if (notFound) return (
-    <div style={{minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-      <div className="card" style={{maxWidth: 360, textAlign: 'center'}}>
-        <p style={{fontWeight: 600, marginBottom: '0.5rem'}}>invalid invite link</p>
-        <p style={{color: 'var(--text-dim)', fontSize: '0.875rem'}}>this link doesn't exist or has expired.</p>
+    <div style={{minHeight: '100vh', background: '#f7f7f5', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+      <div style={{background: 'white', border: '1px solid #e0e0db', padding: '24px', maxWidth: 360, textAlign: 'center', fontSize: '13px'}}>
+        <p style={{fontWeight: 600, marginBottom: '6px'}}>invalid invite link</p>
+        <p style={{color: '#888'}}>this link doesn't exist or has expired.</p>
       </div>
     </div>
   )
 
   const displayName = user?.user_metadata?.display_name || user?.email?.split('@')[0]
+  const hasBuyIn = pool?.buy_in_amount && pool?.venmo_handle
 
   return (
-    <div style={{minHeight: '100vh', background: 'var(--bg)'}}>
-      <div style={{borderBottom: '1px solid var(--border)', background: 'white', padding: '0.75rem 2rem'}}>
-        <span style={{fontWeight: 700, fontSize: '1.1rem', color: 'var(--red)'}}>pool'em</span>
+    <div style={{minHeight: '100vh', background: '#f7f7f5', fontFamily: "'Inter', system-ui, sans-serif", fontSize: '13px'}}>
+      <div style={{background: '#111', color: 'white', padding: '10px 20px'}}>
+        <span style={{fontWeight: 700, fontSize: '13px'}}>pool'em</span>
       </div>
-      <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4rem 1rem'}}>
-        <div className="card" style={{maxWidth: 380, width: '100%'}}>
-          <p style={{fontSize: '0.7rem', fontWeight: 600, color: 'var(--red)', textTransform: 'uppercase', marginBottom: '0.5rem'}}>you've been invited</p>
-          <h2 style={{fontWeight: 700, fontSize: '1.25rem', marginBottom: '0.4rem'}}>{pool.name}</h2>
-          <p style={{color: 'var(--text-dim)', fontSize: '0.875rem', marginBottom: '1.5rem'}}>
-            {user ? <>joining as <strong style={{color: 'var(--text)'}}>{displayName}</strong></> : <>create an account or log in to join.</>}
-          </p>
-          {user ? (
-            <button className="btn-primary" onClick={handleJoin} disabled={joining} style={{width: '100%', padding: '0.6rem'}}>
-              {joining ? 'joining...' : "let's go →"}
-            </button>
-          ) : (
-            <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem'}}>
-              <a href={`/auth/signup?invite=${params.code}`}><button className="btn-primary" style={{width: '100%', padding: '0.6rem'}}>create account</button></a>
-              <a href={`/auth/login?invite=${params.code}`}><button className="btn-secondary" style={{width: '100%', padding: '0.6rem'}}>log in</button></a>
+
+      <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 24px'}}>
+        <div style={{width: 400}}>
+
+          {/* Pool info */}
+          <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px', marginBottom: '12px'}}>
+            <p style={{fontSize: '10px', fontWeight: 600, color: '#C8102E', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '6px'}}>you've been invited</p>
+            <h2 style={{fontWeight: 700, fontSize: '18px', marginBottom: '4px'}}>{pool.name}</h2>
+            <p style={{color: '#888', fontSize: '11px'}}>
+              {pool.tournament_scope?.replace('_', ' ')} · {pool.package_id?.replace('_', ' ')}
+            </p>
+          </div>
+
+          {/* Buy-in prompt */}
+          {hasBuyIn && (
+            <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '16px', marginBottom: '12px'}}>
+              <p style={{fontWeight: 600, marginBottom: '4px'}}>💰 this pool has a ${pool.buy_in_amount} buy-in</p>
+              <p style={{fontSize: '11px', color: '#666', marginBottom: '12px'}}>
+                send payment to <strong>@{pool.venmo_handle}</strong> on venmo. the admin will confirm your payment.
+              </p>
+              <a href={venmoUrl() || venmoWebUrl() || '#'}>
+                <button style={{
+                  width: '100%', padding: '10px', fontSize: '13px', fontWeight: 600,
+                  background: '#3D95CE', color: 'white', border: 'none', cursor: 'pointer',
+                  fontFamily: 'inherit', marginBottom: '6px',
+                }}>
+                  pay ${pool.buy_in_amount} via venmo →
+                </button>
+              </a>
+              <p style={{fontSize: '10px', color: '#aaa', textAlign: 'center' as const}}>
+                you can still join without paying — but the admin may remove you
+              </p>
             </div>
           )}
+
+          {/* Join section */}
+          <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
+            {user ? (
+              <div>
+                <p style={{marginBottom: '12px', color: '#555'}}>
+                  joining as <strong style={{color: '#111'}}>{displayName}</strong>
+                </p>
+                <button onClick={handleJoin} disabled={joining}
+                  style={{width: '100%', padding: '10px', fontSize: '13px', fontWeight: 600, background: '#111', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
+                  {joining ? 'joining...' : "join pool →"}
+                </button>
+              </div>
+            ) : (
+              <div>
+                <p style={{marginBottom: '12px', color: '#555'}}>create an account or log in to join.</p>
+                <div style={{display: 'flex', flexDirection: 'column' as const, gap: '6px'}}>
+                  <a href={`/auth/signup?invite=${params.code}`}>
+                    <button style={{width: '100%', padding: '10px', fontSize: '13px', fontWeight: 600, background: '#111', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
+                      create account
+                    </button>
+                  </a>
+                  <a href={`/auth/login?invite=${params.code}`}>
+                    <button style={{width: '100%', padding: '10px', fontSize: '13px', background: 'white', color: '#111', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit'}}>
+                      log in
+                    </button>
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
     </div>
