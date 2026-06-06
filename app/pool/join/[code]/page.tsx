@@ -43,18 +43,6 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
     window.location.href = `/pool/${pool.id}`
   }
 
-  function venmoUrl() {
-    if (!pool?.venmo_handle || !pool?.buy_in_amount) return null
-    const note = encodeURIComponent(`${pool.name} buy-in`)
-    return `venmo://paycharge?txn=pay&recipients=${pool.venmo_handle}&amount=${pool.buy_in_amount}&note=${note}`
-  }
-
-  function venmoWebUrl() {
-    if (!pool?.venmo_handle || !pool?.buy_in_amount) return null
-    const note = encodeURIComponent(`${pool.name} buy-in`)
-    return `https://venmo.com/${pool.venmo_handle}?txn=pay&amount=${pool.buy_in_amount}&note=${note}`
-  }
-
   if (loading) return (
     <div style={{minHeight: '100vh', background: '#f7f7f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', color: '#888'}}>
       loading...
@@ -71,7 +59,16 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
   )
 
   const displayName = user?.user_metadata?.display_name || user?.email?.split('@')[0]
-  const hasBuyIn = pool?.buy_in_amount && pool?.venmo_handle
+  const buyInAmount = pool?.buy_in_amount
+  const venmoHandle = pool?.venmo_handle
+  const hasBuyIn = !!(buyInAmount && venmoHandle)
+
+  const venmoDeepLink = hasBuyIn
+    ? `venmo://paycharge?txn=pay&recipients=${venmoHandle}&amount=${buyInAmount}&note=${encodeURIComponent(pool.name + ' buy-in')}`
+    : null
+  const venmoWebLink = hasBuyIn
+    ? `https://venmo.com/${venmoHandle}?txn=pay&amount=${buyInAmount}&note=${encodeURIComponent(pool.name + ' buy-in')}`
+    : null
 
   return (
     <div style={{minHeight: '100vh', background: '#f7f7f5', fontFamily: "'Inter', system-ui, sans-serif", fontSize: '13px'}}>
@@ -82,29 +79,21 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 24px'}}>
         <div style={{width: 400}}>
 
-          {/* Pool info */}
           <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px', marginBottom: '12px'}}>
             <p style={{fontSize: '10px', fontWeight: 600, color: '#C8102E', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: '6px'}}>you've been invited</p>
             <h2 style={{fontWeight: 700, fontSize: '18px', marginBottom: '4px'}}>{pool.name}</h2>
-            <p style={{color: '#888', fontSize: '11px'}}>
-              {pool.tournament_scope?.replace('_', ' ')} · {pool.package_id?.replace('_', ' ')}
-            </p>
+            <p style={{color: '#888', fontSize: '11px'}}>{pool.tournament_scope?.replace('_', ' ')} · {pool.package_id?.replace('_', ' ')}</p>
           </div>
 
-          {/* Buy-in prompt */}
           {hasBuyIn && (
             <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '16px', marginBottom: '12px'}}>
-              <p style={{fontWeight: 600, marginBottom: '4px'}}>💰 this pool has a ${pool.buy_in_amount} buy-in</p>
+              <p style={{fontWeight: 600, marginBottom: '4px'}}>💰 this pool has a ${buyInAmount} buy-in</p>
               <p style={{fontSize: '11px', color: '#666', marginBottom: '12px'}}>
-                send payment to <strong>@{pool.venmo_handle}</strong> on venmo. the admin will confirm your payment.
+                send payment to <strong>@{venmoHandle}</strong> on venmo. the admin will confirm your payment.
               </p>
-              <a href={venmoUrl() || venmoWebUrl() || '#'}>
-                <button style={{
-                  width: '100%', padding: '10px', fontSize: '13px', fontWeight: 600,
-                  background: '#3D95CE', color: 'white', border: 'none', cursor: 'pointer',
-                  fontFamily: 'inherit', marginBottom: '6px',
-                }}>
-                  pay ${pool.buy_in_amount} via venmo →
+              <a href={venmoDeepLink || venmoWebLink || '#'}>
+                <button style={{width: '100%', padding: '10px', fontSize: '13px', fontWeight: 600, background: '#3D95CE', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '6px'}}>
+                  pay ${buyInAmount} via venmo →
                 </button>
               </a>
               <p style={{fontSize: '10px', color: '#aaa', textAlign: 'center' as const}}>
@@ -113,16 +102,13 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
             </div>
           )}
 
-          {/* Join section */}
           <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
             {user ? (
               <div>
-                <p style={{marginBottom: '12px', color: '#555'}}>
-                  joining as <strong style={{color: '#111'}}>{displayName}</strong>
-                </p>
+                <p style={{marginBottom: '12px', color: '#555'}}>joining as <strong style={{color: '#111'}}>{displayName}</strong></p>
                 <button onClick={handleJoin} disabled={joining}
                   style={{width: '100%', padding: '10px', fontSize: '13px', fontWeight: 600, background: '#111', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
-                  {joining ? 'joining...' : "join pool →"}
+                  {joining ? 'joining...' : 'join pool →'}
                 </button>
               </div>
             ) : (
@@ -130,14 +116,10 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
                 <p style={{marginBottom: '12px', color: '#555'}}>create an account or log in to join.</p>
                 <div style={{display: 'flex', flexDirection: 'column' as const, gap: '6px'}}>
                   <a href={`/auth/signup?invite=${params.code}`}>
-                    <button style={{width: '100%', padding: '10px', fontSize: '13px', fontWeight: 600, background: '#111', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
-                      create account
-                    </button>
+                    <button style={{width: '100%', padding: '10px', fontSize: '13px', fontWeight: 600, background: '#111', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>create account</button>
                   </a>
                   <a href={`/auth/login?invite=${params.code}`}>
-                    <button style={{width: '100%', padding: '10px', fontSize: '13px', background: 'white', color: '#111', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit'}}>
-                      log in
-                    </button>
+                    <button style={{width: '100%', padding: '10px', fontSize: '13px', background: 'white', color: '#111', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit'}}>log in</button>
                   </a>
                 </div>
               </div>
