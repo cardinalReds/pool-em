@@ -15,6 +15,7 @@ function getSessionFromCookie() {
   } catch { return null }
 }
 
+
 function DeletePool({ poolId }: { poolId: string }) {
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -59,25 +60,15 @@ function DeletePool({ poolId }: { poolId: string }) {
 export default function PoolPage({ params }: { params: { id: string } }) {
   const [pool, setPool] = useState<any>(null)
   const [user, setUser] = useState<any>(null)
-  const [members, setMembers] = useState<any[]>([])
   const [leaderboard, setLeaderboard] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [inviteUrl, setInviteUrl] = useState('')
   const [copied, setCopied] = useState(false)
 
-  // Rebuild leaderboard from members + latest scores
-  function buildLeaderboard(memberList: any[], scores: { user_id: string; points_earned: number | null }[]) {
-    const pointsMap: Record<string, number> = {}
-    scores.forEach(s => { if (s.points_earned) pointsMap[s.user_id] = (pointsMap[s.user_id] || 0) + s.points_earned })
-    return memberList.map(m => ({ ...m, points: pointsMap[m.user_id] || 0 })).sort((a, b) => b.points - a.points)
-  }
-
   useEffect(() => {
-    const supabase = createClient()
-    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null
-
     async function load() {
+      const supabase = createClient()
       let currentUser = null
       const { data: { user: authUser } } = await supabase.auth.getUser()
       if (authUser) {
@@ -93,53 +84,23 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       if (!currentUser) { window.location.href = '/auth/login'; return }
       setUser(currentUser)
 
-      const { data: poolData } = await supabase.from('pools').select('*').eq('id', params.id).single()
-      if (!poolData) { setNotFound(true); setLoading(false); return }
-      setPool(poolData)
-      setInviteUrl(`${window.location.origin}/pool/join/${poolData.invite_code}`)
+      const { data: pool } = await supabase.from('pools').select('*').eq('id', params.id).single()
+      if (!pool) { setNotFound(true); setLoading(false); return }
+      setPool(pool)
+      setInviteUrl(`${window.location.origin}/pool/join/${pool.invite_code}`)
 
-      const { data: membership } = await supabase.from('pool_members').select('id').eq('pool_id', poolData.id).eq('user_id', currentUser.id).single()
-      if (!membership) { window.location.href = `/pool/join/${poolData.invite_code}`; return }
+      const { data: membership } = await supabase.from('pool_members').select('id').eq('pool_id', pool.id).eq('user_id', currentUser.id).single()
+      if (!membership) { window.location.href = `/pool/join/${pool.invite_code}`; return }
 
-      const { data: memberList } = await supabase.from('pool_members').select('*').eq('pool_id', poolData.id)
-      const { data: scores } = await supabase.from('predictions').select('user_id, points_earned').eq('pool_id', poolData.id)
+      const { data: members } = await supabase.from('pool_members').select('*').eq('pool_id', pool.id)
+      const { data: scores } = await supabase.from('predictions').select('user_id, points_earned').eq('pool_id', pool.id)
 
-      const resolvedMembers = memberList || []
-      setMembers(resolvedMembers)
-      setLeaderboard(buildLeaderboard(resolvedMembers, scores || []))
+      const pointsMap: Record<string, number> = {}
+      scores?.forEach(s => { if (s.points_earned) pointsMap[s.user_id] = (pointsMap[s.user_id] || 0) + s.points_earned })
+      setLeaderboard((members || []).map(m => ({ ...m, points: pointsMap[m.user_id] || 0 })).sort((a, b) => b.points - a.points))
       setLoading(false)
-
-      // Subscribe to prediction changes for this pool and refresh leaderboard
-      realtimeChannel = supabase
-        .channel(`leaderboard:${poolData.id}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'predictions',
-            filter: `pool_id=eq.${poolData.id}`,
-          },
-          async () => {
-            const { data: freshScores } = await supabase
-              .from('predictions')
-              .select('user_id, points_earned')
-              .eq('pool_id', poolData.id)
-            setMembers(prev => {
-              const updated = buildLeaderboard(prev, freshScores || [])
-              setLeaderboard(updated)
-              return prev
-            })
-          }
-        )
-        .subscribe()
     }
-
     load()
-
-    return () => {
-      if (realtimeChannel) supabase.removeChannel(realtimeChannel)
-    }
   }, [params.id])
 
   async function handleCopy() {
@@ -165,6 +126,8 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
   return (
     <div style={{minHeight: '100vh', background: '#f7f7f5', fontFamily: "'Inter', system-ui, sans-serif", fontSize: '13px'}}>
+
+      {/* Nav */}
       <div style={{background: '#111', color: 'white', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 50}}>
         <a href="/dashboard" style={{fontWeight: 700, fontSize: '13px', color: 'white', textDecoration: 'none'}}>pool'em</a>
         <span style={{fontSize: '11px', color: '#888'}}>
@@ -176,14 +139,32 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         </span>
       </div>
 
+      {/* Two column layout */}
       <div style={{display: 'grid', gridTemplateColumns: '45% 55%', minHeight: 'calc(100vh - 41px)'}}>
+
+        {/* LEFT — centered content */}
         <div style={{background: 'white', borderRight: '1px solid #e0e0db', display: 'flex', justifyContent: 'center', padding: '40px 24px'}}>
           <div style={{width: 280}}>
+
             <div style={{fontWeight: 700, fontSize: '15px', marginBottom: '2px'}}>{pool.name}</div>
             <div style={{fontSize: '11px', color: '#888', marginBottom: '20px'}}>
               {pool.tournament_scope?.replace('_', ' ')} · {pkg?.name}
               {isAdmin && <span style={{color: '#C8102E', marginLeft: '6px', fontWeight: 600}}>admin</span>}
             </div>
+
+            {/* Leaderboard */}
+            {/* Pay reminder for non-admin members with unpaid buy-in */}
+            {!isAdmin && pool.buy_in_amount && pool.venmo_handle && (
+              <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '10px 12px', marginBottom: '16px'}}>
+                <p style={{fontSize: '11px', fontWeight: 600, marginBottom: '4px'}}>💰 ${pool.buy_in_amount} buy-in due</p>
+                <p style={{fontSize: '10px', color: '#888', marginBottom: '8px'}}>send to @{pool.venmo_handle} on venmo</p>
+                <a href={`https://venmo.com/${pool.venmo_handle}?txn=pay&amount=${pool.buy_in_amount}&note=${encodeURIComponent(pool.name + ' buy-in')}`} target="_blank" rel="noopener noreferrer">
+                  <button style={{width: '100%', padding: '6px', fontSize: '11px', fontWeight: 600, background: '#3D95CE', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
+                    pay via venmo →
+                  </button>
+                </a>
+              </div>
+            )}
 
             <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '8px'}}>leaderboard</div>
             <div style={{marginBottom: '20px'}}>
@@ -204,6 +185,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               ))}
             </div>
 
+            {/* Scoring */}
             <div style={{borderTop: '1px solid #eee', paddingTop: '14px', marginBottom: '14px'}}>
               <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '6px'}}>scoring</div>
               <div style={{fontSize: '11px', color: '#555', lineHeight: 1.8}}>
@@ -214,6 +196,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               </div>
             </div>
 
+            {/* Invite */}
             {isAdmin && (
               <div style={{borderTop: '1px solid #eee', paddingTop: '14px', marginBottom: '14px'}}>
                 <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '6px'}}>invite</div>
@@ -228,18 +211,22 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               </div>
             )}
 
+            {/* Reminder */}
             <div style={{borderTop: '1px solid #eee', paddingTop: '14px', marginBottom: '14px'}}>
               <ReminderButton poolId={pool.id} userId={user.id} userEmail={user.email || ''} />
             </div>
 
+            {/* Delete pool — admin only */}
             {isAdmin && (
               <div style={{borderTop: '1px solid #eee', paddingTop: '14px'}}>
                 <DeletePool poolId={pool.id} />
               </div>
             )}
+
           </div>
         </div>
 
+        {/* RIGHT — centered content */}
         <div style={{display: 'flex', justifyContent: 'center', padding: '40px 24px'}}>
           <div>
             {user && (
@@ -254,6 +241,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             )}
           </div>
         </div>
+
       </div>
     </div>
   )
