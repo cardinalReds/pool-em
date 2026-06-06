@@ -20,7 +20,7 @@ export default function ReminderButton({ poolId, userId, userEmail }: {
         .select('hours_before')
         .eq('pool_id', poolId)
         .eq('user_id', userId)
-        .single()
+        .maybeSingle()
       if (data) {
         setHours(data.hours_before)
         setExisting(data.hours_before)
