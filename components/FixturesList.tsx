@@ -59,8 +59,8 @@ function formatDatePT(dateStr: string) {
   })
 }
 
-export default function FixturesList({ poolId, userId, packageId, deadlineType }: {
-  poolId: string, userId: string, packageId: string, deadlineType: string, scope: string
+export default function FixturesList({ poolId, userId, packageId, deadlineType, tournamentId }: {
+  poolId: string, userId: string, packageId: string, deadlineType: string, scope: string, tournamentId?: string
 }) {
   const [fixtures, setFixtures] = useState<Fixture[]>([])
   const [predictions, setPredictions] = useState<Record<number, Prediction>>({})
@@ -75,7 +75,7 @@ export default function FixturesList({ poolId, userId, packageId, deadlineType }
   useEffect(() => {
     async function load() {
       const supabase = createClient()
-      const res = await fetch('/api/fixtures')
+      const res = await fetch(`/api/fixtures?tournament_id=${tournamentId || 'wc_2026'}`)
       const data = await res.json()
       setFixtures(data.fixtures || [])
       const { data: preds } = await supabase.from('predictions').select('*').eq('pool_id', poolId).eq('user_id', userId)

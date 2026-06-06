@@ -9,19 +9,18 @@ const supabase = createClient(
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const round = searchParams.get('round')
+  const tournament_id = searchParams.get('tournament_id') || 'wc_2026'
 
   try {
     let query = supabase
       .from('fixtures')
       .select('*')
+      .eq('tournament_id', tournament_id)
       .order('date', { ascending: true })
 
-    if (round) {
-      query = query.eq('round', round)
-    }
+    if (round) query = query.eq('round', round)
 
     const { data, error } = await query
-
     if (error) throw error
 
     return NextResponse.json({ fixtures: data, mock: false })

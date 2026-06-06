@@ -223,6 +223,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 packageId={pool.package_id}
                 deadlineType={pool.deadline_type}
                 scope={pool.tournament_scope}
+                tournamentId={pool.tournament_id}
               />
             )}
           </div>
