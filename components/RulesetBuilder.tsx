@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 interface Category {
@@ -17,10 +17,9 @@ interface Category {
 
 interface SelectedRule {
   category_id: string
-  points: number
+  points: number       // pts per correct team score (exact score); pts for all other categories
+  bonus_points: number // bonus when BOTH team scores are correct (exact score only)
   enabled: boolean
-  partial_credit?: boolean
-  partial_credit_points?: number
 }
 
 const EXAMPLE_FIXTURE = {
@@ -30,7 +29,32 @@ const EXAMPLE_FIXTURE = {
   away_flag: '🇿🇦',
   date: 'Jun 12 · 12:00 PM PT',
   round: 'Group A · Matchday 1',
+  // Real lines for Mex vs South Africa (example)
+  goals_line: 2.5,
+  corners_line: 9.5,
+  card_pts_line: 30,
+  handicap_line: -0.5, // Mexico favored
 }
+
+
+// All WC 2026 squad players for brace/goalscorer search (representative sample)
+const WC_PLAYERS = [
+  'Hirving Lozano', 'Raúl Jiménez', 'Edson Álvarez', 'Henry Martín', 'Chucky Lozano',
+  'Percy Tau', 'Lyle Foster', 'Ronwen Williams', 'Bafana Bafana', 'Evidence Makgopa',
+  'Robert Lewandowski', 'Piotr Zieliński', 'Jakub Błaszczykowski',
+  'Salem Al-Dawsari', 'Firas Al-Buraikan', 'Mohammed Al-Owais',
+  'Kylian Mbappé', 'Antoine Griezmann', 'Ousmane Dembélé',
+  'Harry Kane', 'Bukayo Saka', 'Jude Bellingham', 'Phil Foden',
+  'Vinicius Jr.', 'Rodrygo', 'Neymar', 'Richarlison',
+  'Erling Haaland', 'Martin Ødegaard',
+  'Mohamed Salah', 'Omar Marmoush',
+  'Lamine Yamal', 'Pedri', 'Ferran Torres', 'Álvaro Morata',
+  'Ciro Immobile', 'Federico Chiesa', 'Gianluigi Donnarumma',
+  'Serge Gnabry', 'Kai Havertz', 'Florian Wirtz', 'Thomas Müller',
+  'Romelu Lukaku', 'Kevin De Bruyne', 'Dodi Lukebakio',
+  'Christian Pulisic', 'Gio Reyna', 'Ricardo Pepi',
+  'Lionel Messi', 'Julián Álvarez', 'Enzo Fernández',
+]
 
 function generateResult() {
   const scores = [[0,0],[1,0],[0,1],[1,1],[2,0],[0,2],[2,1],[1,2],[2,2],[3,0],[0,3],[3,1],[1,3]]
@@ -43,9 +67,14 @@ function generateResult() {
   const awayYellows = Math.floor(Math.random()*3)
   const homeReds = Math.random() > 0.85 ? 1 : 0
   const awayReds = Math.random() > 0.85 ? 1 : 0
-  const scorers = ['Vinicius Jr.', 'Mbappé', 'Salah', 'Benzema', 'Lewandowski', 'Kane', 'De Bruyne', 'Neymar']
   const homeCardPts = homeYellows * 10 + homeReds * 25
   const awayCardPts = awayYellows * 10 + awayReds * 25
+  const totalGoals = score[0] + score[1]
+  const scorers = WC_PLAYERS.slice(0, 8)
+  // first yellow: 'home', 'away', or 'none'
+  const firstYellow = homeYellows === 0 && awayYellows === 0 ? 'none' : homeYellows > 0 && awayYellows > 0
+    ? (Math.random() > 0.5 ? 'home' : 'away')
+    : homeYellows > 0 ? 'home' : 'away'
   return {
     home_score: score[0], away_score: score[1],
     ht_home: ht[0], ht_away: ht[1],
@@ -55,11 +84,11 @@ function generateResult() {
     home_reds: homeReds, away_reds: awayReds,
     home_card_pts: homeCardPts, away_card_pts: awayCardPts,
     total_card_pts: homeCardPts + awayCardPts,
-    first_scorer: score[0] > 0 || score[1] > 0 ? scorers[Math.floor(Math.random()*scorers.length)] : null,
+    first_scorer: totalGoals > 0 ? scorers[Math.floor(Math.random()*scorers.length)] : null,
     btts: score[0] > 0 && score[1] > 0,
-    total_goals: score[0] + score[1],
+    total_goals: totalGoals,
     total_corners: corners[0] + corners[1],
-    handicap_line: [-1.5, -1, -0.5, 0, 0.5, 1, 1.5][Math.floor(Math.random()*7)],
+    first_yellow: firstYellow,
   }
 }
 
@@ -72,29 +101,38 @@ function getResult(home: number, away: number): 'home' | 'draw' | 'away' {
 function checkCorrect(categoryId: string, pick: any, result: ReturnType<typeof generateResult>): boolean {
   const actual = getResult(result.home_score, result.away_score)
   const htActual = getResult(result.ht_home, result.ht_away)
-  switch(categoryId) {
+  switch (categoryId) {
     case 'soccer_result': return pick === actual
     case 'soccer_ht_result': return pick === htActual
     case 'soccer_exact_score': return pick === `${result.home_score}-${result.away_score}`
     case 'soccer_ht_exact_score': return pick === `${result.ht_home}-${result.ht_away}`
     case 'soccer_btts': return pick === result.btts
-    case 'soccer_total_goals_ou': return (pick === 'over' && result.total_goals > 2.5) || (pick === 'under' && result.total_goals <= 2.5)
+    case 'soccer_total_goals_ou':
+      return (pick === 'over' && result.total_goals > EXAMPLE_FIXTURE.goals_line) ||
+             (pick === 'under' && result.total_goals <= EXAMPLE_FIXTURE.goals_line)
     case 'soccer_first_team_score': {
       const fts = result.total_goals === 0 ? 'none' : result.home_score > 0 ? 'home' : 'away'
       return pick === fts
     }
     case 'soccer_corners_winner': return pick === getResult(result.home_corners, result.away_corners)
     case 'soccer_ht_corners_winner': return pick === getResult(result.ht_home_corners, result.ht_away_corners)
-    case 'soccer_total_corners_ou': return (pick === 'over' && result.total_corners > 9.5) || (pick === 'under' && result.total_corners <= 9.5)
-    case 'soccer_card_points_ou': return (pick === 'over' && result.total_card_pts > 30) || (pick === 'under' && result.total_card_pts <= 30)
+    case 'soccer_total_corners_ou':
+      return (pick === 'over' && result.total_corners > EXAMPLE_FIXTURE.corners_line) ||
+             (pick === 'under' && result.total_corners <= EXAMPLE_FIXTURE.corners_line)
+    case 'soccer_card_points_ou':
+      return (pick === 'over' && result.total_card_pts > EXAMPLE_FIXTURE.card_pts_line) ||
+             (pick === 'under' && result.total_card_pts <= EXAMPLE_FIXTURE.card_pts_line)
     case 'soccer_cards_home_away': return pick === getResult(result.home_card_pts, result.away_card_pts)
-    case 'soccer_cards_ht': return false // can't simulate HT cards easily
+    case 'soccer_cards_ht': return false
+    case 'soccer_first_yellow_team': return pick === result.first_yellow
     case 'soccer_asian_handicap': {
-      const adjustedHome = result.home_score + (result.handicap_line || 0)
+      const adjustedHome = result.home_score + EXAMPLE_FIXTURE.handicap_line
       if (pick === 'home') return adjustedHome > result.away_score
       if (pick === 'away') return result.away_score > adjustedHome
       return false
     }
+    case 'soccer_first_goalscorer': return pick && result.first_scorer && pick.toLowerCase() === result.first_scorer.toLowerCase()
+    case 'soccer_anytime_goalscorer': return false // can't simulate full scorer list
     default: return false
   }
 }
@@ -103,10 +141,66 @@ const CATEGORY_GROUPS = [
   { label: 'Match Outcome', ids: ['soccer_result', 'soccer_ht_result', 'soccer_asian_handicap'] },
   { label: 'Goals', ids: ['soccer_exact_score', 'soccer_ht_exact_score', 'soccer_btts', 'soccer_total_goals_ou', 'soccer_first_team_score', 'soccer_first_goalscorer', 'soccer_anytime_goalscorer'] },
   { label: 'Corners', ids: ['soccer_corners_winner', 'soccer_ht_corners_winner', 'soccer_total_corners_ou'] },
-  { label: 'Bad Sportsmanship', ids: ['soccer_card_points_ou', 'soccer_cards_home_away', 'soccer_cards_ht', 'soccer_first_yellow_team'] },
+  { label: 'Cards', ids: ['soccer_card_points_ou', 'soccer_cards_home_away', 'soccer_cards_ht', 'soccer_first_yellow_team'] },
 ]
 
 const ROUND_SPECIALS = ['soccer_clean_sheet_round', 'soccer_brace_round', 'soccer_red_card_round', 'soccer_penalty_round']
+
+// Descriptions that override whatever is in the DB for display clarity
+const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  soccer_clean_sheet_round: 'Predict which team will keep a clean sheet. Pick 1 team per group, per matchday.',
+  soccer_brace_round: 'Predict which player scores 2+ goals across any game that matchday. One pick per matchday.',
+  soccer_red_card_round: 'Predict which team receives a red card across any game that matchday. One pick per matchday.',
+  soccer_penalty_round: 'Predict which team earns a penalty across any game that matchday. One pick per matchday.',
+}
+
+// PlayerSearch: searchable dropdown for player/team picks
+function PlayerSearch({ value, onChange, players, placeholder }: {
+  value: string, onChange: (v: string) => void, players: string[], placeholder: string
+}) {
+  const [query, setQuery] = useState(value || '')
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  const filtered = query.length > 0
+    ? players.filter(p => p.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
+    : []
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <input
+        value={query}
+        placeholder={placeholder}
+        onChange={e => { setQuery(e.target.value); onChange(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        style={{ width: '100%', border: '1px solid #ddd', padding: '5px 8px', fontSize: '11px', fontFamily: 'inherit', boxSizing: 'border-box' }}
+      />
+      {open && filtered.length > 0 && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, background: 'white',
+          border: '1px solid #ddd', borderTop: 'none', zIndex: 100, maxHeight: 160, overflowY: 'auto',
+        }}>
+          {filtered.map(p => (
+            <div key={p}
+              onMouseDown={() => { onChange(p); setQuery(p); setOpen(false) }}
+              style={{ padding: '5px 8px', fontSize: '11px', cursor: 'pointer', borderBottom: '1px solid #f5f5f5' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'white')}
+            >{p}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function RulesetBuilder({ sport, onComplete }: {
   sport: string
@@ -125,7 +219,9 @@ export default function RulesetBuilder({ sport, onComplete }: {
       const cats = data || []
       setCategories(cats)
       const initial: Record<string, SelectedRule> = {}
-      cats.forEach(c => { initial[c.id] = { category_id: c.id, points: c.default_points, enabled: false } })
+      cats.forEach(c => {
+        initial[c.id] = { category_id: c.id, points: c.default_points, bonus_points: 3, enabled: false }
+      })
       setRules(initial)
       setLoading(false)
     }
@@ -140,45 +236,61 @@ export default function RulesetBuilder({ sport, onComplete }: {
     setRules(prev => ({ ...prev, [id]: { ...prev[id], points } }))
   }
 
-  function togglePartialCredit(id: string) {
-    setRules(prev => ({ ...prev, [id]: { ...prev[id], partial_credit: !prev[id].partial_credit, partial_credit_points: prev[id].partial_credit_points || 1 } }))
+  function setBonusPoints(id: string, bonus_points: number) {
+    setRules(prev => ({ ...prev, [id]: { ...prev[id], bonus_points } }))
   }
 
-  function calcScore(): number {
-    if (!result) return 0
-    let pts = 0
+  function calcScore(): { total: number; breakdown: Record<string, { pts: number; detail: string }> } {
+    const breakdown: Record<string, { pts: number; detail: string }> = {}
+    if (!result) return { total: 0, breakdown }
+    let total = 0
+
     Object.values(rules).filter(r => r.enabled).forEach(rule => {
       const pick = userPicks[rule.category_id]
       if (pick === undefined || pick === null || pick === '') return
-      const correct = checkCorrect(rule.category_id, pick, result)
-      if (correct) {
-        pts += rule.points
-      } else if (rule.partial_credit && (rule.category_id === 'soccer_exact_score' || rule.category_id === 'soccer_ht_exact_score')) {
-        // partial credit: correct result but wrong score
-        const scoreResult = getResult(result.home_score, result.away_score)
-        const htResult = getResult(result.ht_home, result.ht_away)
+
+      const isExact = rule.category_id === 'soccer_exact_score' || rule.category_id === 'soccer_ht_exact_score'
+
+      if (isExact) {
         const [ph, pa] = (pick || '0-0').split('-').map(Number)
-        const predictedResult = getResult(ph, pa)
-        if (rule.category_id === 'soccer_exact_score' && predictedResult === scoreResult) pts += (rule.partial_credit_points || 1)
-        if (rule.category_id === 'soccer_ht_exact_score' && predictedResult === htResult) pts += (rule.partial_credit_points || 1)
+        const isFullTime = rule.category_id === 'soccer_exact_score'
+        const actualHome = isFullTime ? result.home_score : result.ht_home
+        const actualAway = isFullTime ? result.away_score : result.ht_away
+        let pts = 0
+        const homeCorrect = ph === actualHome
+        const awayCorrect = pa === actualAway
+        const parts: string[] = []
+        if (homeCorrect) { pts += rule.points; parts.push(`${EXAMPLE_FIXTURE.home_team} ✓ +${rule.points}`) }
+        if (awayCorrect) { pts += rule.points; parts.push(`${EXAMPLE_FIXTURE.away_team} ✓ +${rule.points}`) }
+        if (homeCorrect && awayCorrect && rule.bonus_points > 0) { pts += rule.bonus_points; parts.push(`exact bonus +${rule.bonus_points}`) }
+        breakdown[rule.category_id] = { pts, detail: parts.length ? parts.join(' · ') : '✗ no points' }
+        total += pts
+      } else {
+        const correct = checkCorrect(rule.category_id, pick, result)
+        breakdown[rule.category_id] = correct
+          ? { pts: rule.points, detail: `✓ +${rule.points} pts` }
+          : { pts: 0, detail: '✗ no points' }
+        if (correct) total += rule.points
       }
     })
-    return pts
+
+    return { total, breakdown }
   }
 
   const enabledCount = Object.values(rules).filter(r => r.enabled).length
 
-  if (loading) return <div style={{color: '#aaa', fontSize: '13px'}}>loading...</div>
+  if (loading) return <div style={{ color: '#aaa', fontSize: '13px' }}>loading...</div>
 
   function RuleRow({ cat }: { cat: Category }) {
     const rule = rules[cat.id]
     if (!rule) return null
-    const pick = userPicks[cat.id]
     const isExact = cat.id === 'soccer_exact_score' || cat.id === 'soccer_ht_exact_score'
-    const correct = result && pick !== undefined && pick !== '' ? checkCorrect(cat.id, pick, result) : null
+    const isRound = ROUND_SPECIALS.includes(cat.id)
+    const description = DESCRIPTION_OVERRIDES[cat.id] || cat.description
 
     return (
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 0', borderBottom: '1px solid #f5f5f5' }}>
+        {/* Toggle */}
         <div onClick={() => toggleRule(cat.id)} style={{
           width: 36, height: 20, borderRadius: 10, flexShrink: 0, marginTop: 2,
           background: rule.enabled ? '#C8102E' : '#ddd', cursor: 'pointer', position: 'relative', transition: 'background 0.15s',
@@ -189,37 +301,45 @@ export default function RulesetBuilder({ sport, onComplete }: {
             transition: 'left 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
           }} />
         </div>
-        <div style={{flex: 1}}>
-          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px'}}>
-            <span style={{fontWeight: 600, fontSize: '12px', color: rule.enabled ? '#111' : '#888'}}>{cat.name}</span>
-            <div style={{display: 'flex', gap: '4px'}}>
-              {cat.requires_line && <span style={{fontSize: '9px', color: '#C8102E', border: '1px solid #C8102E', padding: '1px 4px'}}>LIVE LINE</span>}
-              {cat.prediction_type === 'per_round' && <span style={{fontSize: '9px', color: '#888', border: '1px solid #ddd', padding: '1px 4px'}}>ROUND</span>}
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+            <span style={{ fontWeight: 600, fontSize: '12px', color: rule.enabled ? '#111' : '#888' }}>{cat.name}</span>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              {cat.requires_line && (
+                <span style={{ fontSize: '9px', color: '#888', border: '1px solid #ccc', padding: '1px 4px', background: '#f5f5f5' }}>LIVE LINE</span>
+              )}
+              {isRound && (
+                <span style={{ fontSize: '9px', color: '#888', border: '1px solid #ddd', padding: '1px 4px' }}>ROUND</span>
+              )}
             </div>
           </div>
-          <p style={{fontSize: '11px', color: '#aaa', margin: '0 0 4px', lineHeight: 1.4}}>{cat.description}</p>
+          <p style={{ fontSize: '11px', color: '#aaa', margin: '0 0 4px', lineHeight: 1.4 }}>{description}</p>
+          {cat.requires_line && (
+            <p style={{ fontSize: '10px', color: '#bbb', margin: '0 0 4px', fontStyle: 'italic' }}>
+              Lines updated 24 hrs before kickoff.
+            </p>
+          )}
           {rule.enabled && (
             <div>
-              <div style={{display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px'}}>
-                <span style={{fontSize: '11px', color: '#555'}}>points:</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                <span style={{ fontSize: '11px', color: '#555' }}>{isExact ? 'pts per team score:' : 'points:'}</span>
                 <input type="number" min="1" max="20" value={rule.points}
                   onChange={e => setPoints(cat.id, parseInt(e.target.value) || 1)}
-                  style={{width: 44, border: '1px solid #ddd', padding: '2px 6px', fontSize: '12px', fontWeight: 600, textAlign: 'center', fontFamily: 'inherit'}} />
-                <span style={{fontSize: '11px', color: '#aaa'}}>per correct prediction</span>
+                  style={{ width: 44, border: '1px solid #ddd', padding: '2px 6px', fontSize: '12px', fontWeight: 600, textAlign: 'center', fontFamily: 'inherit' }} />
+                {!isExact && <span style={{ fontSize: '11px', color: '#aaa' }}>per correct prediction</span>}
               </div>
               {isExact && (
-                <div style={{display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px'}}>
-                  <input type="checkbox" id={`pc-${cat.id}`} checked={!!rule.partial_credit}
-                    onChange={() => togglePartialCredit(cat.id)} />
-                  <label htmlFor={`pc-${cat.id}`} style={{fontSize: '11px', color: '#555', cursor: 'pointer'}}>
-                    partial credit for correct result (wrong score)
-                  </label>
-                  {rule.partial_credit && (
-                    <input type="number" min="1" max="10" value={rule.partial_credit_points || 1}
-                      onChange={e => setRules(prev => ({...prev, [cat.id]: {...prev[cat.id], partial_credit_points: parseInt(e.target.value) || 1}}))}
-                      style={{width: 36, border: '1px solid #ddd', padding: '2px 4px', fontSize: '11px', textAlign: 'center', fontFamily: 'inherit'}} />
-                  )}
-                  {rule.partial_credit && <span style={{fontSize: '11px', color: '#aaa'}}>pts</span>}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
+                  <span style={{ fontSize: '11px', color: '#555' }}>exact score bonus:</span>
+                  <input type="number" min="0" max="20" value={rule.bonus_points}
+                    onChange={e => setBonusPoints(cat.id, parseInt(e.target.value) || 0)}
+                    style={{ width: 44, border: '1px solid #ddd', padding: '2px 6px', fontSize: '12px', fontWeight: 600, textAlign: 'center', fontFamily: 'inherit' }} />
+                  <span style={{ fontSize: '11px', color: '#aaa' }}>bonus pts (both right)</span>
+                </div>
+              )}
+              {isExact && (
+                <div style={{ fontSize: '10px', color: '#aaa', marginTop: '4px', lineHeight: 1.5 }}>
+                  e.g. 1 team right → <strong>{rule.points} pt</strong> · both right → <strong>{rule.points * 2 + rule.bonus_points} pts</strong> ({rule.points}+{rule.points}+{rule.bonus_points})
                 </div>
               )}
             </div>
@@ -233,121 +353,232 @@ export default function RulesetBuilder({ sport, onComplete }: {
     const rule = rules[cat.id]
     if (!rule?.enabled) return null
     const pick = userPicks[cat.id]
-    const correct = result && pick !== undefined && pick !== '' ? checkCorrect(cat.id, pick, result) : null
+    const isExact = cat.id === 'soccer_exact_score' || cat.id === 'soccer_ht_exact_score'
+    const isRound = ROUND_SPECIALS.includes(cat.id)
+    const scored = result ? calcScore() : null
+    const itemBreakdown = pick !== undefined && pick !== null && pick !== '' ? scored?.breakdown[cat.id] : null
 
-    const btnStyle = (val: any) => ({
+    const btnStyle = (val: any): React.CSSProperties => ({
       flex: 1, padding: '5px 3px', fontSize: '10px', border: '1px solid',
       cursor: 'pointer', fontFamily: 'inherit',
       borderColor: pick === val ? '#C8102E' : '#ddd',
       background: pick === val ? '#C8102E' : 'white',
       color: pick === val ? 'white' : '#555',
-    } as React.CSSProperties)
+    })
+
+    // Round specials: just show a "not yet picked" notice in the emulator
+    if (isRound) {
+      const roundLabel =
+        cat.id === 'soccer_clean_sheet_round' ? 'Clean Sheet' :
+        cat.id === 'soccer_brace_round' ? 'Brace Scorer' :
+        cat.id === 'soccer_red_card_round' ? 'Red Card Team' : 'Penalty Team'
+
+      return (
+        <div style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #f0f0f0' }}>
+          <div style={{ fontSize: '10px', fontWeight: 600, color: '#555', marginBottom: '5px', display: 'flex', justifyContent: 'space-between' }}>
+            <span>{cat.name}</span>
+            <span style={{ color: '#C8102E' }}>{rule.points} pt{rule.points > 1 ? 's' : ''}</span>
+          </div>
+          <div style={{ fontSize: '10px', color: '#aaa', fontStyle: 'italic', padding: '6px 8px', background: '#fafafa', border: '1px solid #f0f0f0' }}>
+            {cat.id === 'soccer_clean_sheet_round'
+              ? 'Pick 1 team per group, per matchday — shown on the pool page'
+              : cat.id === 'soccer_brace_round'
+              ? 'Pick any player in the tournament — searchable list shown on the pool page'
+              : 'Pick any team in the tournament — shown on the pool page'
+            }
+            <div style={{ marginTop: '3px', color: '#ccc' }}>Made once per matchday, not per game.</div>
+          </div>
+        </div>
+      )
+    }
 
     return (
-      <div style={{marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #f0f0f0'}}>
-        <div style={{fontSize: '10px', fontWeight: 600, color: '#555', marginBottom: '5px', display: 'flex', justifyContent: 'space-between'}}>
+      <div style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #f0f0f0' }}>
+        <div style={{ fontSize: '10px', fontWeight: 600, color: '#555', marginBottom: '5px', display: 'flex', justifyContent: 'space-between' }}>
           <span>{cat.name}</span>
-          <span style={{color: '#C8102E'}}>{rule.points} pt{rule.points > 1 ? 's' : ''}</span>
+          {isExact
+            ? <span style={{ color: '#C8102E' }}>{rule.points} pts/team · +{rule.bonus_points} bonus</span>
+            : <span style={{ color: '#C8102E' }}>{rule.points} pt{rule.points > 1 ? 's' : ''}</span>
+          }
         </div>
 
-        {cat.input_type === 'wld' && (
-          <div style={{display: 'flex', gap: 0}}>
-            <button style={{...btnStyle('home'), borderRight: 'none'}} onClick={() => setUserPicks(p => ({...p, [cat.id]: 'home'}))}>
+        {/* WLD buttons — but NOT for first_team_score (handled separately below) */}
+        {cat.input_type === 'wld' && cat.id !== 'soccer_first_team_score' && cat.id !== 'soccer_first_yellow_team' && (
+          <div style={{ display: 'flex', gap: 0 }}>
+            <button style={{ ...btnStyle('home'), borderRight: 'none' }}
+              onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'home' }))}>
               {EXAMPLE_FIXTURE.home_flag} {EXAMPLE_FIXTURE.home_team}
             </button>
             {cat.id !== 'soccer_asian_handicap' && (
-              <button style={{...btnStyle('draw'), borderRight: 'none'}} onClick={() => setUserPicks(p => ({...p, [cat.id]: 'draw'}))}>draw</button>
+              <button style={{ ...btnStyle('draw'), borderRight: 'none' }}
+                onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'draw' }))}>
+                draw
+              </button>
             )}
-            <button style={btnStyle('away')} onClick={() => setUserPicks(p => ({...p, [cat.id]: 'away'}))}>
+            <button style={btnStyle('away')}
+              onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'away' }))}>
               {EXAMPLE_FIXTURE.away_team} {EXAMPLE_FIXTURE.away_flag}
             </button>
           </div>
         )}
 
+        {/* First team to score: home / no goal / away */}
         {cat.id === 'soccer_first_team_score' && (
-          <div style={{display: 'flex', gap: 0}}>
-            <button style={{...btnStyle('home'), borderRight: 'none'}} onClick={() => setUserPicks(p => ({...p, [cat.id]: 'home'}))}>{EXAMPLE_FIXTURE.home_flag} {EXAMPLE_FIXTURE.home_team}</button>
-            <button style={{...btnStyle('none'), borderRight: 'none'}} onClick={() => setUserPicks(p => ({...p, [cat.id]: 'none'}))}>no goal</button>
-            <button style={btnStyle('away')} onClick={() => setUserPicks(p => ({...p, [cat.id]: 'away'}))}>{EXAMPLE_FIXTURE.away_team} {EXAMPLE_FIXTURE.away_flag}</button>
+          <div style={{ display: 'flex', gap: 0 }}>
+            <button style={{ ...btnStyle('home'), borderRight: 'none' }}
+              onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'home' }))}>
+              {EXAMPLE_FIXTURE.home_flag} {EXAMPLE_FIXTURE.home_team}
+            </button>
+            <button style={{ ...btnStyle('none'), borderRight: 'none' }}
+              onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'none' }))}>
+              no goal
+            </button>
+            <button style={btnStyle('away')}
+              onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'away' }))}>
+              {EXAMPLE_FIXTURE.away_team} {EXAMPLE_FIXTURE.away_flag}
+            </button>
           </div>
         )}
 
-        {cat.input_type === 'yesno' && (
-          <div style={{display: 'flex', gap: 0}}>
-            <button style={{...btnStyle(true), borderRight: 'none'}} onClick={() => setUserPicks(p => ({...p, [cat.id]: true}))}>yes</button>
-            <button style={btnStyle(false)} onClick={() => setUserPicks(p => ({...p, [cat.id]: false}))}>no</button>
+        {/* First yellow card team: home / no card / away */}
+        {cat.id === 'soccer_first_yellow_team' && (
+          <div style={{ display: 'flex', gap: 0 }}>
+            <button style={{ ...btnStyle('home'), borderRight: 'none' }}
+              onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'home' }))}>
+              {EXAMPLE_FIXTURE.home_flag} {EXAMPLE_FIXTURE.home_team}
+            </button>
+            <button style={{ ...btnStyle('none'), borderRight: 'none' }}
+              onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'none' }))}>
+              no card
+            </button>
+            <button style={btnStyle('away')}
+              onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'away' }))}>
+              {EXAMPLE_FIXTURE.away_team} {EXAMPLE_FIXTURE.away_flag}
+            </button>
           </div>
         )}
 
+        {/* Over/Under */}
         {cat.input_type === 'ou' && (
-          <div style={{display: 'flex', gap: 0}}>
-            <button style={{...btnStyle('over'), borderRight: 'none'}} onClick={() => setUserPicks(p => ({...p, [cat.id]: 'over'}))}>
-              over {cat.requires_line ? '(line TBD)' : '2.5'}
-            </button>
-            <button style={btnStyle('under')} onClick={() => setUserPicks(p => ({...p, [cat.id]: 'under'}))}>
-              under {cat.requires_line ? '(line TBD)' : '2.5'}
-            </button>
+          <div>
+            <div style={{ display: 'flex', gap: 0 }}>
+              <button style={{ ...btnStyle('over'), borderRight: 'none' }}
+                onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'over' }))}>
+                over {cat.id === 'soccer_total_goals_ou' ? EXAMPLE_FIXTURE.goals_line
+                    : cat.id === 'soccer_total_corners_ou' ? EXAMPLE_FIXTURE.corners_line
+                    : cat.id === 'soccer_card_points_ou' ? EXAMPLE_FIXTURE.card_pts_line
+                    : cat.requires_line ? '(line TBD)' : '2.5'}
+              </button>
+              <button style={btnStyle('under')}
+                onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'under' }))}>
+                under {cat.id === 'soccer_total_goals_ou' ? EXAMPLE_FIXTURE.goals_line
+                     : cat.id === 'soccer_total_corners_ou' ? EXAMPLE_FIXTURE.corners_line
+                     : cat.id === 'soccer_card_points_ou' ? EXAMPLE_FIXTURE.card_pts_line
+                     : cat.requires_line ? '(line TBD)' : '2.5'}
+              </button>
+            </div>
+            {cat.requires_line && (
+              <div style={{ fontSize: '9px', color: '#bbb', marginTop: '3px', fontStyle: 'italic' }}>
+                Lines updated 24 hrs before kickoff
+              </div>
+            )}
           </div>
         )}
 
-        {cat.input_type === 'exact' && (
-          <div style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
-            <input type="number" min="0" max="15" placeholder="0"
-              style={{width: 40, border: '1px solid #ddd', padding: '4px', textAlign: 'center', fontSize: '12px', fontFamily: 'inherit'}}
-              onChange={e => {
-                const current = (userPicks[cat.id] || '0-0').split('-')
-                setUserPicks(p => ({...p, [cat.id]: `${e.target.value}-${current[1] || '0'}`}))
-              }} />
-            <span style={{color: '#aaa'}}>–</span>
-            <input type="number" min="0" max="15" placeholder="0"
-              style={{width: 40, border: '1px solid #ddd', padding: '4px', textAlign: 'center', fontSize: '12px', fontFamily: 'inherit'}}
-              onChange={e => {
-                const current = (userPicks[cat.id] || '0-0').split('-')
-                setUserPicks(p => ({...p, [cat.id]: `${current[0] || '0'}-${e.target.value}`}))
-              }} />
+        {/* Exact score — home and away stored as separate keys to avoid stale closure */}
+        {cat.input_type === 'exact' && (() => {
+          const homeKey = `${cat.id}__home`
+          const awayKey = `${cat.id}__away`
+          const homeVal = userPicks[homeKey] ?? ''
+          const awayVal = userPicks[awayKey] ?? ''
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+              <input
+                type="number" min="0" max="15"
+                value={homeVal}
+                placeholder="0"
+                style={{ width: 40, border: '1px solid #ddd', padding: '4px', textAlign: 'center', fontSize: '12px', fontFamily: 'inherit' }}
+                onChange={e => {
+                  const v = e.target.value
+                  setUserPicks(p => {
+                    const away = p[awayKey] ?? ''
+                    return { ...p, [homeKey]: v, [cat.id]: `${v}-${away}` }
+                  })
+                }}
+              />
+              <span style={{ color: '#aaa' }}>–</span>
+              <input
+                type="number" min="0" max="15"
+                value={awayVal}
+                placeholder="0"
+                style={{ width: 40, border: '1px solid #ddd', padding: '4px', textAlign: 'center', fontSize: '12px', fontFamily: 'inherit' }}
+                onChange={e => {
+                  const v = e.target.value
+                  setUserPicks(p => {
+                    const home = p[homeKey] ?? ''
+                    return { ...p, [awayKey]: v, [cat.id]: `${home}-${v}` }
+                  })
+                }}
+              />
+            </div>
+          )
+        })()}
+
+        {/* Yes/No */}
+        {cat.input_type === 'yesno' && (
+          <div style={{ display: 'flex', gap: 0 }}>
+            <button style={{ ...btnStyle(true), borderRight: 'none' }}
+              onClick={() => setUserPicks(p => ({ ...p, [cat.id]: true }))}>yes</button>
+            <button style={btnStyle(false)}
+              onClick={() => setUserPicks(p => ({ ...p, [cat.id]: false }))}>no</button>
           </div>
         )}
 
-        {(cat.input_type === 'player' || cat.input_type === 'team') && (
-          <input placeholder={cat.input_type === 'player' ? 'player name...' : 'team name...'}
-            style={{width: '100%', border: '1px solid #ddd', padding: '5px 8px', fontSize: '11px', fontFamily: 'inherit'}}
-            onChange={e => setUserPicks(p => ({...p, [cat.id]: e.target.value}))} />
+        {/* Goalscorer search */}
+        {(cat.input_type === 'player') && (
+          <PlayerSearch
+            value={userPicks[cat.id] || ''}
+            onChange={v => setUserPicks(p => ({ ...p, [cat.id]: v }))}
+            players={WC_PLAYERS}
+            placeholder="search player..."
+          />
         )}
 
-        {result && correct !== null && (
-          <div style={{fontSize: '10px', marginTop: '3px', color: correct ? '#2d7a2d' : '#aaa'}}>
-            {correct ? `✓ +${rule.points} pts` : `✗ no points`}
-            {!correct && rule.partial_credit && (cat.id === 'soccer_exact_score' || cat.id === 'soccer_ht_exact_score') && (() => {
-              const [ph, pa] = (pick || '0-0').split('-').map(Number)
-              const predicted = getResult(ph, pa)
-              const actual = cat.id === 'soccer_exact_score' ? getResult(result.home_score, result.away_score) : getResult(result.ht_home, result.ht_away)
-              return predicted === actual ? <span style={{color: '#f59e0b'}}> · partial credit +{rule.partial_credit_points} pts</span> : null
-            })()}
+        {/* Team text input */}
+        {cat.input_type === 'team' && (
+          <input placeholder="team name..."
+            style={{ width: '100%', border: '1px solid #ddd', padding: '5px 8px', fontSize: '11px', fontFamily: 'inherit' }}
+            onChange={e => setUserPicks(p => ({ ...p, [cat.id]: e.target.value }))} />
+        )}
+
+        {/* Scoring feedback */}
+        {result && itemBreakdown && (
+          <div style={{ fontSize: '10px', marginTop: '4px', color: itemBreakdown.pts > 0 ? '#2d7a2d' : '#aaa' }}>
+            {itemBreakdown.detail}
           </div>
         )}
       </div>
     )
   }
 
-  const allCatIds = [...CATEGORY_GROUPS.flatMap(g => g.ids), ...ROUND_SPECIALS]
   const perRoundCats = categories.filter(c => ROUND_SPECIALS.includes(c.id))
 
   return (
-    <div style={{display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'start'}}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'start' }}>
 
       {/* LEFT */}
       <div>
-        <div style={{marginBottom: '16px'}}>
-          <h2 style={{fontWeight: 700, fontSize: '15px', marginBottom: '4px'}}>what should participants predict?</h2>
-          <p style={{fontSize: '11px', color: '#888'}}>toggle on predictions, set the points. the ticket preview updates live on the right.</p>
+        <div style={{ marginBottom: '16px' }}>
+          <h2 style={{ fontWeight: 700, fontSize: '15px', marginBottom: '4px' }}>what should participants predict?</h2>
+          <p style={{ fontSize: '11px', color: '#888' }}>toggle on predictions, set the points. the ticket preview updates live on the right.</p>
         </div>
 
         {CATEGORY_GROUPS.map(group => {
           const groupCats = categories.filter(c => group.ids.includes(c.id))
           if (groupCats.length === 0) return null
           return (
-            <div key={group.label} style={{marginBottom: '20px'}}>
-              <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '4px', paddingBottom: '4px', borderBottom: '1px solid #eee'}}>
+            <div key={group.label} style={{ marginBottom: '20px' }}>
+              <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '4px', paddingBottom: '4px', borderBottom: '1px solid #eee' }}>
                 {group.label}
               </div>
               {groupCats.map(cat => <RuleRow key={cat.id} cat={cat} />)}
@@ -356,11 +587,11 @@ export default function RulesetBuilder({ sport, onComplete }: {
         })}
 
         {perRoundCats.length > 0 && (
-          <div style={{marginBottom: '20px'}}>
-            <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '4px', paddingBottom: '4px', borderBottom: '1px solid #eee'}}>
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '4px', paddingBottom: '4px', borderBottom: '1px solid #eee' }}>
               round specials
-              <span style={{fontWeight: 400, textTransform: 'none' as const, marginLeft: '6px', color: '#ccc'}}>
-                — one pick per matchday, covers your group's game that day
+              <span style={{ fontWeight: 400, textTransform: 'none' as const, marginLeft: '6px', color: '#ccc' }}>
+                — one pick per matchday, per group
               </span>
             </div>
             {perRoundCats.map(cat => <RuleRow key={cat.id} cat={cat} />)}
@@ -379,50 +610,58 @@ export default function RulesetBuilder({ sport, onComplete }: {
         </button>
       </div>
 
-      {/* RIGHT: Ticket emulator */}
-      <div style={{position: 'sticky', top: 70}}>
-        <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '8px'}}>
+      {/* RIGHT: Ticket emulator — scrollable, max height so it doesn't go off screen */}
+      <div style={{ position: 'sticky', top: 70, maxHeight: 'calc(100vh - 90px)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '8px', flexShrink: 0 }}>
           ticket preview — example fixture
         </div>
-        <div style={{background: 'white', border: '1px solid #e0e0db'}}>
-          <div style={{background: '#111', color: 'white', padding: '10px 12px'}}>
-            <div style={{fontSize: '10px', color: '#888', marginBottom: '4px'}}>{EXAMPLE_FIXTURE.round} · {EXAMPLE_FIXTURE.date}</div>
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-              <span style={{fontWeight: 700, fontSize: '13px'}}>{EXAMPLE_FIXTURE.home_flag} {EXAMPLE_FIXTURE.home_team}</span>
-              <span style={{color: '#555', fontSize: '11px'}}>vs</span>
-              <span style={{fontWeight: 700, fontSize: '13px'}}>{EXAMPLE_FIXTURE.away_team} {EXAMPLE_FIXTURE.away_flag}</span>
+        <div style={{ background: 'white', border: '1px solid #e0e0db', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+
+          {/* Fixed header */}
+          <div style={{ background: '#111', color: 'white', padding: '10px 12px', flexShrink: 0 }}>
+            <div style={{ fontSize: '10px', color: '#888', marginBottom: '4px' }}>{EXAMPLE_FIXTURE.round} · {EXAMPLE_FIXTURE.date}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontWeight: 700, fontSize: '13px' }}>{EXAMPLE_FIXTURE.home_flag} {EXAMPLE_FIXTURE.home_team}</span>
+              <span style={{ color: '#555', fontSize: '11px' }}>vs</span>
+              <span style={{ fontWeight: 700, fontSize: '13px' }}>{EXAMPLE_FIXTURE.away_team} {EXAMPLE_FIXTURE.away_flag}</span>
             </div>
             {result && (
-              <div style={{marginTop: '8px', fontSize: '11px', color: '#aaa', lineHeight: 1.6}}>
-                <div style={{fontWeight: 700, fontSize: '15px', color: 'white', textAlign: 'center'}}>{result.home_score} – {result.away_score}</div>
-                <div style={{textAlign: 'center', fontSize: '10px'}}>HT: {result.ht_home}–{result.ht_away} · corners: {result.home_corners}–{result.away_corners} · cards: {result.home_yellows}Y{result.home_reds > 0 ? `/${result.home_reds}R` : ''} / {result.away_yellows}Y{result.away_reds > 0 ? `/${result.away_reds}R` : ''}</div>
-                {result.handicap_line !== 0 && <div style={{textAlign: 'center', fontSize: '10px', color: '#C8102E'}}>handicap: {result.home_score > 0 ? EXAMPLE_FIXTURE.home_team : EXAMPLE_FIXTURE.away_team} {result.handicap_line > 0 ? '+' : ''}{result.handicap_line}</div>}
+              <div style={{ marginTop: '8px', lineHeight: 1.6 }}>
+                <div style={{ fontWeight: 700, fontSize: '15px', color: 'white', textAlign: 'center' }}>{result.home_score} – {result.away_score}</div>
+                <div style={{ textAlign: 'center', fontSize: '10px', color: '#aaa' }}>
+                  HT: {result.ht_home}–{result.ht_away} · corners: {result.home_corners}–{result.away_corners} · cards: {result.home_yellows}Y{result.home_reds > 0 ? `/${result.home_reds}R` : ''} / {result.away_yellows}Y{result.away_reds > 0 ? `/${result.away_reds}R` : ''}
+                </div>
+                {result.first_scorer && (
+                  <div style={{ textAlign: 'center', fontSize: '10px', color: '#aaa' }}>first scorer: {result.first_scorer}</div>
+                )}
+                <div style={{ textAlign: 'center', fontSize: '10px', color: '#777' }}>
+                  handicap: {EXAMPLE_FIXTURE.home_team} {EXAMPLE_FIXTURE.handicap_line > 0 ? '+' : ''}{EXAMPLE_FIXTURE.handicap_line} · goals O/U: {EXAMPLE_FIXTURE.goals_line} · corners O/U: {EXAMPLE_FIXTURE.corners_line}
+                </div>
               </div>
             )}
           </div>
 
+          {/* Scrollable body */}
           {enabledCount === 0 ? (
-            <div style={{padding: '20px', textAlign: 'center', color: '#aaa', fontSize: '12px'}}>
+            <div style={{ padding: '20px', textAlign: 'center', color: '#aaa', fontSize: '12px' }}>
               toggle on predictions to see the ticket
             </div>
           ) : (
-            <div style={{padding: '10px 12px'}}>
-              {categories.filter(c => rules[c.id]?.enabled && c.id !== 'soccer_first_team_score').map(cat => (
-                <TicketInput key={cat.id} cat={cat} />
-              ))}
-              {categories.filter(c => c.id === 'soccer_first_team_score' && rules[c.id]?.enabled).map(cat => (
+            <div style={{ overflowY: 'auto', flex: 1, padding: '10px 12px' }}>
+              {categories.filter(c => rules[c.id]?.enabled).map(cat => (
                 <TicketInput key={cat.id} cat={cat} />
               ))}
 
-              <div style={{marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #eee'}}>
-                <button onClick={() => { setResult(generateResult()); setUserPicks({}) }}
-                  style={{width: '100%', padding: '8px', fontSize: '11px', background: '#f5f5f5', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '6px'}}>
+              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #eee' }}>
+                <button
+                  onClick={() => setResult(generateResult())}
+                  style={{ width: '100%', padding: '8px', fontSize: '11px', background: '#f5f5f5', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '6px' }}>
                   🎲 generate random result
                 </button>
                 {result && Object.keys(userPicks).length > 0 && (
-                  <div style={{textAlign: 'center', padding: '8px', background: '#fff5f5', border: '1px solid #f0d0d0'}}>
-                    <span style={{fontSize: '11px', color: '#555'}}>score for these picks: </span>
-                    <span style={{fontWeight: 700, fontSize: '16px', color: '#C8102E'}}>{calcScore()} pts</span>
+                  <div style={{ textAlign: 'center', padding: '8px', background: '#fff5f5', border: '1px solid #f0d0d0' }}>
+                    <span style={{ fontSize: '11px', color: '#555' }}>score for these picks: </span>
+                    <span style={{ fontWeight: 700, fontSize: '16px', color: '#C8102E' }}>{calcScore().total} pts</span>
                   </div>
                 )}
               </div>
