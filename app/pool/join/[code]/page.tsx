@@ -15,7 +15,12 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
       localStorage.setItem('pending_invite', params.code)
-      const { data: pool } = await supabase.from('pools').select('*').eq('invite_code', params.code).single()
+      const { data: pool, error } = await supabase
+        .from('pools')
+        .select('*')
+        .eq('invite_code', params.code)
+        .maybeSingle()
+      if (error) { console.error('pool lookup error:', error); setNotFound(true); setLoading(false); return }
       if (!pool) { setNotFound(true); setLoading(false); return }
       setPool(pool)
       if (session?.user) {
@@ -45,8 +50,8 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
   if (notFound) return (
     <div style={{minHeight:'100vh',background:'#f7f7f5',display:'flex',alignItems:'center',justifyContent:'center'}}>
       <div style={{background:'white',border:'1px solid #e0e0db',padding:'24px',maxWidth:360,textAlign:'center',fontSize:'13px'}}>
-        <p style={{fontWeight:600,marginBottom:'6px'}}>invalid invite link</p>
-        <p style={{color:'#888'}}>this link doesn't exist or has expired.</p>
+        <p style={{fontWeight:600,marginBottom:'6px'}}>invite link not found</p>
+        <p style={{color:'#888'}}>double-check the link or ask the pool admin to resend it.</p>
       </div>
     </div>
   )

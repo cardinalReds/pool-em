@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { RULE_PACKAGES } from '@/types'
 import FixturesList from '@/components/FixturesList'
 import ReminderButton from '@/components/ReminderButton'
+import InvitePanel from '@/components/InvitePanel'
 
 function getSessionFromCookie() {
   try {
@@ -24,6 +25,7 @@ function DeletePool({ poolId }: { poolId: string }) {
     setDeleting(true)
     const supabase = createClient()
     await supabase.from('predictions').delete().eq('pool_id', poolId)
+    await supabase.from('predictions_v2').delete().eq('pool_id', poolId)
     await supabase.from('pool_members').delete().eq('pool_id', poolId)
     await supabase.from('reminders').delete().eq('pool_id', poolId)
     await supabase.from('pools').delete().eq('id', poolId)
@@ -93,10 +95,21 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       if (!membership) { window.location.href = `/pool/join/${pool.invite_code}`; return }
 
       const { data: members } = await supabase.from('pool_members').select('*').eq('pool_id', pool.id)
-      const { data: scores } = await supabase.from('predictions').select('user_id, points_earned').eq('pool_id', pool.id)
 
       const pointsMap: Record<string, number> = {}
-      scores?.forEach(s => { if (s.points_earned) pointsMap[s.user_id] = (pointsMap[s.user_id] || 0) + s.points_earned })
+      if (pool.package_id === 'CUSTOM') {
+        const { data: scores } = await supabase
+          .from('predictions_v2')
+          .select('user_id, points_earned')
+          .eq('pool_id', pool.id)
+        scores?.forEach(s => { if (s.points_earned) pointsMap[s.user_id] = (pointsMap[s.user_id] || 0) + s.points_earned })
+      } else {
+        const { data: scores } = await supabase
+          .from('predictions')
+          .select('user_id, points_earned')
+          .eq('pool_id', pool.id)
+        scores?.forEach(s => { if (s.points_earned) pointsMap[s.user_id] = (pointsMap[s.user_id] || 0) + s.points_earned })
+      }
       setLeaderboard((members || []).map(m => ({ ...m, points: pointsMap[m.user_id] || 0 })).sort((a, b) => b.points - a.points))
       setLoading(false)
     }
@@ -189,9 +202,15 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             <div style={{borderTop: '1px solid #eee', paddingTop: '14px', marginBottom: '14px'}}>
               <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '6px'}}>scoring</div>
               <div style={{fontSize: '11px', color: '#555', lineHeight: 1.8}}>
-                {pkg?.scoring.correct_result ? `correct result: ${pkg.scoring.correct_result} pt` : ''}
-                {pkg?.scoring.correct_first_scorer ? <><br />first scorer: {pkg.scoring.correct_first_scorer} pts</> : ''}
-                {pkg?.scoring.correct_exact_score ? <><br />exact score: {pkg.scoring.correct_exact_score} pts</> : ''}
+                {pool.package_id === 'CUSTOM' ? (
+                  <>custom ruleset · points vary by prediction</>
+                ) : (
+                  <>
+                    {pkg?.scoring.correct_result ? `correct result: ${pkg.scoring.correct_result} pt` : ''}
+                    {pkg?.scoring.correct_first_scorer ? <><br />first scorer: {pkg.scoring.correct_first_scorer} pts</> : ''}
+                    {pkg?.scoring.correct_exact_score ? <><br />exact score: {pkg.scoring.correct_exact_score} pts</> : ''}
+                  </>
+                )}
                 <br />deadline: {pool.deadline_type === 'before_each_game' ? 'before kickoff' : 'before tournament'}
               </div>
             </div>
@@ -199,15 +218,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             {/* Invite */}
             {isAdmin && (
               <div style={{borderTop: '1px solid #eee', paddingTop: '14px', marginBottom: '14px'}}>
-                <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '6px'}}>invite</div>
-                <div style={{display: 'flex', gap: '4px'}}>
-                  <input readOnly value={inviteUrl} onClick={e => (e.target as HTMLInputElement).select()}
-                    style={{fontSize: '10px', border: '1px solid #ddd', padding: '3px 6px', flex: 1, minWidth: 0, color: '#888', background: '#fafafa', fontFamily: 'inherit'}} />
-                  <button onClick={handleCopy}
-                    style={{fontSize: '10px', padding: '3px 8px', background: '#111', color: 'white', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit'}}>
-                    {copied ? 'copied!' : 'copy'}
-                  </button>
-                </div>
+                <InvitePanel poolId={pool.id} poolName={pool.name} inviteUrl={inviteUrl} />
               </div>
             )}
 

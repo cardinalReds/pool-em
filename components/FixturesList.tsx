@@ -166,10 +166,12 @@ export default function FixturesList({
   const [fixtures, setFixtures] = useState<Fixture[]>([])
   const [poolRules, setPoolRules] = useState<PoolRule[]>([])
   const [preds, setPreds] = useState<PredMap>({})
+  const [memberPreds, setMemberPreds] = useState<PredMap>({}) // all members' picks for locked fixtures
+  const [members, setMembers] = useState<Record<string, string>>({}) // userId → displayName
   const [scoreInputs, setScoreInputs] = useState<ScoreInputMap>({})
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState<number | null>(null) // fixtureId being saved
-  const [saved, setSaved] = useState<Record<number, boolean>>({}) // fixtureId → confirmed saved
+  const [saving, setSaving] = useState<number | null>(null)
+  const [saved, setSaved] = useState<Record<number, boolean>>({})
   const [sortMode, setSortMode] = useState<'date' | 'group'>('date')
   const [viewMode, setViewMode] = useState<'pages' | 'list'>('pages')
   const [currentPage, setCurrentPage] = useState(0)
@@ -223,6 +225,26 @@ export default function FixturesList({
         })
         setPreds(predMap)
         setScoreInputs(scoreMap)
+
+        // Fetch all members' display names
+        const { data: memberRows } = await supabase
+          .from('pool_members')
+          .select('user_id, display_name')
+          .eq('pool_id', poolId)
+        const memberMap: Record<string, string> = {}
+        ;(memberRows || []).forEach((m: any) => { memberMap[m.user_id] = m.display_name })
+        setMembers(memberMap)
+
+        // Fetch all members' picks for locked/finished fixtures (everyone's picks, not just ours)
+        const { data: allPreds } = await supabase
+          .from('predictions_v2')
+          .select('*')
+          .eq('pool_id', poolId)
+        const allPredMap: PredMap = {}
+        ;(allPreds || []).forEach((p: PredV2) => {
+          allPredMap[`${p.user_id}:${p.fixture_id}:${p.category_id}`] = p
+        })
+        setMemberPreds(allPredMap)
       } else {
         // Legacy: load from predictions table
         const { data: legacyPreds } = await supabase
@@ -559,6 +581,24 @@ export default function FixturesList({
     )
   }
 
+  // Format a prediction value for display in the picks comparison table
+  function formatPickValue(pred: PredV2 | undefined, rule: PoolRule, fixture: Fixture): string {
+    if (!pred) return '—'
+    if (rule.input_type === 'wld' || rule.category_id === 'soccer_first_team_score' || rule.category_id === 'soccer_first_yellow_team') {
+      if (!pred.value_wld) return '—'
+      if (pred.value_wld === 'home') return `${FLAGS[fixture.home_team] || ''} ${fixture.home_team}`
+      if (pred.value_wld === 'away') return `${fixture.away_team} ${FLAGS[fixture.away_team] || ''}`
+      if (pred.value_wld === 'draw') return 'draw'
+      if (pred.value_wld === 'none') return rule.category_id === 'soccer_first_yellow_team' ? 'no card' : 'no goal'
+      return pred.value_wld
+    }
+    if (rule.input_type === 'exact') return pred.value_text || '—'
+    if (rule.input_type === 'ou') return pred.value_ou ? `${pred.value_ou}` : '—'
+    if (rule.input_type === 'yesno') return pred.value_yesno === null ? '—' : pred.value_yesno ? 'yes' : 'no'
+    if (rule.input_type === 'player' || rule.input_type === 'team') return pred.value_text || '—'
+    return '—'
+  }
+
   // ── Fixture card ─────────────────────────────────────────────────────────
   function FixtureCard({ fixture }: { fixture: Fixture }) {
     const locked = isLocked(fixture)
@@ -627,6 +667,65 @@ export default function FixturesList({
                 {saved[fixture.id] && (
                   <span style={{ fontSize: '11px', color: '#2d7a2d' }}>✓ picks saved</span>
                 )}
+              </div>
+            )}
+
+            {/* Member picks comparison — visible once locked */}
+            {(locked || finished) && Object.keys(members).length > 0 && (
+              <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #f0f0f0' }}>
+                <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '8px' }}>
+                  everyone's picks
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                    <thead>
+                      <tr>
+                        <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const }}></td>
+                        {perGameRules.map(rule => (
+                          <td key={rule.category_id} style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const, textAlign: 'center' as const }}>
+                            {rule.name}
+                          </td>
+                        ))}
+                        {finished && <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>pts</td>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(members).map(([memberId, displayName]) => {
+                        const isMe = memberId === userId
+                        const memberTotalPts = perGameRules.reduce((sum, rule) => {
+                          const p = memberPreds[`${memberId}:${fixture.id}:${rule.category_id}`]
+                          return sum + (p?.points_earned ?? 0)
+                        }, 0)
+                        return (
+                          <tr key={memberId} style={{ background: isMe ? '#fff5f5' : 'transparent' }}>
+                            <td style={{ padding: '4px 6px', fontWeight: isMe ? 700 : 400, color: isMe ? '#C8102E' : '#555', whiteSpace: 'nowrap' as const, borderTop: '1px solid #f5f5f5' }}>
+                              {displayName}{isMe ? ' (you)' : ''}
+                            </td>
+                            {perGameRules.map(rule => {
+                              const p = memberPreds[`${memberId}:${fixture.id}:${rule.category_id}`]
+                              const isCorrect = p?.is_correct
+                              return (
+                                <td key={rule.category_id} style={{
+                                  padding: '4px 6px', textAlign: 'center' as const, whiteSpace: 'nowrap' as const,
+                                  borderTop: '1px solid #f5f5f5',
+                                  color: finished ? (isCorrect ? '#2d7a2d' : isCorrect === false ? '#aaa' : '#555') : '#555',
+                                }}>
+                                  {formatPickValue(p, rule, fixture)}
+                                  {finished && isCorrect && <span style={{ marginLeft: 3 }}>✓</span>}
+                                </td>
+                              )
+                            })}
+                            {finished && (
+                              <td style={{ padding: '4px 6px', textAlign: 'center' as const, fontWeight: 700, color: memberTotalPts > 0 ? '#C8102E' : '#aaa', borderTop: '1px solid #f5f5f5' }}>
+                                {memberTotalPts > 0 ? `+${memberTotalPts}` : '0'}
+                              </td>
+                            )}
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
