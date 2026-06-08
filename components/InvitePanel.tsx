@@ -2,10 +2,12 @@
 
 import { useState } from 'react'
 
-export default function InvitePanel({ poolId, poolName, inviteUrl }: {
+export default function InvitePanel({ poolId, poolName, inviteUrl, buyInAmount, payoutStructure }: {
   poolId: string
   poolName: string
   inviteUrl: string
+  buyInAmount?: number | null
+  payoutStructure?: string | null
 }) {
   const [copied, setCopied] = useState(false)
   const [phone, setPhone] = useState('')
@@ -74,7 +76,7 @@ export default function InvitePanel({ poolId, poolName, inviteUrl }: {
       const res = await fetch('/api/invite/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), poolName, inviteUrl }),
+        body: JSON.stringify({ email: email.trim(), poolName, inviteUrl, buyInAmount, payoutStructure }),
       })
       if (!res.ok) throw new Error('Failed to send')
       setEmailSent(true)

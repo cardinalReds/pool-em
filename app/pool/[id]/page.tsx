@@ -182,12 +182,20 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             {!isAdmin && pool.buy_in_amount && pool.venmo_handle && (
               <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '10px 12px', marginBottom: '16px'}}>
                 <p style={{fontSize: '11px', fontWeight: 600, marginBottom: '4px'}}>💰 ${pool.buy_in_amount} buy-in due</p>
-                <p style={{fontSize: '10px', color: '#888', marginBottom: '8px'}}>send to @{pool.venmo_handle} on venmo</p>
+                <p style={{fontSize: '10px', color: '#888', marginBottom: pool.payout_structure ? '6px' : '8px'}}>send to @{pool.venmo_handle} on venmo</p>
+                {pool.payout_structure && (
+                  <p style={{fontSize: '10px', color: '#666', marginBottom: '8px'}}>🏆 payout: {pool.payout_structure}</p>
+                )}
                 <a href={`https://venmo.com/${pool.venmo_handle}?txn=pay&amount=${pool.buy_in_amount}&note=${encodeURIComponent(pool.name + ' buy-in')}`} target="_blank" rel="noopener noreferrer">
                   <button style={{width: '100%', padding: '6px', fontSize: '11px', fontWeight: 600, background: '#3D95CE', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
                     pay via venmo →
                   </button>
                 </a>
+              </div>
+            )}
+            {isAdmin && pool.buy_in_amount && pool.payout_structure && (
+              <div style={{background: '#f9f9f9', border: '1px solid #eee', padding: '10px 12px', marginBottom: '16px', fontSize: '11px', color: '#555'}}>
+                💰 ${pool.buy_in_amount} buy-in · 🏆 {pool.payout_structure}
               </div>
             )}
 
@@ -246,7 +254,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             {/* Invite */}
             {isAdmin && (
               <div style={{borderTop: '1px solid #eee', paddingTop: '14px', marginBottom: '14px'}}>
-                <InvitePanel poolId={pool.id} poolName={pool.name} inviteUrl={inviteUrl} />
+                <InvitePanel poolId={pool.id} poolName={pool.name} inviteUrl={inviteUrl} buyInAmount={pool.buy_in_amount} payoutStructure={pool.payout_structure} />
               </div>
             )}
 

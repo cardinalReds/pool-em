@@ -29,6 +29,16 @@ export default function CreatePoolPage() {
   // Step 4 — buy-in
   const [buyIn, setBuyIn] = useState('')
   const [venmoHandle, setVenmoHandle] = useState('')
+  const [payoutTemplate, setPayoutTemplate] = useState<string>('winner')
+  const [customPayout, setCustomPayout] = useState('')
+
+  const PAYOUT_TEMPLATES = [
+    { id: 'winner', label: 'Winner takes all', description: '1st place gets the full pot' },
+    { id: 'top2', label: 'Top 2 split', description: '1st: 70% · 2nd: 30%' },
+    { id: 'top3', label: 'Top 3 split', description: '1st: 60% · 2nd: 25% · 3rd: 15%' },
+    { id: 'top3_equal', label: 'Top 3 equal', description: '1st, 2nd, 3rd split evenly' },
+    { id: 'custom', label: 'Custom', description: 'Write your own payout rules' },
+  ]
 
   const TOURNAMENTS = [
     { id: 'wc_2026', name: 'FIFA World Cup 2026', sport: 'soccer', description: 'Group stage · Jun 12 – Jul 2' },
@@ -54,6 +64,9 @@ export default function CreatePoolPage() {
       is_active: true,
       buy_in_amount: buyIn ? parseFloat(buyIn) : null,
       venmo_handle: venmoHandle.replace('@', '').trim() || null,
+      payout_structure: buyIn && parseFloat(buyIn) > 0
+        ? (payoutTemplate === 'custom' ? customPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description || null)
+        : null,
     }).select().single()
 
     if (poolError) { setError(poolError.message); setLoading(false); return }
@@ -194,16 +207,60 @@ export default function CreatePoolPage() {
                 style={{border: '1px solid #ddd', padding: '6px 10px', fontSize: '16px', width: 100, fontFamily: 'inherit'}} />
               <span style={{fontSize: '13px', color: '#888'}}>per person</span>
             </div>
+
             {buyIn && parseFloat(buyIn) > 0 && (
-              <div style={{marginBottom: '12px'}}>
-                <label style={{display: 'block', fontWeight: 600, marginBottom: '6px'}}>your venmo handle</label>
-                <div style={{display: 'flex', alignItems: 'center', gap: '4px'}}>
-                  <span style={{color: '#555', fontSize: '14px'}}>@</span>
-                  <input type="text" placeholder="yourhandle" value={venmoHandle}
-                    onChange={e => setVenmoHandle(e.target.value.replace('@', ''))}
-                    style={{border: '1px solid #ddd', padding: '6px 10px', fontSize: '13px', flex: 1, fontFamily: 'inherit'}} />
+              <>
+                <div style={{marginBottom: '16px'}}>
+                  <label style={{display: 'block', fontWeight: 600, marginBottom: '6px'}}>your venmo handle</label>
+                  <div style={{display: 'flex', alignItems: 'center', gap: '4px'}}>
+                    <span style={{color: '#555', fontSize: '14px'}}>@</span>
+                    <input type="text" placeholder="yourhandle" value={venmoHandle}
+                      onChange={e => setVenmoHandle(e.target.value.replace('@', ''))}
+                      style={{border: '1px solid #ddd', padding: '6px 10px', fontSize: '13px', flex: 1, fontFamily: 'inherit'}} />
+                  </div>
                 </div>
-              </div>
+
+                <div style={{marginBottom: '16px'}}>
+                  <label style={{display: 'block', fontWeight: 600, marginBottom: '6px'}}>how does the pot get paid out?</label>
+                  <div style={{display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px'}}>
+                    {PAYOUT_TEMPLATES.map(t => (
+                      <button key={t.id} onClick={() => setPayoutTemplate(t.id)}
+                        style={{
+                          textAlign: 'left', padding: '8px 12px', border: '1px solid', cursor: 'pointer',
+                          borderColor: payoutTemplate === t.id ? '#C8102E' : '#e0e0db',
+                          background: payoutTemplate === t.id ? '#fff5f5' : 'white',
+                        }}>
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                          <span style={{fontWeight: 600, fontSize: '12px', color: payoutTemplate === t.id ? '#C8102E' : '#111'}}>{t.label}</span>
+                          {t.id !== 'custom' && (
+                            <span style={{fontSize: '11px', color: '#888'}}>{t.description}</span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  {payoutTemplate === 'custom' && (
+                    <div>
+                      <label style={{display: 'block', fontSize: '11px', color: '#555', marginBottom: '4px'}}>
+                        describe your payout rules
+                      </label>
+                      <textarea
+                        placeholder="e.g. Top 3 places: 1st gets 50%, 2nd gets 30%, 3rd gets 20%. Ties split the prize money evenly."
+                        value={customPayout}
+                        onChange={e => setCustomPayout(e.target.value)}
+                        rows={3}
+                        style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '12px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box'}}
+                      />
+                    </div>
+                  )}
+                  {/* Preview */}
+                  {payoutTemplate !== 'custom' && buyIn && parseFloat(buyIn) > 0 && (
+                    <div style={{fontSize: '11px', color: '#555', padding: '8px', background: '#f9f9f9', border: '1px solid #eee', marginTop: '6px'}}>
+                      members will see: <em>"{PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description}"</em>
+                    </div>
+                  )}
+                </div>
+              </>
             )}
 
             <div style={{marginBottom: '12px', padding: '10px', background: '#f9f9f9', border: '1px solid #eee', fontSize: '11px', color: '#555'}}>

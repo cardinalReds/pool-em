@@ -59,6 +59,7 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
   const displayName = user?.user_metadata?.display_name || user?.email?.split('@')[0]
   const buyInAmount = pool?.buy_in_amount
   const venmoHandle = pool?.venmo_handle
+  const payoutStructure = pool?.payout_structure
   const hasBuyIn = !!(buyInAmount && venmoHandle)
   const venmoWebLink = hasBuyIn
     ? `https://venmo.com/${venmoHandle}?txn=pay&amount=${buyInAmount}&note=${encodeURIComponent(pool.name + ' buy-in')}`
@@ -80,15 +81,20 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
           {hasBuyIn && (
             <div style={{background:'#fffbf0',border:'1px solid #f0e0a0',padding:'16px',marginBottom:'12px'}}>
               <p style={{fontWeight:600,marginBottom:'4px'}}>💰 this pool has a ${buyInAmount} buy-in</p>
-              <p style={{fontSize:'11px',color:'#666',marginBottom:'12px'}}>
+              <p style={{fontSize:'11px',color:'#666',marginBottom: payoutStructure ? '8px' : '12px'}}>
                 send payment to <strong>@{venmoHandle}</strong> on venmo. the admin will confirm your payment.
               </p>
+              {payoutStructure && (
+                <p style={{fontSize:'11px',color:'#666',marginBottom:'12px',padding:'8px',background:'#fff8e6',border:'1px solid #f0e0a0'}}>
+                  🏆 payout: {payoutStructure}
+                </p>
+              )}
               <a href={venmoWebLink || '#'} target="_blank" rel="noopener noreferrer">
                 <button style={{width:'100%',padding:'10px',fontSize:'13px',fontWeight:600,background:'#3D95CE',color:'white',border:'none',cursor:'pointer',fontFamily:'inherit',marginBottom:'6px'}}>
                   pay ${buyInAmount} via venmo →
                 </button>
               </a>
-              <p style={{fontSize:'10px',color:'#aaa',textAlign:'center'}}>
+              <p style={{fontSize:'10px',color:'#aaa',textAlign:'center' as const}}>
                 you can still join without paying — but the admin may remove you
               </p>
             </div>
