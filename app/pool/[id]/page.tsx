@@ -6,6 +6,7 @@ import { RULE_PACKAGES } from '@/types'
 import FixturesList from '@/components/FixturesList'
 import ReminderButton from '@/components/ReminderButton'
 import InvitePanel from '@/components/InvitePanel'
+import BracketPicker from '@/components/BracketPicker'
 
 function getSessionFromCookie() {
   try {
@@ -64,6 +65,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const [user, setUser] = useState<any>(null)
   const [leaderboard, setLeaderboard] = useState<any[]>([])
   const [poolRules, setPoolRules] = useState<any[]>([])
+  const [pickMode, setPickMode] = useState<'simple' | 'full'>('simple')
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [inviteUrl, setInviteUrl] = useState('')
@@ -275,8 +277,15 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
         {/* RIGHT — centered content */}
         <div style={{display: 'flex', justifyContent: 'center', padding: '40px 24px'}}>
-          <div>
-            {user && (
+          <div style={{width: '100%', maxWidth: 960}}>
+            {user && pool.deadline_type === 'before_tournament' ? (
+              <BracketPicker
+                poolId={pool.id}
+                userId={user.id}
+                pickMode={pool.pick_mode || 'simple'}
+                locked={false}
+              />
+            ) : user && (
               <FixturesList
                 poolId={pool.id}
                 userId={user.id}

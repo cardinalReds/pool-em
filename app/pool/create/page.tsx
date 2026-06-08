@@ -26,6 +26,13 @@ export default function CreatePoolPage() {
   // Step 3 — ruleset
   const [selectedRules, setSelectedRules] = useState<SelectedRule[]>([])
 
+  // Bracket settings (only when deadline = before_tournament)
+  const [pickMode, setPickMode] = useState<'simple' | 'full'>('simple')
+  const [bracketScoring, setBracketScoring] = useState({
+    r32_points: 1, r16_points: 2, qf_points: 4,
+    sf_points: 8, final_points: 16, winner_points: 32,
+  })
+
   // Step 4 — buy-in
   const [buyIn, setBuyIn] = useState('')
   const [venmoHandle, setVenmoHandle] = useState('')
@@ -67,6 +74,7 @@ export default function CreatePoolPage() {
       payout_structure: buyIn && parseFloat(buyIn) > 0
         ? (payoutTemplate === 'custom' ? customPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description || null)
         : null,
+      pick_mode: deadlineType === 'before_tournament' ? pickMode : null,
     }).select().single()
 
     if (poolError) { setError(poolError.message); setLoading(false); return }
@@ -78,8 +86,17 @@ export default function CreatePoolPage() {
           pool_id: pool.id,
           category_id: r.category_id,
           points: r.points,
+          bonus_points: r.bonus_points || 0,
         }))
       )
+    }
+
+    // Save bracket scoring rules if before_tournament pool
+    if (deadlineType === 'before_tournament') {
+      await supabase.from('bracket_scoring_rules').insert({
+        pool_id: pool.id,
+        ...bracketScoring,
+      })
     }
 
     // Add admin as member
@@ -175,6 +192,48 @@ export default function CreatePoolPage() {
               <button className="btn-secondary" onClick={() => setStep(1)}>← back</button>
               <button className="btn-primary" onClick={() => setStep(3)}>next →</button>
             </div>
+
+            {/* Bracket settings — only for before_tournament pools */}
+            {deadlineType === 'before_tournament' && (
+              <div style={{marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '16px'}}>
+                <label style={{display: 'block', fontWeight: 600, marginBottom: '8px'}}>group stage pick style</label>
+                <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '16px'}}>
+                  {([
+                    { id: 'simple', label: 'rank teams per group', desc: 'pick 1st–4th in each group' },
+                    { id: 'full', label: 'predict every game', desc: 'app calculates who advances' },
+                  ] as const).map(opt => (
+                    <button key={opt.id} onClick={() => setPickMode(opt.id)}
+                      style={{
+                        padding: '8px', border: '1px solid', textAlign: 'left', cursor: 'pointer',
+                        borderColor: pickMode === opt.id ? '#C8102E' : '#e0e0db',
+                        background: pickMode === opt.id ? '#fff5f5' : 'white',
+                      }}>
+                      <div style={{fontWeight: 600, fontSize: '11px', color: pickMode === opt.id ? '#C8102E' : '#111'}}>{opt.label}</div>
+                      <div style={{fontSize: '10px', color: '#aaa', marginTop: '2px'}}>{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+
+                <label style={{display: 'block', fontWeight: 600, marginBottom: '8px'}}>bracket scoring (pts per correct pick)</label>
+                <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px'}}>
+                  {([
+                    { key: 'r32_points', label: 'Round of 32' },
+                    { key: 'r16_points', label: 'Round of 16' },
+                    { key: 'qf_points', label: 'Quarter Finals' },
+                    { key: 'sf_points', label: 'Semi Finals' },
+                    { key: 'final_points', label: 'Final' },
+                    { key: 'winner_points', label: 'Champion bonus' },
+                  ] as const).map(({ key, label }) => (
+                    <div key={key}>
+                      <div style={{fontSize: '10px', color: '#888', marginBottom: '3px'}}>{label}</div>
+                      <input type="number" min="0" max="100" value={bracketScoring[key]}
+                        onChange={e => setBracketScoring(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))}
+                        style={{width: '100%', border: '1px solid #ddd', padding: '4px 8px', fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', textAlign: 'center'}} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

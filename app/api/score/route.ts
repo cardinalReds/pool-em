@@ -98,7 +98,38 @@ async function fetchFixtureStats(fixtureId: number): Promise<CornerFacts> {
   return { homeCorners, awayCorners }
 }
 
-function getResult(home: number, away: number): 'home' | 'draw' | 'away' {
+async function fetchAndSeedSquad(teamId: number, teamName: string): Promise<void> {
+  // Check if we already have players for this team
+  const { count } = await supabase
+    .from('players')
+    .select('*', { count: 'exact', head: true })
+    .eq('team_id', teamId)
+    .eq('tournament_id', 'wc_2026')
+
+  if (count && count > 0) return // already seeded
+
+  const res = await fetch(
+    `https://v3.football.api-sports.io/players/squads?team=${teamId}`,
+    { headers: { 'x-apisports-key': API_FOOTBALL_KEY } }
+  )
+  const data = await res.json()
+  const squad = data.response?.[0]?.players || []
+
+  if (squad.length === 0) return
+
+  const rows = squad.map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    team_id: teamId,
+    team_name: teamName,
+    position: p.position || null,
+    shirt_number: p.number || null,
+    tournament_id: 'wc_2026',
+  }))
+
+  await supabase.from('players').upsert(rows, { onConflict: 'id' })
+  console.log(`Seeded ${rows.length} players for ${teamName}`)
+}
   if (home > away) return 'home'
   if (home < away) return 'away'
   return 'draw'
@@ -255,11 +286,20 @@ export async function POST(request: NextRequest) {
       if (existing?.scored) continue
 
       // Fetch events (goals, cards) and stats (corners) in parallel
+      // Also seed squad rosters if not already in DB
       const homeTeamId: number = match.teams.home.id
+      const awayTeamId: number = match.teams.away.id
+      const homeTeamName: string = match.teams.home.name
+      const awayTeamName: string = match.teams.away.name
+
       const [eventFacts, cornerFacts] = await Promise.all([
         fetchFixtureEvents(fixtureId, homeTeamId),
         fetchFixtureStats(fixtureId),
       ])
+
+      // Seed squads in background (non-blocking)
+      fetchAndSeedSquad(homeTeamId, homeTeamName).catch(console.error)
+      fetchAndSeedSquad(awayTeamId, awayTeamName).catch(console.error)
 
       const { firstScorerName, firstTeamScore, firstYellow, homeCardPts, awayCardPts } = eventFacts
       const actualResult = getResult(homeScore, awayScore)
