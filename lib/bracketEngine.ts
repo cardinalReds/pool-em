@@ -143,6 +143,7 @@ export function generateR32FromGroupPicks(
     if (slotIdx === thirdSlots.length) return true
     const slot = thirdSlots[slotIdx]
     const eligible = slot.away.groups || []
+    // Try eligible groups first
     for (let i = 0; i < remaining.length; i++) {
       if (eligible.includes(remaining[i])) {
         const group = remaining[i]
@@ -150,6 +151,12 @@ export function generateR32FromGroupPicks(
         thirdAssignments[slot.slot] = thirds[group] || ''
         if (assign(slotIdx + 1, next)) return true
       }
+    }
+    // Fallback: assign any remaining team (violates eligibility but avoids blank)
+    if (remaining.length > 0) {
+      thirdAssignments[slot.slot] = thirds[remaining[0]] || ''
+      const next = remaining.slice(1)
+      if (assign(slotIdx + 1, next)) return true
     }
     return false
   }
