@@ -63,6 +63,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const [pool, setPool] = useState<any>(null)
   const [user, setUser] = useState<any>(null)
   const [leaderboard, setLeaderboard] = useState<any[]>([])
+  const [poolRules, setPoolRules] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [inviteUrl, setInviteUrl] = useState('')
@@ -111,6 +112,17 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         scores?.forEach(s => { if (s.points_earned) pointsMap[s.user_id] = (pointsMap[s.user_id] || 0) + s.points_earned })
       }
       setLeaderboard((members || []).map(m => ({ ...m, points: pointsMap[m.user_id] || 0 })).sort((a, b) => b.points - a.points))
+
+      // Fetch scoring rubric for custom pools
+      if (pool.package_id === 'CUSTOM') {
+        const { data: rules } = await supabase
+          .from('pool_rules')
+          .select('category_id, points, bonus_points, ruleset_categories(name, input_type)')
+          .eq('pool_id', pool.id)
+          .order('category_id')
+        setPoolRules(rules || [])
+      }
+
       setLoading(false)
     }
     load()
@@ -198,21 +210,37 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               ))}
             </div>
 
-            {/* Scoring */}
+            {/* Scoring rubric */}
             <div style={{borderTop: '1px solid #eee', paddingTop: '14px', marginBottom: '14px'}}>
-              <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '6px'}}>scoring</div>
-              <div style={{fontSize: '11px', color: '#555', lineHeight: 1.8}}>
-                {pool.package_id === 'CUSTOM' ? (
-                  <>custom ruleset · points vary by prediction</>
-                ) : (
-                  <>
-                    {pkg?.scoring.correct_result ? `correct result: ${pkg.scoring.correct_result} pt` : ''}
-                    {pkg?.scoring.correct_first_scorer ? <><br />first scorer: {pkg.scoring.correct_first_scorer} pts</> : ''}
-                    {pkg?.scoring.correct_exact_score ? <><br />exact score: {pkg.scoring.correct_exact_score} pts</> : ''}
-                  </>
-                )}
-                <br />deadline: {pool.deadline_type === 'before_each_game' ? 'before kickoff' : 'before tournament'}
-              </div>
+              <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '8px'}}>scoring</div>
+              {pool.package_id === 'CUSTOM' ? (
+                <div>
+                  {poolRules.map((rule: any) => {
+                    const isExact = rule.category_id === 'soccer_exact_score' || rule.category_id === 'soccer_ht_exact_score'
+                    return (
+                      <div key={rule.category_id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '4px 0', borderBottom: '1px solid #f5f5f5'}}>
+                        <span style={{fontSize: '11px', color: '#555'}}>{rule.ruleset_categories?.name || rule.category_id}</span>
+                        <span style={{fontSize: '11px', color: '#111', fontWeight: 600, textAlign: 'right' as const, marginLeft: '8px', flexShrink: 0}}>
+                          {isExact
+                            ? `${rule.points}pt/team${rule.bonus_points > 0 ? ` +${rule.bonus_points} bonus` : ''}`
+                            : `${rule.points} pt${rule.points !== 1 ? 's' : ''}`
+                          }
+                        </span>
+                      </div>
+                    )
+                  })}
+                  <div style={{fontSize: '10px', color: '#aaa', marginTop: '8px'}}>
+                    deadline: {pool.deadline_type === 'before_each_game' ? 'before kickoff' : 'before tournament'}
+                  </div>
+                </div>
+              ) : (
+                <div style={{fontSize: '11px', color: '#555', lineHeight: 1.8}}>
+                  {pkg?.scoring.correct_result ? `correct result: ${pkg.scoring.correct_result} pt` : ''}
+                  {pkg?.scoring.correct_first_scorer ? <><br />first scorer: {pkg.scoring.correct_first_scorer} pts</> : ''}
+                  {pkg?.scoring.correct_exact_score ? <><br />exact score: {pkg.scoring.correct_exact_score} pts</> : ''}
+                  <br />deadline: {pool.deadline_type === 'before_each_game' ? 'before kickoff' : 'before tournament'}
+                </div>
+              )}
             </div>
 
             {/* Invite */}
