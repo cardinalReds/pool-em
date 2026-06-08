@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'pool\'em <invites@poolem.app>',
+      from: "pool'em <invites@pool-em.com>",
       to: email,
       subject: `You've been invited to join ${poolName}`,
       html: `
