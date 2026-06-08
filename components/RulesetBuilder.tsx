@@ -211,6 +211,15 @@ export default function RulesetBuilder({ sport, onComplete }: {
   const [loading, setLoading] = useState(true)
   const [result, setResult] = useState<ReturnType<typeof generateResult> | null>(null)
   const [userPicks, setUserPicks] = useState<Record<string, any>>({})
+  const [isMobile, setIsMobile] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+
+  useEffect(() => {
+    function checkMobile() { setIsMobile(window.innerWidth < 768) }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -563,111 +572,128 @@ export default function RulesetBuilder({ sport, onComplete }: {
 
   const perRoundCats = categories.filter(c => ROUND_SPECIALS.includes(c.id))
 
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'start' }}>
-
-      {/* LEFT */}
-      <div>
-        <div style={{ marginBottom: '16px' }}>
-          <h2 style={{ fontWeight: 700, fontSize: '15px', marginBottom: '4px' }}>what should participants predict?</h2>
-          <p style={{ fontSize: '11px', color: '#888' }}>toggle on predictions, set the points. the ticket preview updates live on the right.</p>
+  const ticketPreview = (
+    <div style={{ background: 'white', border: '1px solid #e0e0db', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      {/* Fixed header */}
+      <div style={{ background: '#111', color: 'white', padding: '10px 12px', flexShrink: 0 }}>
+        <div style={{ fontSize: '10px', color: '#888', marginBottom: '4px' }}>{EXAMPLE_FIXTURE.round} · {EXAMPLE_FIXTURE.date}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontWeight: 700, fontSize: '13px' }}>{EXAMPLE_FIXTURE.home_flag} {EXAMPLE_FIXTURE.home_team}</span>
+          <span style={{ color: '#555', fontSize: '11px' }}>vs</span>
+          <span style={{ fontWeight: 700, fontSize: '13px' }}>{EXAMPLE_FIXTURE.away_team} {EXAMPLE_FIXTURE.away_flag}</span>
         </div>
-
-        {CATEGORY_GROUPS.map(group => {
-          const groupCats = categories.filter(c => group.ids.includes(c.id))
-          if (groupCats.length === 0) return null
-          return (
-            <div key={group.label} style={{ marginBottom: '20px' }}>
-              <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '4px', paddingBottom: '4px', borderBottom: '1px solid #eee' }}>
-                {group.label}
-              </div>
-              {groupCats.map(cat => <RuleRow key={cat.id} cat={cat} />)}
+        {result && (
+          <div style={{ marginTop: '8px', lineHeight: 1.6 }}>
+            <div style={{ fontWeight: 700, fontSize: '15px', color: 'white', textAlign: 'center' }}>{result.home_score} – {result.away_score}</div>
+            <div style={{ textAlign: 'center', fontSize: '10px', color: '#aaa' }}>
+              HT: {result.ht_home}–{result.ht_away} · corners: {result.home_corners}–{result.away_corners} · cards: {result.home_yellows}Y{result.home_reds > 0 ? `/${result.home_reds}R` : ''} / {result.away_yellows}Y{result.away_reds > 0 ? `/${result.away_reds}R` : ''}
             </div>
-          )
-        })}
-
-        {perRoundCats.length > 0 && (
-          <div style={{ marginBottom: '20px' }}>
-            <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '4px', paddingBottom: '4px', borderBottom: '1px solid #eee' }}>
-              round specials
-              <span style={{ fontWeight: 400, textTransform: 'none' as const, marginLeft: '6px', color: '#ccc' }}>
-                — one pick per matchday, per group
-              </span>
+            {result.first_scorer && (
+              <div style={{ textAlign: 'center', fontSize: '10px', color: '#aaa' }}>first scorer: {result.first_scorer}</div>
+            )}
+            <div style={{ textAlign: 'center', fontSize: '10px', color: '#777' }}>
+              handicap: {EXAMPLE_FIXTURE.home_team} {EXAMPLE_FIXTURE.handicap_line > 0 ? '+' : ''}{EXAMPLE_FIXTURE.handicap_line} · goals O/U: {EXAMPLE_FIXTURE.goals_line} · corners O/U: {EXAMPLE_FIXTURE.corners_line}
             </div>
-            {perRoundCats.map(cat => <RuleRow key={cat.id} cat={cat} />)}
           </div>
         )}
-
-        <button
-          onClick={() => onComplete(Object.values(rules).filter(r => r.enabled))}
-          disabled={enabledCount === 0}
-          style={{
-            padding: '10px 24px', background: enabledCount > 0 ? '#111' : '#ddd',
-            color: 'white', border: 'none', cursor: enabledCount > 0 ? 'pointer' : 'default',
-            fontSize: '13px', fontWeight: 600, fontFamily: 'inherit',
-          }}>
-          continue with {enabledCount} prediction{enabledCount !== 1 ? 's' : ''} →
-        </button>
       </div>
 
+      {/* Scrollable body */}
+      {enabledCount === 0 ? (
+        <div style={{ padding: '20px', textAlign: 'center', color: '#aaa', fontSize: '12px' }}>
+          toggle on predictions to see the ticket
+        </div>
+      ) : (
+        <div style={{ overflowY: 'auto', flex: 1, padding: '10px 12px', maxHeight: isMobile ? 400 : undefined }}>
+          {categories.filter(c => rules[c.id]?.enabled).map(cat => (
+            <TicketInput key={cat.id} cat={cat} />
+          ))}
+          <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #eee' }}>
+            <button
+              onClick={() => setResult(generateResult())}
+              style={{ width: '100%', padding: '10px', fontSize: '12px', background: '#f5f5f5', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '6px', minHeight: 44 }}>
+              🎲 generate random result
+            </button>
+            {result && Object.keys(userPicks).length > 0 && (
+              <div style={{ textAlign: 'center', padding: '8px', background: '#fff5f5', border: '1px solid #f0d0d0' }}>
+                <span style={{ fontSize: '11px', color: '#555' }}>score for these picks: </span>
+                <span style={{ fontWeight: 700, fontSize: '16px', color: '#C8102E' }}>{calcScore().total} pts</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
+  const rulesPanel = (
+    <div>
+      <div style={{ marginBottom: '16px' }}>
+        <h2 style={{ fontWeight: 700, fontSize: '15px', marginBottom: '4px' }}>what should participants predict?</h2>
+        <p style={{ fontSize: '11px', color: '#888' }}>
+          {isMobile ? 'toggle on predictions, set the points.' : 'toggle on predictions, set the points. the ticket preview updates live on the right.'}
+        </p>
+      </div>
+
+      {CATEGORY_GROUPS.map(group => {
+        const groupCats = categories.filter(c => group.ids.includes(c.id))
+        if (groupCats.length === 0) return null
+        return (
+          <div key={group.label} style={{ marginBottom: '20px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '4px', paddingBottom: '4px', borderBottom: '1px solid #eee' }}>
+              {group.label}
+            </div>
+            {groupCats.map(cat => <RuleRow key={cat.id} cat={cat} />)}
+          </div>
+        )
+      })}
+
+      {perRoundCats.length > 0 && (
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '4px', paddingBottom: '4px', borderBottom: '1px solid #eee' }}>
+            round specials
+            <span style={{ fontWeight: 400, textTransform: 'none' as const, marginLeft: '6px', color: '#ccc' }}>
+              — one pick per matchday, per group
+            </span>
+          </div>
+          {perRoundCats.map(cat => <RuleRow key={cat.id} cat={cat} />)}
+        </div>
+      )}
+
+      <button
+        onClick={() => onComplete(Object.values(rules).filter(r => r.enabled))}
+        disabled={enabledCount === 0}
+        style={{
+          padding: '12px 24px', background: enabledCount > 0 ? '#111' : '#ddd',
+          color: 'white', border: 'none', cursor: enabledCount > 0 ? 'pointer' : 'default',
+          fontSize: '14px', fontWeight: 600, fontFamily: 'inherit', minHeight: 44, width: isMobile ? '100%' : 'auto',
+        }}>
+        continue with {enabledCount} prediction{enabledCount !== 1 ? 's' : ''} →
+      </button>
+    </div>
+  )
+
+  return isMobile ? (
+    <div>
+      {rulesPanel}
+      <div style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '16px' }}>
+        <button
+          onClick={() => setShowPreview(p => !p)}
+          style={{ width: '100%', padding: '10px', fontSize: '12px', background: 'white', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit', marginBottom: showPreview ? '12px' : 0, minHeight: 44 }}>
+          {showPreview ? '▲ hide ticket preview' : '▼ show ticket preview'}
+        </button>
+        {showPreview && ticketPreview}
+      </div>
+    </div>
+  ) : (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'start' }}>
+      {rulesPanel}
       {/* RIGHT: Ticket emulator — scrollable, max height so it doesn't go off screen */}
       <div style={{ position: 'sticky', top: 70, maxHeight: 'calc(100vh - 90px)', display: 'flex', flexDirection: 'column' }}>
         <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '8px', flexShrink: 0 }}>
           ticket preview — example fixture
         </div>
-        <div style={{ background: 'white', border: '1px solid #e0e0db', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-
-          {/* Fixed header */}
-          <div style={{ background: '#111', color: 'white', padding: '10px 12px', flexShrink: 0 }}>
-            <div style={{ fontSize: '10px', color: '#888', marginBottom: '4px' }}>{EXAMPLE_FIXTURE.round} · {EXAMPLE_FIXTURE.date}</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 700, fontSize: '13px' }}>{EXAMPLE_FIXTURE.home_flag} {EXAMPLE_FIXTURE.home_team}</span>
-              <span style={{ color: '#555', fontSize: '11px' }}>vs</span>
-              <span style={{ fontWeight: 700, fontSize: '13px' }}>{EXAMPLE_FIXTURE.away_team} {EXAMPLE_FIXTURE.away_flag}</span>
-            </div>
-            {result && (
-              <div style={{ marginTop: '8px', lineHeight: 1.6 }}>
-                <div style={{ fontWeight: 700, fontSize: '15px', color: 'white', textAlign: 'center' }}>{result.home_score} – {result.away_score}</div>
-                <div style={{ textAlign: 'center', fontSize: '10px', color: '#aaa' }}>
-                  HT: {result.ht_home}–{result.ht_away} · corners: {result.home_corners}–{result.away_corners} · cards: {result.home_yellows}Y{result.home_reds > 0 ? `/${result.home_reds}R` : ''} / {result.away_yellows}Y{result.away_reds > 0 ? `/${result.away_reds}R` : ''}
-                </div>
-                {result.first_scorer && (
-                  <div style={{ textAlign: 'center', fontSize: '10px', color: '#aaa' }}>first scorer: {result.first_scorer}</div>
-                )}
-                <div style={{ textAlign: 'center', fontSize: '10px', color: '#777' }}>
-                  handicap: {EXAMPLE_FIXTURE.home_team} {EXAMPLE_FIXTURE.handicap_line > 0 ? '+' : ''}{EXAMPLE_FIXTURE.handicap_line} · goals O/U: {EXAMPLE_FIXTURE.goals_line} · corners O/U: {EXAMPLE_FIXTURE.corners_line}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Scrollable body */}
-          {enabledCount === 0 ? (
-            <div style={{ padding: '20px', textAlign: 'center', color: '#aaa', fontSize: '12px' }}>
-              toggle on predictions to see the ticket
-            </div>
-          ) : (
-            <div style={{ overflowY: 'auto', flex: 1, padding: '10px 12px' }}>
-              {categories.filter(c => rules[c.id]?.enabled).map(cat => (
-                <TicketInput key={cat.id} cat={cat} />
-              ))}
-
-              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #eee' }}>
-                <button
-                  onClick={() => setResult(generateResult())}
-                  style={{ width: '100%', padding: '8px', fontSize: '11px', background: '#f5f5f5', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '6px' }}>
-                  🎲 generate random result
-                </button>
-                {result && Object.keys(userPicks).length > 0 && (
-                  <div style={{ textAlign: 'center', padding: '8px', background: '#fff5f5', border: '1px solid #f0d0d0' }}>
-                    <span style={{ fontSize: '11px', color: '#555' }}>score for these picks: </span>
-                    <span style={{ fontWeight: 700, fontSize: '16px', color: '#C8102E' }}>{calcScore().total} pts</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
+        {ticketPreview}
       </div>
     </div>
   )

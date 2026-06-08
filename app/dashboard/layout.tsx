@@ -24,14 +24,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div style={{minHeight: '100vh', background: 'var(--bg)'}}>
-      <div style={{borderBottom: '1px solid var(--border)', background: 'white', padding: '0.75rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 50}}>
+      <div style={{borderBottom: '1px solid var(--border)', background: 'white', padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 50}}>
         <Link href="/dashboard" style={{fontWeight: 700, fontSize: '1.1rem', color: 'var(--red)'}}>pool'em</Link>
-        <div style={{display: 'flex', alignItems: 'center', gap: '1rem'}}>
-          <span style={{fontSize: '0.8rem', color: 'var(--text-dim)'}}>{displayName}</span>
-          <button onClick={handleLogout} style={{fontSize: '0.8rem', color: 'var(--text-dim)', background: 'none', border: 'none', cursor: 'pointer'}}>log out</button>
+        <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
+          <span style={{fontSize: '0.8rem', color: 'var(--text-dim)', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{displayName}</span>
+          <button onClick={handleLogout} style={{fontSize: '0.8rem', color: 'var(--text-dim)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', minHeight: 44}}>log out</button>
         </div>
       </div>
-      <main style={{maxWidth: 900, margin: '0 auto', padding: '2rem 1.5rem'}}>
+      <main style={{maxWidth: 900, margin: '0 auto', padding: '1.25rem 1rem'}}>
         {children}
       </main>
     </div>

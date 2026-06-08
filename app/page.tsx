@@ -9,29 +9,33 @@ export default async function Home() {
 
   return (
     <div style={{minHeight: '100vh', background: 'var(--bg)'}}>
-      <div style={{borderBottom: '1px solid var(--border)', background: 'white', padding: '0.75rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+      <div style={{borderBottom: '1px solid var(--border)', background: 'white', padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
         <span style={{fontWeight: 700, fontSize: '1.1rem', color: 'var(--red)'}}>pool'em</span>
         <div style={{display: 'flex', gap: '0.5rem'}}>
-          <Link href="/auth/login"><button className="btn-ghost">log in</button></Link>
-          <Link href="/auth/signup"><button className="btn-primary">sign up</button></Link>
+          <Link href="/auth/login"><button className="btn-ghost" style={{minHeight: 40, padding: '0 14px'}}>log in</button></Link>
+          <Link href="/auth/signup"><button className="btn-primary" style={{minHeight: 40, padding: '0 14px'}}>sign up</button></Link>
         </div>
       </div>
 
-      <div style={{maxWidth: 600, margin: '80px auto', padding: '0 1.5rem'}}>
-        <h1 style={{fontSize: '2rem', fontWeight: 700, marginBottom: '0.5rem'}}>
+      <div style={{maxWidth: 600, margin: '0 auto', padding: '48px 1.25rem 2rem'}}>
+        <h1 style={{fontSize: 'clamp(1.5rem, 5vw, 2rem)', fontWeight: 700, marginBottom: '0.5rem', lineHeight: 1.2}}>
           Private prediction pools for the World Cup.
         </h1>
         <p style={{color: 'var(--text-dim)', marginBottom: '2rem', fontSize: '1rem', lineHeight: 1.6}}>
-          Create a pool, set your rules, invite your friends. Picks lock at kickoff. 
+          Create a pool, set your rules, invite your friends. Picks lock at kickoff.
           Leaderboard updates as goals go in. Free, no ads, no nonsense.
         </p>
 
-        <div style={{display: 'flex', gap: '0.75rem', marginBottom: '3rem'}}>
-          <Link href="/auth/signup"><button className="btn-primary" style={{padding: '0.6rem 1.5rem', fontSize: '0.95rem'}}>create a pool</button></Link>
-          <Link href="/auth/login"><button className="btn-secondary" style={{padding: '0.6rem 1.5rem', fontSize: '0.95rem'}}>join a pool</button></Link>
+        <div style={{display: 'flex', gap: '0.75rem', marginBottom: '3rem', flexWrap: 'wrap'}}>
+          <Link href="/auth/signup">
+            <button className="btn-primary" style={{padding: '12px 24px', fontSize: '1rem', minHeight: 48}}>create a pool</button>
+          </Link>
+          <Link href="/auth/login">
+            <button className="btn-secondary" style={{padding: '12px 24px', fontSize: '1rem', minHeight: 48}}>join a pool</button>
+          </Link>
         </div>
 
-        <div style={{borderTop: '1px solid var(--border)', paddingTop: '2rem', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem'}}>
+        <div style={{borderTop: '1px solid var(--border)', paddingTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 160px), 1fr))', gap: '1.5rem'}}>
           {[
             { title: 'pick your rules', desc: 'Win/loss/draw, exact scores, first scorer — or build your own.' },
             { title: 'invite only', desc: 'Share a link. No spam, no public pools.' },

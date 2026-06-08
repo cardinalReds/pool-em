@@ -17,7 +17,6 @@ function getSessionFromCookie() {
   } catch { return null }
 }
 
-
 function DeletePool({ poolId }: { poolId: string }) {
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -38,19 +37,19 @@ function DeletePool({ poolId }: { poolId: string }) {
       <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '8px'}}>danger zone</div>
       {!confirming ? (
         <button onClick={() => setConfirming(true)}
-          style={{fontSize: '11px', padding: '5px 10px', width: '100%', background: 'white', color: '#C8102E', border: '1px solid #C8102E', cursor: 'pointer', fontFamily: 'inherit'}}>
+          style={{fontSize: '12px', padding: '8px 10px', width: '100%', background: 'white', color: '#C8102E', border: '1px solid #C8102E', cursor: 'pointer', fontFamily: 'inherit'}}>
           delete pool
         </button>
       ) : (
         <div>
-          <p style={{fontSize: '11px', color: '#555', marginBottom: '8px'}}>this will delete all picks and members. are you sure?</p>
-          <div style={{display: 'flex', gap: '6px'}}>
+          <p style={{fontSize: '12px', color: '#555', marginBottom: '8px'}}>this will delete all picks and members. are you sure?</p>
+          <div style={{display: 'flex', gap: '8px'}}>
             <button onClick={() => setConfirming(false)}
-              style={{flex: 1, fontSize: '11px', padding: '5px', background: 'white', color: '#555', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit'}}>
+              style={{flex: 1, fontSize: '12px', padding: '8px', background: 'white', color: '#555', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit'}}>
               cancel
             </button>
             <button onClick={handleDelete} disabled={deleting}
-              style={{flex: 1, fontSize: '11px', padding: '5px', background: '#C8102E', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
+              style={{flex: 1, fontSize: '12px', padding: '8px', background: '#C8102E', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
               {deleting ? 'deleting...' : 'yes, delete'}
             </button>
           </div>
@@ -60,16 +59,45 @@ function DeletePool({ poolId }: { poolId: string }) {
   )
 }
 
+function Section({ title, children, defaultOpen = true }: {
+  title: string
+  children: React.ReactNode
+  defaultOpen?: boolean
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div style={{borderTop: '1px solid #eee'}}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '12px 0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+        }}>
+        <span style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb'}}>{title}</span>
+        <span style={{fontSize: '12px', color: '#ccc'}}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && <div style={{paddingBottom: '14px'}}>{children}</div>}
+    </div>
+  )
+}
+
 export default function PoolPage({ params }: { params: { id: string } }) {
   const [pool, setPool] = useState<any>(null)
   const [user, setUser] = useState<any>(null)
   const [leaderboard, setLeaderboard] = useState<any[]>([])
   const [poolRules, setPoolRules] = useState<any[]>([])
-  const [pickMode, setPickMode] = useState<'simple' | 'full'>('simple')
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [inviteUrl, setInviteUrl] = useState('')
-  const [copied, setCopied] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const [showSidebar, setShowSidebar] = useState(false)
+
+  useEffect(() => {
+    function checkMobile() { setIsMobile(window.innerWidth < 768) }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -101,21 +129,14 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
       const pointsMap: Record<string, number> = {}
       if (pool.package_id === 'CUSTOM') {
-        const { data: scores } = await supabase
-          .from('predictions_v2')
-          .select('user_id, points_earned')
-          .eq('pool_id', pool.id)
+        const { data: scores } = await supabase.from('predictions_v2').select('user_id, points_earned').eq('pool_id', pool.id)
         scores?.forEach(s => { if (s.points_earned) pointsMap[s.user_id] = (pointsMap[s.user_id] || 0) + s.points_earned })
       } else {
-        const { data: scores } = await supabase
-          .from('predictions')
-          .select('user_id, points_earned')
-          .eq('pool_id', pool.id)
+        const { data: scores } = await supabase.from('predictions').select('user_id, points_earned').eq('pool_id', pool.id)
         scores?.forEach(s => { if (s.points_earned) pointsMap[s.user_id] = (pointsMap[s.user_id] || 0) + s.points_earned })
       }
       setLeaderboard((members || []).map(m => ({ ...m, points: pointsMap[m.user_id] || 0 })).sort((a, b) => b.points - a.points))
 
-      // Fetch scoring rubric for custom pools
       if (pool.package_id === 'CUSTOM') {
         const { data: rules } = await supabase
           .from('pool_rules')
@@ -129,12 +150,6 @@ export default function PoolPage({ params }: { params: { id: string } }) {
     }
     load()
   }, [params.id])
-
-  async function handleCopy() {
-    await navigator.clipboard.writeText(inviteUrl)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
 
   if (loading) return (
     <div style={{minHeight: '100vh', background: '#f7f7f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', color: '#888'}}>
@@ -151,154 +166,163 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const pkg = RULE_PACKAGES[pool.package_id as keyof typeof RULE_PACKAGES]
   const isAdmin = pool.admin_id === user?.id
 
+  const sidebarContent = (
+    <div style={{padding: isMobile ? '16px' : '40px 24px', maxWidth: isMobile ? '100%' : 280, margin: isMobile ? 0 : '0 auto', width: '100%'}}>
+
+      <div style={{fontWeight: 700, fontSize: '16px', marginBottom: '2px'}}>{pool.name}</div>
+      <div style={{fontSize: '11px', color: '#888', marginBottom: '16px'}}>
+        {pool.tournament_scope?.replace('_', ' ')} · {pkg?.name || 'custom'}
+        {isAdmin && <span style={{color: '#C8102E', marginLeft: '6px', fontWeight: 600}}>admin</span>}
+      </div>
+
+      {/* Buy-in */}
+      {!isAdmin && pool.buy_in_amount && pool.venmo_handle && (
+        <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '12px', marginBottom: '16px'}}>
+          <p style={{fontSize: '12px', fontWeight: 600, marginBottom: '4px'}}>💰 ${pool.buy_in_amount} buy-in due</p>
+          <p style={{fontSize: '11px', color: '#888', marginBottom: pool.payout_structure ? '6px' : '10px'}}>send to @{pool.venmo_handle} on venmo</p>
+          {pool.payout_structure && (
+            <p style={{fontSize: '11px', color: '#666', marginBottom: '10px'}}>🏆 payout: {pool.payout_structure}</p>
+          )}
+          <a href={`https://venmo.com/${pool.venmo_handle}?txn=pay&amount=${pool.buy_in_amount}&note=${encodeURIComponent(pool.name + ' buy-in')}`} target="_blank" rel="noopener noreferrer">
+            <button style={{width: '100%', padding: '10px', fontSize: '13px', fontWeight: 600, background: '#3D95CE', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
+              pay via venmo →
+            </button>
+          </a>
+        </div>
+      )}
+      {isAdmin && pool.buy_in_amount && pool.payout_structure && (
+        <div style={{background: '#f9f9f9', border: '1px solid #eee', padding: '10px 12px', marginBottom: '16px', fontSize: '12px', color: '#555'}}>
+          💰 ${pool.buy_in_amount} buy-in · 🏆 {pool.payout_structure}
+        </div>
+      )}
+
+      {/* Leaderboard */}
+      <Section title="leaderboard" defaultOpen={true}>
+        {leaderboard.map((member, i) => (
+          <div key={member.id} style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '7px 8px', marginBottom: '1px',
+            background: member.user_id === user?.id ? '#fff5f5' : 'transparent',
+            borderLeft: `3px solid ${member.user_id === user?.id ? '#C8102E' : 'transparent'}`,
+          }}>
+            <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555'}}>
+              {i + 1}. {member.display_name}
+            </span>
+            <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888'}}>
+              {member.points}
+            </span>
+          </div>
+        ))}
+      </Section>
+
+      {/* Scoring */}
+      <Section title="scoring" defaultOpen={!isMobile}>
+        {pool.package_id === 'CUSTOM' ? (
+          <div>
+            {poolRules.map((rule: any) => {
+              const isExact = rule.category_id === 'soccer_exact_score' || rule.category_id === 'soccer_ht_exact_score'
+              return (
+                <div key={rule.category_id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 0', borderBottom: '1px solid #f5f5f5'}}>
+                  <span style={{fontSize: '12px', color: '#555'}}>{rule.ruleset_categories?.name || rule.category_id}</span>
+                  <span style={{fontSize: '12px', color: '#111', fontWeight: 600, marginLeft: '8px', flexShrink: 0}}>
+                    {isExact ? `${rule.points}pt/team${rule.bonus_points > 0 ? ` +${rule.bonus_points}` : ''}` : `${rule.points} pt${rule.points !== 1 ? 's' : ''}`}
+                  </span>
+                </div>
+              )
+            })}
+            <div style={{fontSize: '11px', color: '#aaa', marginTop: '8px'}}>
+              deadline: {pool.deadline_type === 'before_each_game' ? 'before kickoff' : 'before tournament'}
+            </div>
+          </div>
+        ) : (
+          <div style={{fontSize: '12px', color: '#555', lineHeight: 1.8}}>
+            {pkg?.scoring.correct_result ? `correct result: ${pkg.scoring.correct_result} pt` : ''}
+            {pkg?.scoring.correct_first_scorer ? <><br />first scorer: {pkg.scoring.correct_first_scorer} pts</> : ''}
+            {pkg?.scoring.correct_exact_score ? <><br />exact score: {pkg.scoring.correct_exact_score} pts</> : ''}
+            <br />deadline: {pool.deadline_type === 'before_each_game' ? 'before kickoff' : 'before tournament'}
+          </div>
+        )}
+      </Section>
+
+      {/* Invite */}
+      {isAdmin && (
+        <Section title="invite" defaultOpen={!isMobile}>
+          <InvitePanel poolId={pool.id} poolName={pool.name} inviteUrl={inviteUrl} buyInAmount={pool.buy_in_amount} payoutStructure={pool.payout_structure} />
+        </Section>
+      )}
+
+      {/* Reminder */}
+      <Section title="remind me" defaultOpen={!isMobile}>
+        <ReminderButton poolId={pool.id} userId={user.id} userEmail={user.email || ''} />
+      </Section>
+
+      {/* Delete */}
+      {isAdmin && (
+        <Section title="danger zone" defaultOpen={false}>
+          <DeletePool poolId={pool.id} />
+        </Section>
+      )}
+    </div>
+  )
+
   return (
     <div style={{minHeight: '100vh', background: '#f7f7f5', fontFamily: "'Inter', system-ui, sans-serif", fontSize: '13px'}}>
 
       {/* Nav */}
-      <div style={{background: '#111', color: 'white', padding: '10px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 50}}>
+      <div style={{background: '#111', color: 'white', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 50}}>
         <a href="/dashboard" style={{fontWeight: 700, fontSize: '13px', color: 'white', textDecoration: 'none'}}>pool'em</a>
-        <span style={{fontSize: '11px', color: '#888'}}>
-          {user?.user_metadata?.display_name || user?.email?.split('@')[0]} ·{' '}
-          <button onClick={async () => { const s = createClient(); await s.auth.signOut(); window.location.href = '/' }}
-            style={{background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '11px', fontFamily: 'inherit'}}>
-            log out
-          </button>
-        </span>
+        <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
+          {isMobile && (
+            <button onClick={() => setShowSidebar(s => !s)}
+              style={{background: 'none', border: '1px solid #444', color: '#aaa', cursor: 'pointer', fontSize: '11px', padding: '4px 10px', fontFamily: 'inherit'}}>
+              {showSidebar ? '✕ close' : '☰ info'}
+            </button>
+          )}
+          <span style={{fontSize: '11px', color: '#888'}}>
+            {user?.user_metadata?.display_name || user?.email?.split('@')[0]} ·{' '}
+            <button onClick={async () => { const s = createClient(); await s.auth.signOut(); window.location.href = '/' }}
+              style={{background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '11px', fontFamily: 'inherit'}}>
+              out
+            </button>
+          </span>
+        </div>
       </div>
 
-      {/* Two column layout */}
-      <div style={{display: 'grid', gridTemplateColumns: '45% 55%', minHeight: 'calc(100vh - 41px)'}}>
-
-        {/* LEFT — centered content */}
-        <div style={{background: 'white', borderRight: '1px solid #e0e0db', display: 'flex', justifyContent: 'center', padding: '40px 24px'}}>
-          <div style={{width: 280}}>
-
-            <div style={{fontWeight: 700, fontSize: '15px', marginBottom: '2px'}}>{pool.name}</div>
-            <div style={{fontSize: '11px', color: '#888', marginBottom: '20px'}}>
-              {pool.tournament_scope?.replace('_', ' ')} · {pkg?.name}
-              {isAdmin && <span style={{color: '#C8102E', marginLeft: '6px', fontWeight: 600}}>admin</span>}
+      {isMobile ? (
+        // ── Mobile layout ────────────────────────────────────────────────
+        <div>
+          {/* Sidebar drawer */}
+          {showSidebar && (
+            <div style={{background: 'white', borderBottom: '1px solid #e0e0db'}}>
+              {sidebarContent}
             </div>
-
-            {/* Leaderboard */}
-            {/* Pay reminder for non-admin members with unpaid buy-in */}
-            {!isAdmin && pool.buy_in_amount && pool.venmo_handle && (
-              <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '10px 12px', marginBottom: '16px'}}>
-                <p style={{fontSize: '11px', fontWeight: 600, marginBottom: '4px'}}>💰 ${pool.buy_in_amount} buy-in due</p>
-                <p style={{fontSize: '10px', color: '#888', marginBottom: pool.payout_structure ? '6px' : '8px'}}>send to @{pool.venmo_handle} on venmo</p>
-                {pool.payout_structure && (
-                  <p style={{fontSize: '10px', color: '#666', marginBottom: '8px'}}>🏆 payout: {pool.payout_structure}</p>
-                )}
-                <a href={`https://venmo.com/${pool.venmo_handle}?txn=pay&amount=${pool.buy_in_amount}&note=${encodeURIComponent(pool.name + ' buy-in')}`} target="_blank" rel="noopener noreferrer">
-                  <button style={{width: '100%', padding: '6px', fontSize: '11px', fontWeight: 600, background: '#3D95CE', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
-                    pay via venmo →
-                  </button>
-                </a>
-              </div>
+          )}
+          {/* Main content */}
+          <div style={{padding: '16px'}}>
+            {user && pool.deadline_type === 'before_tournament' ? (
+              <BracketPicker poolId={pool.id} userId={user.id} pickMode={pool.pick_mode || 'simple'} locked={false} />
+            ) : user && (
+              <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />
             )}
-            {isAdmin && pool.buy_in_amount && pool.payout_structure && (
-              <div style={{background: '#f9f9f9', border: '1px solid #eee', padding: '10px 12px', marginBottom: '16px', fontSize: '11px', color: '#555'}}>
-                💰 ${pool.buy_in_amount} buy-in · 🏆 {pool.payout_structure}
-              </div>
-            )}
-
-            <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '8px'}}>leaderboard</div>
-            <div style={{marginBottom: '20px'}}>
-              {leaderboard.map((member, i) => (
-                <div key={member.id} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: '5px 8px', marginBottom: '1px',
-                  background: member.user_id === user?.id ? '#fff5f5' : 'transparent',
-                  borderLeft: `3px solid ${member.user_id === user?.id ? '#C8102E' : 'transparent'}`,
-                }}>
-                  <span style={{fontSize: '12px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555'}}>
-                    {i + 1}. {member.display_name}
-                  </span>
-                  <span style={{fontSize: '12px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888'}}>
-                    {member.points}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {/* Scoring rubric */}
-            <div style={{borderTop: '1px solid #eee', paddingTop: '14px', marginBottom: '14px'}}>
-              <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '8px'}}>scoring</div>
-              {pool.package_id === 'CUSTOM' ? (
-                <div>
-                  {poolRules.map((rule: any) => {
-                    const isExact = rule.category_id === 'soccer_exact_score' || rule.category_id === 'soccer_ht_exact_score'
-                    return (
-                      <div key={rule.category_id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '4px 0', borderBottom: '1px solid #f5f5f5'}}>
-                        <span style={{fontSize: '11px', color: '#555'}}>{rule.ruleset_categories?.name || rule.category_id}</span>
-                        <span style={{fontSize: '11px', color: '#111', fontWeight: 600, textAlign: 'right' as const, marginLeft: '8px', flexShrink: 0}}>
-                          {isExact
-                            ? `${rule.points}pt/team${rule.bonus_points > 0 ? ` +${rule.bonus_points} bonus` : ''}`
-                            : `${rule.points} pt${rule.points !== 1 ? 's' : ''}`
-                          }
-                        </span>
-                      </div>
-                    )
-                  })}
-                  <div style={{fontSize: '10px', color: '#aaa', marginTop: '8px'}}>
-                    deadline: {pool.deadline_type === 'before_each_game' ? 'before kickoff' : 'before tournament'}
-                  </div>
-                </div>
-              ) : (
-                <div style={{fontSize: '11px', color: '#555', lineHeight: 1.8}}>
-                  {pkg?.scoring.correct_result ? `correct result: ${pkg.scoring.correct_result} pt` : ''}
-                  {pkg?.scoring.correct_first_scorer ? <><br />first scorer: {pkg.scoring.correct_first_scorer} pts</> : ''}
-                  {pkg?.scoring.correct_exact_score ? <><br />exact score: {pkg.scoring.correct_exact_score} pts</> : ''}
-                  <br />deadline: {pool.deadline_type === 'before_each_game' ? 'before kickoff' : 'before tournament'}
-                </div>
+          </div>
+        </div>
+      ) : (
+        // ── Desktop layout ───────────────────────────────────────────────
+        <div style={{display: 'grid', gridTemplateColumns: '320px 1fr', minHeight: 'calc(100vh - 41px)'}}>
+          <div style={{background: 'white', borderRight: '1px solid #e0e0db', overflowY: 'auto'}}>
+            {sidebarContent}
+          </div>
+          <div style={{padding: '40px 24px', overflowY: 'auto'}}>
+            <div style={{maxWidth: 960, margin: '0 auto'}}>
+              {user && pool.deadline_type === 'before_tournament' ? (
+                <BracketPicker poolId={pool.id} userId={user.id} pickMode={pool.pick_mode || 'simple'} locked={false} />
+              ) : user && (
+                <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />
               )}
             </div>
-
-            {/* Invite */}
-            {isAdmin && (
-              <div style={{borderTop: '1px solid #eee', paddingTop: '14px', marginBottom: '14px'}}>
-                <InvitePanel poolId={pool.id} poolName={pool.name} inviteUrl={inviteUrl} buyInAmount={pool.buy_in_amount} payoutStructure={pool.payout_structure} />
-              </div>
-            )}
-
-            {/* Reminder */}
-            <div style={{borderTop: '1px solid #eee', paddingTop: '14px', marginBottom: '14px'}}>
-              <ReminderButton poolId={pool.id} userId={user.id} userEmail={user.email || ''} />
-            </div>
-
-            {/* Delete pool — admin only */}
-            {isAdmin && (
-              <div style={{borderTop: '1px solid #eee', paddingTop: '14px'}}>
-                <DeletePool poolId={pool.id} />
-              </div>
-            )}
-
           </div>
         </div>
-
-        {/* RIGHT — centered content */}
-        <div style={{display: 'flex', justifyContent: 'center', padding: '40px 24px'}}>
-          <div style={{width: '100%', maxWidth: 960}}>
-            {user && pool.deadline_type === 'before_tournament' ? (
-              <BracketPicker
-                poolId={pool.id}
-                userId={user.id}
-                pickMode={pool.pick_mode || 'simple'}
-                locked={false}
-              />
-            ) : user && (
-              <FixturesList
-                poolId={pool.id}
-                userId={user.id}
-                packageId={pool.package_id}
-                deadlineType={pool.deadline_type}
-                scope={pool.tournament_scope}
-                tournamentId={pool.tournament_id}
-              />
-            )}
-          </div>
-        </div>
-
-      </div>
+      )}
     </div>
   )
 }

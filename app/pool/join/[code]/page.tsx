@@ -70,8 +70,8 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
       <div style={{background:'#111',color:'white',padding:'10px 20px'}}>
         <span style={{fontWeight:700,fontSize:'13px'}}>pool'em</span>
       </div>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:'60px 24px'}}>
-        <div style={{width:400}}>
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'center',padding:'24px 16px',minHeight:'calc(100vh - 41px)'}}>
+        <div style={{width:'100%',maxWidth:420}}>
           <div style={{background:'white',border:'1px solid #e0e0db',padding:'20px',marginBottom:'12px'}}>
             <p style={{fontSize:'10px',fontWeight:600,color:'#C8102E',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'6px'}}>you've been invited</p>
             <h2 style={{fontWeight:700,fontSize:'18px',marginBottom:'4px'}}>{pool.name}</h2>
@@ -90,7 +90,7 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
                 </p>
               )}
               <a href={venmoWebLink || '#'} target="_blank" rel="noopener noreferrer">
-                <button style={{width:'100%',padding:'10px',fontSize:'13px',fontWeight:600,background:'#3D95CE',color:'white',border:'none',cursor:'pointer',fontFamily:'inherit',marginBottom:'6px'}}>
+                <button style={{width:'100%',padding:'12px',fontSize:'14px',fontWeight:600,background:'#3D95CE',minHeight:'48px',color:'white',border:'none',cursor:'pointer',fontFamily:'inherit',marginBottom:'6px'}}>
                   pay ${buyInAmount} via venmo →
                 </button>
               </a>
@@ -105,7 +105,7 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
               <div>
                 <p style={{marginBottom:'12px',color:'#555'}}>joining as <strong style={{color:'#111'}}>{displayName}</strong></p>
                 <button onClick={handleJoin} disabled={joining}
-                  style={{width:'100%',padding:'10px',fontSize:'13px',fontWeight:600,background:'#111',color:'white',border:'none',cursor:'pointer',fontFamily:'inherit'}}>
+                  style={{width:'100%',padding:'12px',fontSize:'14px',fontWeight:600,background:'#111',minHeight:'48px',color:'white',border:'none',cursor:'pointer',fontFamily:'inherit'}}>
                   {joining ? 'joining...' : 'join pool →'}
                 </button>
               </div>
@@ -114,10 +114,10 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
                 <p style={{marginBottom:'12px',color:'#555'}}>create an account or log in to join.</p>
                 <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
                   <a href={`/auth/signup?invite=${params.code}`}>
-                    <button style={{width:'100%',padding:'10px',fontSize:'13px',fontWeight:600,background:'#111',color:'white',border:'none',cursor:'pointer',fontFamily:'inherit'}}>create account</button>
+                    <button style={{width:'100%',padding:'12px',fontSize:'14px',fontWeight:600,background:'#111',minHeight:'48px',color:'white',border:'none',cursor:'pointer',fontFamily:'inherit'}}>create account</button>
                   </a>
                   <a href={`/auth/login?invite=${params.code}`}>
-                    <button style={{width:'100%',padding:'10px',fontSize:'13px',background:'white',color:'#111',border:'1px solid #ddd',cursor:'pointer',fontFamily:'inherit'}}>log in</button>
+                    <button style={{width:'100%',padding:'12px',fontSize:'14px',background:'white',minHeight:'48px',color:'#111',border:'1px solid #ddd',cursor:'pointer',fontFamily:'inherit'}}>log in</button>
                   </a>
                 </div>
               </div>

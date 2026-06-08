@@ -371,9 +371,9 @@ export default function FixturesList({
     const btnStyle = (val: string | boolean): React.CSSProperties => {
       const active = pred?.value_wld === val || pred?.value_ou === val
       return {
-        flex: 1, padding: '5px 4px', fontSize: '11px', border: '1px solid',
+        flex: 1, padding: '8px 4px', fontSize: '12px', border: '1px solid',
         cursor: locked || finished ? 'default' : 'pointer',
-        fontFamily: 'inherit',
+        fontFamily: 'inherit', minHeight: 44,
         borderColor: active ? '#C8102E' : '#ddd',
         background: active ? '#C8102E' : locked || finished ? '#fafafa' : 'white',
         color: active ? 'white' : '#555',
@@ -405,22 +405,26 @@ export default function FixturesList({
           rule.category_id !== 'soccer_first_team_score' &&
           rule.category_id !== 'soccer_first_yellow_team' && (
           <div style={{ display: 'flex', gap: 0 }}>
-            <button style={{ ...btnStyle('home'), borderRight: 'none' }}
+            <button style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
               disabled={locked || finished}
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
-              {FLAGS[fixture.home_team]} {fixture.home_team}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
+                {FLAGS[fixture.home_team]} {fixture.home_team}
+              </span>
             </button>
             {rule.category_id !== 'soccer_asian_handicap' && (
-              <button style={{ ...btnStyle('draw'), borderRight: 'none' }}
+              <button style={{ ...btnStyle('draw'), borderRight: 'none', flexShrink: 0, flex: '0 0 60px' }}
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'draw' })}>
                 draw
               </button>
             )}
-            <button style={btnStyle('away')}
+            <button style={{ ...btnStyle('away'), overflow: 'hidden' }}
               disabled={locked || finished}
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
-              {fixture.away_team} {FLAGS[fixture.away_team]}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
+                {fixture.away_team} {FLAGS[fixture.away_team]}
+              </span>
             </button>
           </div>
         )}
@@ -428,20 +432,24 @@ export default function FixturesList({
         {/* First team to score */}
         {rule.category_id === 'soccer_first_team_score' && (
           <div style={{ display: 'flex', gap: 0 }}>
-            <button style={{ ...btnStyle('home'), borderRight: 'none' }}
+            <button style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
               disabled={locked || finished}
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
-              {FLAGS[fixture.home_team]} {fixture.home_team}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
+                {FLAGS[fixture.home_team]} {fixture.home_team}
+              </span>
             </button>
-            <button style={{ ...btnStyle('none' as any), borderRight: 'none' }}
+            <button style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
               disabled={locked || finished}
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'none' })}>
               no goal
             </button>
-            <button style={btnStyle('away')}
+            <button style={{ ...btnStyle('away'), overflow: 'hidden' }}
               disabled={locked || finished}
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
-              {fixture.away_team} {FLAGS[fixture.away_team]}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
+                {fixture.away_team} {FLAGS[fixture.away_team]}
+              </span>
             </button>
           </div>
         )}
@@ -449,20 +457,24 @@ export default function FixturesList({
         {/* First yellow card */}
         {rule.category_id === 'soccer_first_yellow_team' && (
           <div style={{ display: 'flex', gap: 0 }}>
-            <button style={{ ...btnStyle('home'), borderRight: 'none' }}
+            <button style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
               disabled={locked || finished}
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
-              {FLAGS[fixture.home_team]} {fixture.home_team}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
+                {FLAGS[fixture.home_team]} {fixture.home_team}
+              </span>
             </button>
-            <button style={{ ...btnStyle('none' as any), borderRight: 'none' }}
+            <button style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
               disabled={locked || finished}
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'none' })}>
               no card
             </button>
-            <button style={btnStyle('away')}
+            <button style={{ ...btnStyle('away'), overflow: 'hidden' }}
               disabled={locked || finished}
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
-              {fixture.away_team} {FLAGS[fixture.away_team]}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
+                {fixture.away_team} {FLAGS[fixture.away_team]}
+              </span>
             </button>
           </div>
         )}
@@ -496,7 +508,7 @@ export default function FixturesList({
                 value={homeVal}
                 placeholder="0"
                 disabled={locked || finished}
-                style={{ width: 40, border: '1px solid #ddd', padding: '4px', textAlign: 'center', fontSize: '12px', fontFamily: 'inherit', background: locked || finished ? '#fafafa' : 'white' }}
+                style={{ width: 52, border: '1px solid #ddd', padding: '8px 4px', textAlign: 'center', fontSize: '16px', fontFamily: 'inherit', background: locked || finished ? '#fafafa' : 'white' }}
                 onChange={e => {
                   const v = e.target.value
                   setScoreInputs(prev => {
@@ -514,7 +526,7 @@ export default function FixturesList({
                 value={awayVal}
                 placeholder="0"
                 disabled={locked || finished}
-                style={{ width: 40, border: '1px solid #ddd', padding: '4px', textAlign: 'center', fontSize: '12px', fontFamily: 'inherit', background: locked || finished ? '#fafafa' : 'white' }}
+                style={{ width: 52, border: '1px solid #ddd', padding: '8px 4px', textAlign: 'center', fontSize: '16px', fontFamily: 'inherit', background: locked || finished ? '#fafafa' : 'white' }}
                 onChange={e => {
                   const v = e.target.value
                   setScoreInputs(prev => {
@@ -643,7 +655,7 @@ export default function FixturesList({
         border: '1px solid #e0e0db',
         borderLeft: hasAnyPick ? '3px solid #C8102E' : '1px solid #e0e0db',
         marginBottom: 4,
-        width: 480,
+        width: '100%',
       }}>
         {/* Meta row */}
         <div style={{
@@ -663,13 +675,13 @@ export default function FixturesList({
         </div>
 
         {/* Team header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', borderBottom: perGameRules.length > 0 ? '1px solid #f5f5f5' : 'none' }}>
-          <span style={{ fontWeight: 700, fontSize: '13px' }}>{FLAGS[fixture.home_team]} {fixture.home_team}</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderBottom: perGameRules.length > 0 ? '1px solid #f5f5f5' : 'none', gap: 4 }}>
+          <span style={{ fontWeight: 700, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1 }}>{FLAGS[fixture.home_team]} {fixture.home_team}</span>
           {finished
-            ? <span style={{ fontWeight: 700, fontSize: '14px', color: '#111' }}>{fixture.home_score} – {fixture.away_score}</span>
-            : <span style={{ fontSize: '11px', color: '#ccc' }}>vs</span>
+            ? <span style={{ fontWeight: 700, fontSize: '14px', color: '#111', flexShrink: 0, padding: '0 8px' }}>{fixture.home_score} – {fixture.away_score}</span>
+            : <span style={{ fontSize: '11px', color: '#ccc', flexShrink: 0, padding: '0 8px' }}>vs</span>
           }
-          <span style={{ fontWeight: 700, fontSize: '13px' }}>{fixture.away_team} {FLAGS[fixture.away_team]}</span>
+          <span style={{ fontWeight: 700, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1, textAlign: 'right' as const }}>{fixture.away_team} {FLAGS[fixture.away_team]}</span>
         </div>
 
         {/* Per-game predictions */}
@@ -684,10 +696,10 @@ export default function FixturesList({
                   onClick={() => saveFixture(fixture.id)}
                   disabled={saving === fixture.id || !hasAnyPick}
                   style={{
-                    padding: '6px 16px', fontSize: '11px', fontWeight: 600,
+                    padding: '10px 20px', fontSize: '13px', fontWeight: 600,
                     background: saving === fixture.id ? '#ddd' : hasAnyPick ? '#111' : '#ddd',
                     color: 'white', border: 'none', cursor: hasAnyPick && saving !== fixture.id ? 'pointer' : 'default',
-                    fontFamily: 'inherit',
+                    fontFamily: 'inherit', minHeight: 44, flex: 1,
                   }}>
                   {saving === fixture.id ? 'saving...' : 'save picks'}
                 </button>
@@ -766,11 +778,11 @@ export default function FixturesList({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {/* Controls */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: 480 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 8, flexWrap: 'wrap' as const }}>
         <div style={{ display: 'flex', border: '1px solid #ddd', overflow: 'hidden', borderRadius: 3 }}>
           {(['date', 'group'] as const).map((mode, i) => (
             <button key={mode} onClick={() => { setSortMode(mode); setCurrentPage(0) }}
-              style={{ padding: '4px 12px', fontSize: '11px', cursor: 'pointer', border: 'none', borderLeft: i > 0 ? '1px solid #ddd' : 'none', fontFamily: 'inherit', background: sortMode === mode ? '#111' : 'white', color: sortMode === mode ? 'white' : '#888' }}>
+              style={{ padding: '8px 16px', fontSize: '12px', cursor: 'pointer', border: 'none', borderLeft: i > 0 ? '1px solid #ddd' : 'none', fontFamily: 'inherit', background: sortMode === mode ? '#111' : 'white', color: sortMode === mode ? 'white' : '#888', minHeight: 44 }}>
               by {mode}
             </button>
           ))}
@@ -778,7 +790,7 @@ export default function FixturesList({
         <div style={{ display: 'flex', border: '1px solid #ddd', overflow: 'hidden', borderRadius: 3 }}>
           {(['pages', 'list'] as const).map((mode, i) => (
             <button key={mode} onClick={() => setViewMode(mode)}
-              style={{ padding: '4px 12px', fontSize: '11px', cursor: 'pointer', border: 'none', borderLeft: i > 0 ? '1px solid #ddd' : 'none', fontFamily: 'inherit', background: viewMode === mode ? '#111' : 'white', color: viewMode === mode ? 'white' : '#888' }}>
+              style={{ padding: '8px 16px', fontSize: '12px', cursor: 'pointer', border: 'none', borderLeft: i > 0 ? '1px solid #ddd' : 'none', fontFamily: 'inherit', background: viewMode === mode ? '#111' : 'white', color: viewMode === mode ? 'white' : '#888', minHeight: 44 }}>
               {mode}
             </button>
           ))}
@@ -787,15 +799,15 @@ export default function FixturesList({
 
       {/* Pager */}
       {viewMode === 'pages' && pages.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', border: '1px solid #e0e0db', padding: '8px 14px', width: 480 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', border: '1px solid #e0e0db', padding: '8px 14px', width: '100%' }}>
           <button onClick={() => setCurrentPage(p => Math.max(0, p - 1))} disabled={safePage === 0}
-            style={{ background: 'none', border: '1px solid #ddd', padding: '2px 10px', cursor: safePage === 0 ? 'default' : 'pointer', fontSize: '14px', color: safePage === 0 ? '#ddd' : '#555' }}>‹</button>
+            style={{ background: 'none', border: '1px solid #ddd', padding: '8px 16px', cursor: safePage === 0 ? 'default' : 'pointer', fontSize: '18px', color: safePage === 0 ? '#ddd' : '#555', minHeight: 44 }}>‹</button>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontWeight: 600, fontSize: '13px' }}>{pages[safePage]?.label}</div>
-            <div style={{ fontSize: '10px', color: '#aaa', marginTop: 2 }}>{safePage + 1} of {totalPages} · {pages[safePage]?.sub}</div>
+            <div style={{ fontWeight: 600, fontSize: '14px' }}>{pages[safePage]?.label}</div>
+            <div style={{ fontSize: '11px', color: '#aaa', marginTop: 2 }}>{safePage + 1} of {totalPages} · {pages[safePage]?.sub}</div>
           </div>
           <button onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))} disabled={safePage === totalPages - 1}
-            style={{ background: 'none', border: '1px solid #ddd', padding: '2px 10px', cursor: safePage === totalPages - 1 ? 'default' : 'pointer', fontSize: '14px', color: safePage === totalPages - 1 ? '#ddd' : '#555' }}>›</button>
+            style={{ background: 'none', border: '1px solid #ddd', padding: '8px 16px', cursor: safePage === totalPages - 1 ? 'default' : 'pointer', fontSize: '18px', color: safePage === totalPages - 1 ? '#ddd' : '#555', minHeight: 44 }}>›</button>
         </div>
       )}
 
@@ -805,7 +817,7 @@ export default function FixturesList({
           ? pages[safePage]?.fixtures.map(f => <FixtureCard key={f.id} fixture={f} />)
           : pages.map(page => (
             <div key={page.label}>
-              <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', padding: '8px 0 4px', borderBottom: '1px solid #e8e8e4', marginBottom: 4, width: 480 }}>
+              <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', padding: '8px 0 4px', borderBottom: '1px solid #e8e8e4', marginBottom: 4, width: '100%' }}>
                 {page.label} <span style={{ fontWeight: 400, textTransform: 'none', color: '#ccc' }}>{page.sub}</span>
               </div>
               {page.fixtures.map(f => <FixtureCard key={f.id} fixture={f} />)}

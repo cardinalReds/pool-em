@@ -49,25 +49,32 @@ export default function SignupPage() {
       <form onSubmit={handleSignup} style={{display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
         <div>
           <label style={{display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.3rem', color: 'var(--text-dim)'}}>your name</label>
-          <input className="input" type="text" placeholder="what your friends call you" value={displayName} onChange={e => setDisplayName(e.target.value)} required />
+          <input className="input" type="text" placeholder="what your friends call you" value={displayName}
+            onChange={e => setDisplayName(e.target.value)} required
+            style={{fontSize: '16px', padding: '0.65rem 0.75rem'}} />
         </div>
         <div>
           <label style={{display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.3rem', color: 'var(--text-dim)'}}>email</label>
-          <input className="input" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
+          <input className="input" type="email" placeholder="you@example.com" value={email}
+            onChange={e => setEmail(e.target.value)} required
+            style={{fontSize: '16px', padding: '0.65rem 0.75rem'}} />
         </div>
         <div>
           <label style={{display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.3rem', color: 'var(--text-dim)'}}>password</label>
-          <input className="input" type="password" placeholder="min 6 characters" value={password} onChange={e => setPassword(e.target.value)} minLength={6} required />
+          <input className="input" type="password" placeholder="min 6 characters" value={password}
+            onChange={e => setPassword(e.target.value)} minLength={6} required
+            style={{fontSize: '16px', padding: '0.65rem 0.75rem'}} />
         </div>
         {error && <p style={{fontSize: '0.8rem', color: 'var(--red)', background: 'var(--red-light)', padding: '0.5rem 0.75rem'}}>{error}</p>}
-        <button className="btn-primary" type="submit" disabled={loading} style={{width: '100%', marginTop: '0.25rem', padding: '0.6rem'}}>
+        <button className="btn-primary" type="submit" disabled={loading}
+          style={{width: '100%', marginTop: '0.25rem', padding: '0.85rem', fontSize: '1rem', minHeight: 48}}>
           {loading ? 'creating...' : 'create account'}
         </button>
       </form>
 
-      <p style={{textAlign: 'center', fontSize: '0.8rem', marginTop: '1.25rem', color: 'var(--text-dim)'}}>
+      <p style={{textAlign: 'center', fontSize: '0.85rem', marginTop: '1.25rem', color: 'var(--text-dim)'}}>
         already have an account?{' '}
-        <Link href={inviteCode ? `/auth/login?invite=${inviteCode}` : '/auth/login'} style={{color: 'var(--red)'}}>log in</Link>
+        <Link href={inviteCode ? `/auth/login?invite=${inviteCode}` : '/auth/login'} style={{color: 'var(--red)', fontWeight: 600}}>log in</Link>
       </p>
     </div>
   )
