@@ -10,8 +10,10 @@ import {
   SF_MATCHUPS,
   generateR32FromGroupPicks,
   getSlotOpponents,
+  DEFAULT_BRACKET_SCORING,
   type GroupPicks,
   type BracketPicks,
+  type BracketScoringRules,
 } from '@/lib/bracketEngine'
 
 const FLAGS: Record<string, string> = {
@@ -35,15 +37,16 @@ type Step = 'groups' | 'thirds' | 'bracket'
 interface Props {
   poolId: string
   userId: string
-  pickMode: PickMode
+  scoringRules: BracketScoringRules
   locked?: boolean
 }
 
-export default function BracketPicker({ poolId, userId, pickMode, locked = false }: Props) {
+export default function BracketPicker({ poolId, userId, scoringRules, locked = false }: Props) {
   const [step, setStep] = useState<Step>('groups')
   const [groupPicks, setGroupPicks] = useState<GroupPicks>({})
   const [bestThirdGroups, setBestThirdGroups] = useState<string[]>([])
   const [bracketPicks, setBracketPicks] = useState<BracketPicks>({})
+  const [bracketScores, setBracketScores] = useState<Record<string, string>>({}) // slot → "2-1"
   const [r32Bracket, setR32Bracket] = useState<Record<string, { home: string; away: string }>>({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -69,6 +72,7 @@ export default function BracketPicker({ poolId, userId, pickMode, locked = false
         setGroupPicks({ ...defaults, ...(data.group_picks || {}) })
         setBestThirdGroups(data.best_third_groups || [])
         setBracketPicks(data.bracket_picks || {})
+        setBracketScores(data.bracket_scores || {})
       } else {
         // No saved picks — initialize with defaults
         const defaults: GroupPicks = {}
@@ -100,6 +104,7 @@ export default function BracketPicker({ poolId, userId, pickMode, locked = false
       group_picks: groupPicks,
       best_third_groups: bestThirdGroups,
       bracket_picks: bracketPicks,
+      bracket_scores: bracketScores,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'pool_id,user_id' })
     setSaving(false)
@@ -237,8 +242,11 @@ export default function BracketPicker({ poolId, userId, pickMode, locked = false
             <BracketView
               r32Bracket={r32Bracket}
               bracketPicks={bracketPicks}
+              bracketScores={bracketScores}
+              scoringRules={scoringRules}
               locked={locked}
               onPick={pickBracket}
+              onScore={(slot, score) => setBracketScores(prev => ({ ...prev, [slot]: score }))}
             />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #eee' }}>
@@ -318,11 +326,14 @@ function GroupPicker({ group, teams, picks, locked, onChange }: {
 }
 
 // ── Bracket View — mirrored left/right meeting at Final in center ─────────
-function BracketView({ r32Bracket, bracketPicks, locked, onPick }: {
+function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRules, locked, onPick, onScore }: {
   r32Bracket: Record<string, { home: string; away: string }>
   bracketPicks: BracketPicks
+  bracketScores: Record<string, string>
+  scoringRules: BracketScoringRules
   locked: boolean
   onPick: (slot: string, team: string) => void
+  onScore: (slot: string, score: string) => void
 }) {
   // Split R32 into left (first 8) and right (last 8)
   const leftR32Slots = R32_MATCHUPS.slice(0, 8).map(m => m.slot)
@@ -393,8 +404,11 @@ function BracketView({ r32Bracket, bracketPicks, locked, onPick }: {
                         home={opponents.home}
                         away={opponents.away}
                         picked={bracketPicks[slot]}
+                        score={bracketScores[slot]}
+                        showExactScore={slot === 'FINAL' || scoringRules.knockout_pred_style === 'exact'}
                         locked={locked}
                         onPick={onPick}
+                        onScore={onScore}
                       />
                     </div>
                   )
@@ -414,7 +428,7 @@ function BracketView({ r32Bracket, bracketPicks, locked, onPick }: {
 
       {/* Center: Final + Champion */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, minWidth: 120, padding: '0 6px', alignSelf: 'center' }}>
-        <div style={{ fontSize: '9px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#bbb', textAlign: 'center' }}>final</div>
+        <div style={{ fontSize: '9px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#bbb', textAlign: 'center' }}>final · exact score</div>
         <div style={{ border: '1px solid #e0e0db', background: 'white', overflow: 'hidden', width: '100%' }}>
           {[sfLeftPick, sfRightPick].map((team, i) => {
             const active = champion === team
@@ -439,6 +453,30 @@ function BracketView({ r32Bracket, bracketPicks, locked, onPick }: {
               </button>
             )
           })}
+          {/* Exact score inputs for final */}
+          {sfLeftPick && sfRightPick && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '6px 8px', borderTop: '1px solid #f0f0f0' }}>
+              <input type="number" min="0" max="15"
+                value={bracketScores['FINAL']?.split('-')[0] ?? ''}
+                placeholder="0"
+                disabled={locked}
+                onChange={e => {
+                  const away = bracketScores['FINAL']?.split('-')[1] ?? ''
+                  onScore('FINAL', `${e.target.value}-${away}`)
+                }}
+                style={{ width: 36, border: '1px solid #ddd', padding: '3px', textAlign: 'center', fontSize: '13px', fontFamily: 'inherit' }} />
+              <span style={{ color: '#aaa', fontSize: 11 }}>–</span>
+              <input type="number" min="0" max="15"
+                value={bracketScores['FINAL']?.split('-')[1] ?? ''}
+                placeholder="0"
+                disabled={locked}
+                onChange={e => {
+                  const home = bracketScores['FINAL']?.split('-')[0] ?? ''
+                  onScore('FINAL', `${home}-${e.target.value}`)
+                }}
+                style={{ width: 36, border: '1px solid #ddd', padding: '3px', textAlign: 'center', fontSize: '13px', fontFamily: 'inherit' }} />
+            </div>
+          )}
         </div>
         <div style={{ border: '1px solid #e0e0db', background: 'white', width: '100%', padding: '8px', textAlign: 'center' as const }}>
           <div style={{ fontSize: '9px', color: '#bbb', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>champion</div>
@@ -454,15 +492,18 @@ function BracketView({ r32Bracket, bracketPicks, locked, onPick }: {
 }
 
 // ── Single match card ─────────────────────────────────────────────────────
-function MatchCard({ slot, home, away, picked, locked, onPick }: {
+function MatchCard({ slot, home, away, picked, score, showExactScore, locked, onPick, onScore }: {
   slot: string
   home: string
   away: string
   picked: string | undefined
+  score: string | undefined
+  showExactScore: boolean
   locked: boolean
   onPick: (slot: string, team: string) => void
+  onScore: (slot: string, score: string) => void
 }) {
-  if (!home && !away) return <div style={{ height: 54, border: '1px solid transparent' }} />
+  if (!home && !away) return <div style={{ height: showExactScore ? 80 : 54, border: '1px solid transparent' }} />
   const isPlaceholder = (t: string) => !t || t.startsWith('winner of')
 
   return (
@@ -491,6 +532,30 @@ function MatchCard({ slot, home, away, picked, locked, onPick }: {
           </button>
         )
       })}
+      {/* Exact score inputs — shown when both teams are known and exact mode is on */}
+      {showExactScore && picked && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, padding: '4px', borderTop: '1px solid #f0f0f0' }}>
+          <input type="number" min="0" max="15"
+            value={score?.split('-')[0] ?? ''}
+            placeholder="0"
+            disabled={locked}
+            onChange={e => {
+              const away = score?.split('-')[1] ?? ''
+              onScore(slot, `${e.target.value}-${away}`)
+            }}
+            style={{ width: 28, border: '1px solid #ddd', padding: '2px', textAlign: 'center', fontSize: '11px', fontFamily: 'inherit' }} />
+          <span style={{ color: '#aaa', fontSize: 10 }}>–</span>
+          <input type="number" min="0" max="15"
+            value={score?.split('-')[1] ?? ''}
+            placeholder="0"
+            disabled={locked}
+            onChange={e => {
+              const home = score?.split('-')[0] ?? ''
+              onScore(slot, `${home}-${e.target.value}`)
+            }}
+            style={{ width: 28, border: '1px solid #ddd', padding: '2px', textAlign: 'center', fontSize: '11px', fontFamily: 'inherit' }} />
+        </div>
+      )}
     </div>
   )
 }

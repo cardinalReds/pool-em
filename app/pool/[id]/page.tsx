@@ -6,6 +6,7 @@ import { RULE_PACKAGES } from '@/types'
 import FixturesList from '@/components/FixturesList'
 import ReminderButton from '@/components/ReminderButton'
 import InvitePanel from '@/components/InvitePanel'
+import { DEFAULT_BRACKET_SCORING } from '@/lib/bracketEngine'
 import BracketPicker from '@/components/BracketPicker'
 
 function getSessionFromCookie() {
@@ -86,6 +87,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const [user, setUser] = useState<any>(null)
   const [leaderboard, setLeaderboard] = useState<any[]>([])
   const [poolRules, setPoolRules] = useState<any[]>([])
+  const [bracketScoringRules, setBracketScoringRules] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [inviteUrl, setInviteUrl] = useState('')
@@ -144,6 +146,16 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           .eq('pool_id', pool.id)
           .order('category_id')
         setPoolRules(rules || [])
+      }
+
+      // Fetch bracket scoring rules for before_tournament pools
+      if (pool.deadline_type === 'before_tournament') {
+        const { data: bsr } = await supabase
+          .from('bracket_scoring_rules')
+          .select('*')
+          .eq('pool_id', pool.id)
+          .maybeSingle()
+        setBracketScoringRules(bsr)
       }
 
       setLoading(false)
@@ -300,7 +312,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           {/* Main content */}
           <div style={{padding: '16px'}}>
             {user && pool.deadline_type === 'before_tournament' ? (
-              <BracketPicker poolId={pool.id} userId={user.id} pickMode={pool.pick_mode || 'simple'} locked={false} />
+              <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-12T19:00:00Z')} />
             ) : user && (
               <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />
             )}
@@ -315,7 +327,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           <div style={{padding: '40px 24px', overflowY: 'auto'}}>
             <div style={{maxWidth: 960, margin: '0 auto'}}>
               {user && pool.deadline_type === 'before_tournament' ? (
-                <BracketPicker poolId={pool.id} userId={user.id} pickMode={pool.pick_mode || 'simple'} locked={false} />
+                <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-12T19:00:00Z')} />
               ) : user && (
                 <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />
               )}

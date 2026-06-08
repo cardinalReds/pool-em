@@ -27,10 +27,17 @@ export default function CreatePoolPage() {
   const [selectedRules, setSelectedRules] = useState<SelectedRule[]>([])
 
   // Bracket settings (only when deadline = before_tournament)
-  const [pickMode, setPickMode] = useState<'simple' | 'full'>('simple')
+  const [groupPredStyle, setGroupPredStyle] = useState<'wld' | 'exact'>('wld')
+  const [knockoutPredStyle, setKnockoutPredStyle] = useState<'advances' | 'exact'>('advances')
   const [bracketScoring, setBracketScoring] = useState({
-    r32_points: 1, r16_points: 2, qf_points: 4,
-    sf_points: 8, final_points: 16, winner_points: 32,
+    group_wld: 2, group_exact_per_team: 2, group_exact_bonus: 3,
+    group_standing_winner: 3, group_standing_runner_up: 3, group_standing_third: 2,
+    r32_advances: 2, r32_exact_bonus: 3,
+    r16_advances: 3, r16_exact_bonus: 4,
+    qf_advances: 5, qf_exact_bonus: 6,
+    sf_advances: 8, sf_exact_bonus: 10,
+    final_exact_per_team: 5, final_exact_bonus: 15,
+    champion_bonus: 20,
   })
 
   // Step 4 — buy-in
@@ -74,7 +81,7 @@ export default function CreatePoolPage() {
       payout_structure: buyIn && parseFloat(buyIn) > 0
         ? (payoutTemplate === 'custom' ? customPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description || null)
         : null,
-      pick_mode: deadlineType === 'before_tournament' ? pickMode : null,
+      pick_mode: deadlineType === 'before_tournament' ? `${groupPredStyle}_${knockoutPredStyle}` : null,
     }).select().single()
 
     if (poolError) { setError(poolError.message); setLoading(false); return }
@@ -93,10 +100,12 @@ export default function CreatePoolPage() {
 
     // Save bracket scoring rules if before_tournament pool
     if (deadlineType === 'before_tournament') {
-      await supabase.from('bracket_scoring_rules').insert({
+      await supabase.from('bracket_scoring_rules').upsert({
         pool_id: pool.id,
+        group_pred_style: groupPredStyle,
+        knockout_pred_style: knockoutPredStyle,
         ...bracketScoring,
-      })
+      }, { onConflict: 'pool_id' })
     }
 
     // Add admin as member
@@ -198,42 +207,143 @@ export default function CreatePoolPage() {
             {/* Bracket settings — only for before_tournament pools */}
             {deadlineType === 'before_tournament' && (
               <div style={{marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '16px'}}>
-                <label style={{display: 'block', fontWeight: 600, marginBottom: '8px'}}>group stage pick style</label>
-                <div style={{display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px'}}>
+
+                {/* Group stage prediction style */}
+                <label style={{display: 'block', fontWeight: 600, marginBottom: '8px'}}>group stage predictions</label>
+                <div style={{display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '20px'}}>
                   {([
-                    { id: 'simple', label: 'rank teams per group', desc: 'pick 1st–4th in each group' },
-                    { id: 'full', label: 'predict every game', desc: 'app calculates who advances' },
+                    { id: 'wld', label: 'win / draw / loss', desc: `correct result: ${bracketScoring.group_wld} pts` },
+                    { id: 'exact', label: 'exact score', desc: `${bracketScoring.group_exact_per_team} pts per team · +${bracketScoring.group_exact_bonus} pts if both correct` },
                   ] as const).map(opt => (
-                    <button key={opt.id} onClick={() => setPickMode(opt.id)}
+                    <button key={opt.id} onClick={() => setGroupPredStyle(opt.id)}
                       style={{
                         padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer', minHeight: 56,
-                        borderColor: pickMode === opt.id ? '#C8102E' : '#e0e0db',
-                        background: pickMode === opt.id ? '#fff5f5' : 'white',
+                        borderColor: groupPredStyle === opt.id ? '#C8102E' : '#e0e0db',
+                        background: groupPredStyle === opt.id ? '#fff5f5' : 'white',
                       }}>
-                      <div style={{fontWeight: 600, fontSize: '13px', color: pickMode === opt.id ? '#C8102E' : '#111'}}>{opt.label}</div>
+                      <div style={{fontWeight: 600, fontSize: '13px', color: groupPredStyle === opt.id ? '#C8102E' : '#111'}}>{opt.label}</div>
                       <div style={{fontSize: '11px', color: '#aaa', marginTop: '3px'}}>{opt.desc}</div>
                     </button>
                   ))}
                 </div>
 
-                <label style={{display: 'block', fontWeight: 600, marginBottom: '8px'}}>bracket scoring (pts per correct pick)</label>
-                <div style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px'}}>
+                {/* Knockout prediction style */}
+                <label style={{display: 'block', fontWeight: 600, marginBottom: '8px'}}>knockout round predictions</label>
+                <div style={{display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '20px'}}>
                   {([
-                    { key: 'r32_points', label: 'Round of 32' },
-                    { key: 'r16_points', label: 'Round of 16' },
-                    { key: 'qf_points', label: 'Quarter Finals' },
-                    { key: 'sf_points', label: 'Semi Finals' },
-                    { key: 'final_points', label: 'Final' },
-                    { key: 'winner_points', label: 'Champion bonus' },
-                  ] as const).map(({ key, label }) => (
-                    <div key={key}>
-                      <div style={{fontSize: '11px', color: '#888', marginBottom: '4px'}}>{label}</div>
-                      <input type="number" min="0" max="100" value={bracketScoring[key]}
-                        onChange={e => setBracketScoring(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))}
-                        style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontWeight: 600, fontFamily: 'inherit', textAlign: 'center', minHeight: 44}} />
-                    </div>
+                    { id: 'advances', label: 'who advances', desc: 'pick the winner of each match' },
+                    { id: 'exact', label: 'exact score (90 min) + who advances', desc: 'bonus pts for getting the score right' },
+                  ] as const).map(opt => (
+                    <button key={opt.id} onClick={() => setKnockoutPredStyle(opt.id)}
+                      style={{
+                        padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer', minHeight: 56,
+                        borderColor: knockoutPredStyle === opt.id ? '#C8102E' : '#e0e0db',
+                        background: knockoutPredStyle === opt.id ? '#fff5f5' : 'white',
+                      }}>
+                      <div style={{fontWeight: 600, fontSize: '13px', color: knockoutPredStyle === opt.id ? '#C8102E' : '#111'}}>{opt.label}</div>
+                      <div style={{fontSize: '11px', color: '#aaa', marginTop: '3px'}}>{opt.desc}</div>
+                    </button>
                   ))}
                 </div>
+                <div style={{fontSize: '10px', color: '#bbb', marginBottom: '16px', fontStyle: 'italic'}}>
+                  the final is always exact score regardless.
+                </div>
+
+                {/* Scoring values */}
+                <label style={{display: 'block', fontWeight: 600, marginBottom: '12px'}}>scoring</label>
+
+                {/* Group stage scoring */}
+                <div style={{fontSize: '11px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px'}}>group stage</div>
+                <div style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '16px'}}>
+                  {groupPredStyle === 'wld' ? (
+                    <div>
+                      <div style={{fontSize: '11px', color: '#888', marginBottom: '4px'}}>correct result</div>
+                      <input type="number" min="0" max="100" value={bracketScoring.group_wld}
+                        onChange={e => setBracketScoring(p => ({...p, group_wld: parseInt(e.target.value)||0}))}
+                        style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontWeight: 600, fontFamily: 'inherit', textAlign: 'center', minHeight: 44}} />
+                    </div>
+                  ) : (<>
+                    <div>
+                      <div style={{fontSize: '11px', color: '#888', marginBottom: '4px'}}>pts per team score</div>
+                      <input type="number" min="0" max="100" value={bracketScoring.group_exact_per_team}
+                        onChange={e => setBracketScoring(p => ({...p, group_exact_per_team: parseInt(e.target.value)||0}))}
+                        style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontWeight: 600, fontFamily: 'inherit', textAlign: 'center', minHeight: 44}} />
+                    </div>
+                    <div>
+                      <div style={{fontSize: '11px', color: '#888', marginBottom: '4px'}}>exact score bonus</div>
+                      <input type="number" min="0" max="100" value={bracketScoring.group_exact_bonus}
+                        onChange={e => setBracketScoring(p => ({...p, group_exact_bonus: parseInt(e.target.value)||0}))}
+                        style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontWeight: 600, fontFamily: 'inherit', textAlign: 'center', minHeight: 44}} />
+                    </div>
+                  </>)}
+                  <div>
+                    <div style={{fontSize: '11px', color: '#888', marginBottom: '4px'}}>correct group winner</div>
+                    <input type="number" min="0" max="100" value={bracketScoring.group_standing_winner}
+                      onChange={e => setBracketScoring(p => ({...p, group_standing_winner: parseInt(e.target.value)||0}))}
+                      style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontWeight: 600, fontFamily: 'inherit', textAlign: 'center', minHeight: 44}} />
+                  </div>
+                  <div>
+                    <div style={{fontSize: '11px', color: '#888', marginBottom: '4px'}}>correct runner-up</div>
+                    <input type="number" min="0" max="100" value={bracketScoring.group_standing_runner_up}
+                      onChange={e => setBracketScoring(p => ({...p, group_standing_runner_up: parseInt(e.target.value)||0}))}
+                      style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontWeight: 600, fontFamily: 'inherit', textAlign: 'center', minHeight: 44}} />
+                  </div>
+                  <div>
+                    <div style={{fontSize: '11px', color: '#888', marginBottom: '4px'}}>correct 3rd place qualifier</div>
+                    <input type="number" min="0" max="100" value={bracketScoring.group_standing_third}
+                      onChange={e => setBracketScoring(p => ({...p, group_standing_third: parseInt(e.target.value)||0}))}
+                      style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontWeight: 600, fontFamily: 'inherit', textAlign: 'center', minHeight: 44}} />
+                  </div>
+                </div>
+
+                {/* Knockout scoring */}
+                <div style={{fontSize: '11px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px'}}>knockout rounds</div>
+                <div style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '16px'}}>
+                  {(['r32','r16','qf','sf'] as const).map(round => {
+                    const advKey = `${round}_advances` as keyof typeof bracketScoring
+                    const exKey = `${round}_exact_bonus` as keyof typeof bracketScoring
+                    const labels: Record<string, string> = { r32: 'R32', r16: 'R16', qf: 'QF', sf: 'SF' }
+                    return (
+                      <div key={round} style={{border: '1px solid #f0f0f0', padding: '8px'}}>
+                        <div style={{fontSize: '11px', fontWeight: 600, color: '#555', marginBottom: '6px'}}>{labels[round]}</div>
+                        <div style={{fontSize: '10px', color: '#aaa', marginBottom: '3px'}}>advances</div>
+                        <input type="number" min="0" max="100" value={bracketScoring[advKey]}
+                          onChange={e => setBracketScoring(p => ({...p, [advKey]: parseInt(e.target.value)||0}))}
+                          style={{width: '100%', border: '1px solid #ddd', padding: '6px', fontSize: '14px', fontWeight: 600, fontFamily: 'inherit', textAlign: 'center', marginBottom: knockoutPredStyle === 'exact' ? '6px' : 0}} />
+                        {knockoutPredStyle === 'exact' && <>
+                          <div style={{fontSize: '10px', color: '#aaa', marginBottom: '3px'}}>exact score bonus</div>
+                          <input type="number" min="0" max="100" value={bracketScoring[exKey]}
+                            onChange={e => setBracketScoring(p => ({...p, [exKey]: parseInt(e.target.value)||0}))}
+                            style={{width: '100%', border: '1px solid #ddd', padding: '6px', fontSize: '14px', fontWeight: 600, fontFamily: 'inherit', textAlign: 'center'}} />
+                        </>}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Final scoring */}
+                <div style={{fontSize: '11px', fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px'}}>final (always exact score)</div>
+                <div style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '8px'}}>
+                  <div>
+                    <div style={{fontSize: '11px', color: '#888', marginBottom: '4px'}}>pts per team score</div>
+                    <input type="number" min="0" max="100" value={bracketScoring.final_exact_per_team}
+                      onChange={e => setBracketScoring(p => ({...p, final_exact_per_team: parseInt(e.target.value)||0}))}
+                      style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontWeight: 600, fontFamily: 'inherit', textAlign: 'center', minHeight: 44}} />
+                  </div>
+                  <div>
+                    <div style={{fontSize: '11px', color: '#888', marginBottom: '4px'}}>exact score bonus</div>
+                    <input type="number" min="0" max="100" value={bracketScoring.final_exact_bonus}
+                      onChange={e => setBracketScoring(p => ({...p, final_exact_bonus: parseInt(e.target.value)||0}))}
+                      style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontWeight: 600, fontFamily: 'inherit', textAlign: 'center', minHeight: 44}} />
+                  </div>
+                  <div>
+                    <div style={{fontSize: '11px', color: '#888', marginBottom: '4px'}}>champion bonus</div>
+                    <input type="number" min="0" max="100" value={bracketScoring.champion_bonus}
+                      onChange={e => setBracketScoring(p => ({...p, champion_bonus: parseInt(e.target.value)||0}))}
+                      style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontWeight: 600, fontFamily: 'inherit', textAlign: 'center', minHeight: 44}} />
+                  </div>
+                </div>
+
               </div>
             )}
           </div>
