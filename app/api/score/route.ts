@@ -130,6 +130,8 @@ async function fetchAndSeedSquad(teamId: number, teamName: string): Promise<void
   await supabase.from('players').upsert(rows, { onConflict: 'id' })
   console.log(`Seeded ${rows.length} players for ${teamName}`)
 }
+
+function getResult(home: number, away: number): 'home' | 'draw' | 'away' {
   if (home > away) return 'home'
   if (home < away) return 'away'
   return 'draw'
