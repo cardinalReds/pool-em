@@ -21,6 +21,7 @@ async function fetchFinished() {
 
 interface EventFacts {
   firstScorerName: string | null
+  allScorerNames: string[]
   firstTeamScore: 'home' | 'away' | 'none'
   firstYellow: 'home' | 'away' | 'none'
   homeCardPts: number
@@ -40,6 +41,7 @@ async function fetchFixtureEvents(fixtureId: number, homeTeamId: number): Promis
   })
 
   let firstScorerName: string | null = null
+  const allScorerNames: string[] = []
   let firstTeamScore: 'home' | 'away' | 'none' = 'none'
   let firstYellow: 'home' | 'away' | 'none' = 'none'
   let homeCardPts = 0
@@ -50,10 +52,12 @@ async function fetchFixtureEvents(fixtureId: number, homeTeamId: number): Promis
     const side = isHome ? 'home' : 'away'
 
     if (event.type === 'Goal' && event.detail !== 'Missed Penalty') {
+      const scorerName = event.player?.name || null
       if (firstScorerName === null) {
-        firstScorerName = event.player?.name || null
+        firstScorerName = scorerName
         firstTeamScore = side
       }
+      if (scorerName) allScorerNames.push(scorerName)
     }
 
     if (event.type === 'Card') {
@@ -69,7 +73,7 @@ async function fetchFixtureEvents(fixtureId: number, homeTeamId: number): Promis
     }
   }
 
-  return { firstScorerName, firstTeamScore, firstYellow, homeCardPts, awayCardPts }
+  return { firstScorerName, allScorerNames, firstTeamScore, firstYellow, homeCardPts, awayCardPts }
 }
 
 interface CornerFacts {
@@ -231,8 +235,10 @@ function scoreCustomPrediction(
         ? rule.points : 0
 
     case 'soccer_anytime_goalscorer':
-      // Requires full scorer list — not available yet
-      return 0
+      if (!pred.value_text || facts.allScorerNames.length === 0) return 0
+      return facts.allScorerNames.some(
+        name => name.toLowerCase().trim() === pred.value_text.toLowerCase().trim()
+      ) ? rule.points : 0
 
     default:
       return 0
@@ -251,6 +257,7 @@ interface MatchFacts {
   htHome: number | null
   htAway: number | null
   firstScorerName: string | null
+  allScorerNames: string[]
   firstTeamScore: 'home' | 'away' | 'none'
   firstYellow: 'home' | 'away' | 'none'
   homeCorners: number | null
@@ -545,7 +552,7 @@ export async function POST(request: NextRequest) {
       fetchAndSeedSquad(homeTeamId, homeTeamName).catch(console.error)
       fetchAndSeedSquad(awayTeamId, awayTeamName).catch(console.error)
 
-      const { firstScorerName, firstTeamScore, firstYellow, homeCardPts, awayCardPts } = eventFacts
+      const { firstScorerName, allScorerNames, firstTeamScore, firstYellow, homeCardPts, awayCardPts } = eventFacts
       const actualResult = getResult(homeScore, awayScore)
 
       // Update fixture row
@@ -565,6 +572,7 @@ export async function POST(request: NextRequest) {
         htHome: match.score?.halftime?.home ?? null,
         htAway: match.score?.halftime?.away ?? null,
         firstScorerName,
+        allScorerNames,
         firstTeamScore,
         firstYellow,
         homeCorners: cornerFacts.homeCorners,
