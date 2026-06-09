@@ -1,10 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
-)
 
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY!
 
@@ -72,13 +66,24 @@ const WC_TEAMS = [
 ]
 
 async function seedTeam(teamId: number, teamName: string): Promise<{ name: string; count: number; skipped: boolean }> {
-  const { count } = await supabase
-    .from('players')
-    .select('*', { count: 'exact', head: true })
-    .eq('team_id', teamId)
-    .eq('tournament_id', 'wc_2026')
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!
 
-  if (count && count > 0) return { name: teamName, count, skipped: true }
+  // Check if already seeded
+  const countRes = await fetch(
+    `${SUPABASE_URL}/rest/v1/players?team_id=eq.${teamId}&tournament_id=eq.wc_2026&select=id`,
+    {
+      headers: {
+        'apikey': SERVICE_KEY,
+        'Authorization': `Bearer ${SERVICE_KEY}`,
+        'Prefer': 'count=exact',
+        'Range': '0-0',
+      }
+    }
+  )
+  const contentRange = countRes.headers.get('content-range')
+  const total = contentRange ? parseInt(contentRange.split('/')[1]) : 0
+  if (total > 0) return { name: teamName, count: total, skipped: true }
 
   const res = await fetch(
     `https://v3.football.api-sports.io/players/squads?team=${teamId}`,
@@ -99,7 +104,24 @@ async function seedTeam(teamId: number, teamName: string): Promise<{ name: strin
     tournament_id: 'wc_2026',
   }))
 
-  await supabase.from('players').upsert(rows, { onConflict: 'id' })
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!
+
+  const res2 = await fetch(`${SUPABASE_URL}/rest/v1/players`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SERVICE_KEY,
+      'Authorization': `Bearer ${SERVICE_KEY}`,
+      'Prefer': 'resolution=merge-duplicates',
+    },
+    body: JSON.stringify(rows),
+  })
+  if (!res2.ok) {
+    const err = await res2.text()
+    console.error(`Failed to insert players for ${teamName}:`, err)
+    return { name: teamName, count: 0, skipped: false }
+  }
   return { name: teamName, count: rows.length, skipped: false }
 }
 
