@@ -151,7 +151,46 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
   }
 
   function pickBracket(slot: string, team: string) {
-    setBracketPicks(prev => ({ ...prev, [slot]: team }))
+    setBracketPicks(prev => {
+      const next = { ...prev, [slot]: team }
+      // Auto-cascade: find the next round slot and set this team as the pick
+      // only if both teams in that next slot are now known
+      const cascadeSlot = findNextSlot(slot)
+      if (cascadeSlot) {
+        const opponents = getNextSlotOpponents(cascadeSlot, next)
+        // Don't auto-pick — just let the user see who they'd face
+        // But DO clear downstream picks if they no longer match
+        if (next[cascadeSlot] && opponents.home !== next[cascadeSlot] && opponents.away !== next[cascadeSlot]) {
+          delete next[cascadeSlot]
+          // Also clear further downstream
+          const further = findNextSlot(cascadeSlot)
+          if (further && next[further]) delete next[further]
+        }
+      }
+      return next
+    })
+  }
+
+  function findNextSlot(slot: string): string | null {
+    if (slot.startsWith('R32')) {
+      const r16 = R16_MATCHUPS.find(m => m.home === slot || m.away === slot)
+      return r16?.slot || null
+    }
+    if (slot.startsWith('R16')) {
+      const qf = QF_MATCHUPS.find(m => m.home === slot || m.away === slot)
+      return qf?.slot || null
+    }
+    if (slot.startsWith('QF')) {
+      const sf = SF_MATCHUPS.find(m => m.home === slot || m.away === slot)
+      return sf?.slot || null
+    }
+    if (slot.startsWith('SF')) return 'FINAL'
+    return null
+  }
+
+  function getNextSlotOpponents(slot: string, picks: BracketPicks): { home: string; away: string } {
+    return getSlotOpponents(slot, r32Bracket, picks)
+  }
   }
 
   const groupsComplete = Object.keys(groupPicks).length === 12 &&
@@ -469,13 +508,13 @@ function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRules, lo
   onPick: (slot: string, team: string) => void
   onScore: (slot: string, score: string) => void
 }) {
-  // Split R32 into left (first 8) and right (last 8)
-  const leftR32Slots = R32_MATCHUPS.slice(0, 8).map(m => m.slot)
-  const rightR32Slots = R32_MATCHUPS.slice(8, 16).map(m => m.slot)
-
-  // Left R16: winners of left R32 pairs
-  const leftR16Slots = R16_MATCHUPS.slice(0, 4).map(m => m.slot)
-  const rightR16Slots = R16_MATCHUPS.slice(4, 8).map(m => m.slot)
+  // Visual order matches fotmob official bracket exactly
+  // Left: M74+M77→R16_1, M73+M75→R16_2, M84+M88→R16_3, M83+M81→R16_4
+  const leftR32Slots = ['R32_M74','R32_M77','R32_M73','R32_M75','R32_M84','R32_M88','R32_M83','R32_M81']
+  // Right: M76+M78→R16_5, M79+M80→R16_6, M86+M82→R16_7, M85+M87→R16_8
+  const rightR32Slots = ['R32_M76','R32_M78','R32_M79','R32_M80','R32_M86','R32_M82','R32_M85','R32_M87']
+  const leftR16Slots = ['R16_1','R16_2','R16_3','R16_4']
+  const rightR16Slots = ['R16_5','R16_6','R16_7','R16_8']
 
   const leftQFSlots = QF_MATCHUPS.slice(0, 2).map(m => m.slot)
   const rightQFSlots = QF_MATCHUPS.slice(2, 4).map(m => m.slot)

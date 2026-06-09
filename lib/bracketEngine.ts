@@ -30,41 +30,47 @@ export interface BracketPicks {
 // ── R32 Fixed matchups (from FIFA official schedule) ──────────────────────
 // Third-place slots are conditional on which groups produce the best 3rd place teams
 // We store the pool of eligible groups for each 3rd place slot
+// ── Official FIFA WC 2026 Bracket ─────────────────────────────────────────
+// Source: fotmob official fixture schedule
+// R32 ordered top→bottom per half, each adjacent pair feeds one R16
+
 export const R32_MATCHUPS = [
-  // ── LEFT HALF (M73-M80) ───────────────────────────────────────────────
-  { slot: 'R32_M73', home: { type: 'runner_up', group: 'A' }, away: { type: 'runner_up', group: 'B' } },
-  { slot: 'R32_M74', home: { type: 'winner', group: 'E' }, away: { type: 'third', groups: ['A','B','C','D','F'] } },
-  { slot: 'R32_M75', home: { type: 'winner', group: 'F' }, away: { type: 'runner_up', group: 'C' } },
-  { slot: 'R32_M76', home: { type: 'winner', group: 'C' }, away: { type: 'runner_up', group: 'F' } },
-  { slot: 'R32_M77', home: { type: 'winner', group: 'I' }, away: { type: 'third', groups: ['C','D','F','G','H'] } },
-  { slot: 'R32_M78', home: { type: 'runner_up', group: 'E' }, away: { type: 'runner_up', group: 'I' } },
-  { slot: 'R32_M79', home: { type: 'winner', group: 'A' }, away: { type: 'third', groups: ['C','E','F','H','I'] } },
-  { slot: 'R32_M80', home: { type: 'winner', group: 'L' }, away: { type: 'third', groups: ['E','H','I','J','K'] } },
-  // ── RIGHT HALF (M81-M88) ─────────────────────────────────────────────
-  { slot: 'R32_M81', home: { type: 'winner', group: 'G' }, away: { type: 'third', groups: ['A','E','H','I','J'] } },
-  { slot: 'R32_M82', home: { type: 'runner_up', group: 'D' }, away: { type: 'runner_up', group: 'G' } },
-  { slot: 'R32_M83', home: { type: 'winner', group: 'D' }, away: { type: 'third', groups: ['B','E','F','I','J'] } },
-  { slot: 'R32_M84', home: { type: 'runner_up', group: 'K' }, away: { type: 'runner_up', group: 'L' } },
-  { slot: 'R32_M85', home: { type: 'winner', group: 'B' }, away: { type: 'third', groups: ['E','F','G','I','J'] } },
-  { slot: 'R32_M86', home: { type: 'winner', group: 'J' }, away: { type: 'runner_up', group: 'H' } },
-  { slot: 'R32_M87', home: { type: 'winner', group: 'K' }, away: { type: 'third', groups: ['D','E','I','J','L'] } },
-  { slot: 'R32_M88', home: { type: 'winner', group: 'H' }, away: { type: 'runner_up', group: 'J' } },
+  // ── LEFT HALF — top to bottom ─────────────────────────────────────────
+  { slot: 'R32_M74', home: { type: 'winner', group: 'E' }, away: { type: 'third', groups: ['A','B','C','D','F'] } },   // 1E vs 3AB
+  { slot: 'R32_M77', home: { type: 'winner', group: 'I' }, away: { type: 'third', groups: ['C','D','F','G','H'] } },   // 1I vs 3CD
+  { slot: 'R32_M73', home: { type: 'runner_up', group: 'A' }, away: { type: 'runner_up', group: 'B' } },               // 2A vs 2B
+  { slot: 'R32_M75', home: { type: 'winner', group: 'F' }, away: { type: 'runner_up', group: 'C' } },                  // 1F vs 2C
+  { slot: 'R32_M84', home: { type: 'runner_up', group: 'K' }, away: { type: 'runner_up', group: 'L' } },               // 2K vs 2L
+  { slot: 'R32_M88', home: { type: 'winner', group: 'H' }, away: { type: 'runner_up', group: 'J' } },                  // 1H vs 2J
+  { slot: 'R32_M83', home: { type: 'winner', group: 'D' }, away: { type: 'third', groups: ['B','E','F','I','J'] } },   // 1D vs 3BE
+  { slot: 'R32_M81', home: { type: 'winner', group: 'G' }, away: { type: 'third', groups: ['A','E','H','I','J'] } },   // 1G vs 3AE
+  // ── RIGHT HALF — top to bottom ────────────────────────────────────────
+  { slot: 'R32_M76', home: { type: 'winner', group: 'C' }, away: { type: 'runner_up', group: 'F' } },                  // 1C vs 2F
+  { slot: 'R32_M78', home: { type: 'runner_up', group: 'E' }, away: { type: 'runner_up', group: 'I' } },               // 2E vs 2I
+  { slot: 'R32_M79', home: { type: 'winner', group: 'A' }, away: { type: 'third', groups: ['C','E','F','H','I'] } },   // 1A vs 3CE
+  { slot: 'R32_M80', home: { type: 'winner', group: 'L' }, away: { type: 'third', groups: ['E','H','I','J','K'] } },   // 1L vs 3EH
+  { slot: 'R32_M86', home: { type: 'winner', group: 'J' }, away: { type: 'runner_up', group: 'H' } },                  // 1J vs 2H
+  { slot: 'R32_M82', home: { type: 'runner_up', group: 'D' }, away: { type: 'runner_up', group: 'G' } },               // 2D vs 2G
+  { slot: 'R32_M85', home: { type: 'winner', group: 'B' }, away: { type: 'third', groups: ['E','F','G','I','J'] } },   // 1B vs 3EF
+  { slot: 'R32_M87', home: { type: 'winner', group: 'K' }, away: { type: 'third', groups: ['D','E','I','J','L'] } },   // 1K vs 3DE
 ]
 
-// R16 pairings — from official schedule (Sky Sports match numbers)
+// R16 — each pair of adjacent R32 slots feeds one R16 match
 export const R16_MATCHUPS = [
   // Left half
-  { slot: 'R16_1', home: 'R32_M73', away: 'R32_M75' }, // M90: winners of M73 vs M75
-  { slot: 'R16_2', home: 'R32_M74', away: 'R32_M77' }, // M89: winners of M74 vs M77
-  { slot: 'R16_3', home: 'R32_M76', away: 'R32_M78' }, // M91: winners of M76 vs M78
-  { slot: 'R16_4', home: 'R32_M79', away: 'R32_M80' }, // M92: winners of M79 vs M80
+  { slot: 'R16_1', home: 'R32_M74', away: 'R32_M77' }, // 1E/3AB vs 1I/3CD → Jul 4
+  { slot: 'R16_2', home: 'R32_M73', away: 'R32_M75' }, // 2A/2B vs 1F/2C  → Jul 4
+  { slot: 'R16_3', home: 'R32_M84', away: 'R32_M88' }, // 2K/2L vs 1H/2J  → Jul 6
+  { slot: 'R16_4', home: 'R32_M83', away: 'R32_M81' }, // 1D/3BE vs 1G/3AE → Jul 6
   // Right half
-  { slot: 'R16_5', home: 'R32_M83', away: 'R32_M84' }, // M93: winners of M83 vs M84
-  { slot: 'R16_6', home: 'R32_M81', away: 'R32_M82' }, // M94: winners of M81 vs M82
-  { slot: 'R16_7', home: 'R32_M86', away: 'R32_M88' }, // M95: winners of M86 vs M88
-  { slot: 'R16_8', home: 'R32_M85', away: 'R32_M87' }, // M96: winners of M85 vs M87
+  { slot: 'R16_5', home: 'R32_M76', away: 'R32_M78' }, // 1C/2F vs 2E/2I  → Jul 5
+  { slot: 'R16_6', home: 'R32_M79', away: 'R32_M80' }, // 1A/3CE vs 1L/3EH → Jul 5
+  { slot: 'R16_7', home: 'R32_M86', away: 'R32_M82' }, // 1J/2H vs 2D/2G  → Jul 7
+  { slot: 'R16_8', home: 'R32_M85', away: 'R32_M87' }, // 1B/3EF vs 1K/3DE → Jul 7
 ]
 
+// QF: R16_1+R16_2 → QF_1, R16_3+R16_4 → QF_2 (left SF)
+//     R16_5+R16_6 → QF_3, R16_7+R16_8 → QF_4 (right SF)
 export const QF_MATCHUPS = [
   { slot: 'QF_1', home: 'R16_1', away: 'R16_2' },
   { slot: 'QF_2', home: 'R16_3', away: 'R16_4' },
