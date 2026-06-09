@@ -60,7 +60,6 @@ export default function ReminderButton({ poolId, userId, userEmail }: {
 
   return (
     <div>
-      <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', marginBottom: '6px'}}>remind me</div>
       
       {existing !== null && status === 'idle' ? (
         <div>

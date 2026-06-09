@@ -229,7 +229,32 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
       {/* Scoring */}
       <Section title="scoring" defaultOpen={!isMobile}>
-        {pool.package_id === 'CUSTOM' ? (
+        {pool.deadline_type === 'before_tournament' && bracketScoringRules ? (
+          <div style={{fontSize: '12px', color: '#555', lineHeight: 1.9}}>
+            <div style={{fontWeight: 600, marginBottom: '4px', color: '#111'}}>
+              group stage: {bracketScoringRules.group_format === 'standings' ? 'pick standings' : bracketScoringRules.group_format === 'wld' ? 'win/draw/loss' : 'exact score'}
+            </div>
+            {bracketScoringRules.group_format === 'standings' && (
+              <div style={{color: '#888'}}>
+                1st place: {bracketScoringRules.standings_first}pts · 2nd: {bracketScoringRules.standings_second}pts · 3rd qualifier: {bracketScoringRules.standings_third}pt
+              </div>
+            )}
+            {bracketScoringRules.group_format === 'wld' && (
+              <div style={{color: '#888'}}>correct result: {bracketScoringRules.wld_pts}pt per game</div>
+            )}
+            {bracketScoringRules.group_format === 'exact' && (
+              <div style={{color: '#888'}}>3pts result · 2pts per team score · 3pt bonus (10pts max)</div>
+            )}
+            <div style={{fontWeight: 600, marginTop: '8px', marginBottom: '4px', color: '#111'}}>knockout rounds</div>
+            <div style={{color: '#888'}}>
+              R32: {bracketScoringRules.r32_pts}pt · R16: {bracketScoringRules.r16_pts}pts · QF: {bracketScoringRules.qf_pts}pts · SF: {bracketScoringRules.sf_pts}pts
+            </div>
+            <div style={{fontWeight: 600, marginTop: '8px', marginBottom: '4px', color: '#111'}}>final</div>
+            <div style={{color: '#888'}}>
+              {bracketScoringRules.final_pts}pts per finalist · 2pts per correct team goal · +3pt exact bonus · +10pts correct winner
+            </div>
+          </div>
+        ) : pool.package_id === 'CUSTOM' ? (
           <div>
             {poolRules.map((rule: any) => {
               const isExact = rule.category_id === 'soccer_exact_score' || rule.category_id === 'soccer_ht_exact_score'
@@ -243,7 +268,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               )
             })}
             <div style={{fontSize: '11px', color: '#aaa', marginTop: '8px'}}>
-              deadline: {pool.deadline_type === 'before_each_game' ? 'before kickoff' : 'before tournament'}
+              deadline: before kickoff
             </div>
           </div>
         ) : (

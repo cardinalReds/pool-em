@@ -96,10 +96,6 @@ export default function InvitePanel({ poolId, poolName, inviteUrl, buyInAmount, 
   })
 
   return (
-    <div>
-      <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '10px' }}>
-        invite
-      </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid #eee', marginBottom: '12px' }}>

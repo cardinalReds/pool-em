@@ -3,18 +3,18 @@
 // Each group has 4 teams
 
 export const WC_2026_GROUPS: Record<string, string[]> = {
-  A: ['Mexico', 'South Africa', 'Poland', 'Saudi Arabia'],
-  B: ['Argentina', 'Chile', 'Peru', 'Canada'],
-  C: ['USA', 'Panama', 'Haiti', 'Bosnia and Herzegovina'],
-  D: ['Brazil', 'Norway', 'Morocco', 'Uruguay'],
-  E: ['France', 'Algeria', 'Egypt', 'England'],
-  F: ['Spain', 'Senegal', 'Japan', 'Netherlands'],
-  G: ['Germany', 'Serbia', 'Colombia', 'Belgium'],
-  H: ['Portugal', 'Croatia', 'Ivory Coast', 'Ecuador'],
-  I: ['Sweden', 'South Korea', 'Iran', 'Iraq'],
-  J: ['Australia', 'Jordan', 'New Zealand', 'Uzbekistan'],
-  K: ['Türkiye', 'Denmark', 'Austria', 'Ghana'],
-  L: ['Congo DR', 'Cabo Verde', 'Tunisia', 'Qatar'],
+  A: ['Mexico', 'South Africa', 'South Korea', 'Czechia'],
+  B: ['Canada', 'Bosnia and Herzegovina', 'Qatar', 'Switzerland'],
+  C: ['Brazil', 'Morocco', 'Haiti', 'Scotland'],
+  D: ['USA', 'Paraguay', 'Australia', 'Türkiye'],
+  E: ['Germany', 'Curaçao', 'Ivory Coast', 'Ecuador'],
+  F: ['Netherlands', 'Japan', 'Sweden', 'Tunisia'],
+  G: ['Belgium', 'Egypt', 'Iran', 'New Zealand'],
+  H: ['Spain', 'Cape Verde', 'Saudi Arabia', 'Uruguay'],
+  I: ['France', 'Senegal', 'Iraq', 'Norway'],
+  J: ['Argentina', 'Algeria', 'Austria', 'Jordan'],
+  K: ['Portugal', 'Congo DR', 'Uzbekistan', 'Colombia'],
+  L: ['England', 'Croatia', 'Ghana', 'Panama'],
 }
 
 // Group picks: top 2 finishers + 3rd place ranking
