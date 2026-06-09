@@ -163,6 +163,12 @@ export default function PoolPage({ params }: { params: { id: string } }) {
     load()
   }, [params.id])
 
+  async function togglePaid(memberId: string, currentValue: boolean) {
+    const supabase = createClient()
+    await supabase.from('pool_members').update({ is_paid: !currentValue }).eq('id', memberId)
+    setLeaderboard(prev => prev.map(m => m.id === memberId ? { ...m, is_paid: !currentValue } : m))
+  }
+
   if (loading) return (
     <div style={{minHeight: '100vh', background: '#f7f7f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', color: '#888'}}>
       loading...
@@ -210,6 +216,15 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
       {/* Leaderboard */}
       <Section title="leaderboard" defaultOpen={true}>
+        {isAdmin && pool.buy_in_amount && (
+          <div style={{fontSize: '10px', color: '#aaa', marginBottom: '8px', display: 'flex', justifyContent: 'space-between'}}>
+            <span>player</span>
+            <div style={{display: 'flex', gap: 20}}>
+              <span>paid</span>
+              <span>pts</span>
+            </div>
+          </div>
+        )}
         {leaderboard.map((member, i) => (
           <div key={member.id} style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -217,12 +232,34 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             background: member.user_id === user?.id ? '#fff5f5' : 'transparent',
             borderLeft: `3px solid ${member.user_id === user?.id ? '#C8102E' : 'transparent'}`,
           }}>
-            <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555'}}>
+            <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555', flex: 1}}>
               {i + 1}. {member.display_name}
             </span>
-            <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888'}}>
-              {member.points}
-            </span>
+            <div style={{display: 'flex', alignItems: 'center', gap: 16}}>
+              {isAdmin && pool.buy_in_amount && (
+                <button
+                  onClick={() => togglePaid(member.id, member.is_paid)}
+                  title={member.is_paid ? 'mark as unpaid' : 'mark as paid'}
+                  style={{
+                    width: 22, height: 22, borderRadius: '50%', border: '1px solid',
+                    borderColor: member.is_paid ? '#2d7a2d' : '#ddd',
+                    background: member.is_paid ? '#2d7a2d' : 'white',
+                    color: 'white', fontSize: '12px', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                  {member.is_paid ? '✓' : ''}
+                </button>
+              )}
+              {!isAdmin && pool.buy_in_amount && (
+                <span style={{fontSize: '11px', color: member.is_paid ? '#2d7a2d' : '#ddd'}}>
+                  {member.is_paid ? '✓' : '○'}
+                </span>
+              )}
+              <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', minWidth: 24, textAlign: 'right' as const}}>
+                {member.points}
+              </span>
+            </div>
           </div>
         ))}
       </Section>
