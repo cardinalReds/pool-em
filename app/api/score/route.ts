@@ -262,6 +262,248 @@ interface MatchFacts {
   cardPtsLine: number | null
 }
 
+// ── Bracket scoring ────────────────────────────────────────────────────────
+// Groups: A-L, each team plays 3 games. Track wins/draws/losses/gd/gf.
+// After each game finishes we recalculate standings + bracket scores.
+
+interface TeamStanding {
+  team: string
+  pts: number
+  gd: number
+  gf: number
+  played: number
+}
+
+function buildGroupStandings(fixtures: any[]): Record<string, TeamStanding[]> {
+  const standings: Record<string, Record<string, TeamStanding>> = {}
+
+  for (const f of fixtures) {
+    if (f.status !== 'FT' || f.home_score === null || f.away_score === null) continue
+    const group = f.round?.replace('Group Stage - ', '').replace('Group ', '') || ''
+    if (!group || group.length !== 1) continue
+
+    if (!standings[group]) standings[group] = {}
+    const s = standings[group]
+
+    if (!s[f.home_team]) s[f.home_team] = { team: f.home_team, pts: 0, gd: 0, gf: 0, played: 0 }
+    if (!s[f.away_team]) s[f.away_team] = { team: f.away_team, pts: 0, gd: 0, gf: 0, played: 0 }
+
+    const h = f.home_score, a = f.away_score
+    s[f.home_team].played++
+    s[f.away_team].played++
+    s[f.home_team].gf += h; s[f.home_team].gd += h - a
+    s[f.away_team].gf += a; s[f.away_team].gd += a - h
+
+    if (h > a) { s[f.home_team].pts += 3 }
+    else if (h < a) { s[f.away_team].pts += 3 }
+    else { s[f.home_team].pts += 1; s[f.away_team].pts += 1 }
+  }
+
+  const result: Record<string, TeamStanding[]> = {}
+  for (const [group, teams] of Object.entries(standings)) {
+    result[group] = Object.values(teams).sort((a, b) =>
+      b.pts !== a.pts ? b.pts - a.pts :
+      b.gd !== a.gd ? b.gd - a.gd :
+      b.gf - a.gf
+    )
+  }
+  return result
+}
+
+function buildKnockoutResults(fixtures: any[]): Record<string, string> {
+  // Map: round name → winning team
+  const results: Record<string, string> = {}
+  for (const f of fixtures) {
+    if (f.status !== 'FT' || f.home_score === null || f.away_score === null) continue
+    const round = f.round || ''
+    if (!round.includes('Round of') && !round.includes('Quarter') &&
+        !round.includes('Semi') && !round.includes('Final')) continue
+
+    // Store which teams advanced (winner goes through)
+    const winner = f.home_score > f.away_score ? f.home_team :
+                   f.away_score > f.home_score ? f.away_team :
+                   null // draw in group stage — no winner
+    if (winner) results[`${round}:${f.home_team}vs${f.away_team}`] = winner
+  }
+  return results
+}
+
+async function scoreBracketPools(allFixtures: any[]) {
+  // Get all bracket pools
+  const { data: bracketPools } = await supabase
+    .from('pools')
+    .select('id')
+    .eq('deadline_type', 'before_tournament')
+    .eq('tournament_id', 'wc_2026')
+
+  if (!bracketPools?.length) return
+
+  const groupStandings = buildGroupStandings(allFixtures)
+
+  // Build set of teams that have actually advanced to each round from real fixtures
+  const advancedToRound: Record<string, Set<string>> = {
+    'R32': new Set(), 'R16': new Set(), 'QF': new Set(), 'SF': new Set(), 'FINAL': new Set(), 'CHAMPION': new Set()
+  }
+
+  for (const f of allFixtures) {
+    if (f.status !== 'FT' || f.home_score === null || f.away_score === null) continue
+    const r = f.round || ''
+
+    // Teams appearing in a round have advanced to it
+    if (r.includes('Round of 32')) {
+      advancedToRound['R32'].add(f.home_team)
+      advancedToRound['R32'].add(f.away_team)
+      const winner = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
+      if (winner) advancedToRound['R16'].add(winner)
+    }
+    if (r.includes('Round of 16')) {
+      advancedToRound['R16'].add(f.home_team)
+      advancedToRound['R16'].add(f.away_team)
+      const winner = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
+      if (winner) advancedToRound['QF'].add(winner)
+    }
+    if (r.includes('Quarter-finals')) {
+      advancedToRound['QF'].add(f.home_team)
+      advancedToRound['QF'].add(f.away_team)
+      const winner = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
+      if (winner) advancedToRound['SF'].add(winner)
+    }
+    if (r.includes('Semi-finals')) {
+      advancedToRound['SF'].add(f.home_team)
+      advancedToRound['SF'].add(f.away_team)
+      const winner = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
+      if (winner) advancedToRound['FINAL'].add(winner)
+    }
+    if (r === 'Final') {
+      advancedToRound['FINAL'].add(f.home_team)
+      advancedToRound['FINAL'].add(f.away_team)
+      const winner = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
+      if (winner) advancedToRound['CHAMPION'].add(winner)
+    }
+  }
+
+  for (const pool of bracketPools) {
+    // Load scoring rules
+    const { data: rulesRow } = await supabase
+      .from('bracket_scoring_rules')
+      .select('*')
+      .eq('pool_id', pool.id)
+      .maybeSingle()
+
+    if (!rulesRow) continue
+
+    const rules = {
+      groupFormat: rulesRow.group_format || 'standings',
+      standingsFirst: rulesRow.standings_first ?? 3,
+      standingsSecond: rulesRow.standings_second ?? 2,
+      standingsThird: rulesRow.standings_third ?? 1,
+      wldPts: rulesRow.wld_pts ?? 1,
+      r32Pts: rulesRow.r32_pts ?? 1,
+      r16Pts: rulesRow.r16_pts ?? 2,
+      qfPts: rulesRow.qf_pts ?? 4,
+      sfPts: rulesRow.sf_pts ?? 6,
+      finalPts: rulesRow.final_pts ?? 12,
+    }
+
+    // Load all bracket picks for this pool
+    const { data: allPicks } = await supabase
+      .from('bracket_picks')
+      .select('*')
+      .eq('pool_id', pool.id)
+
+    for (const pick of allPicks || []) {
+      let totalPts = 0
+      const breakdown: Record<string, number> = {}
+
+      // ── Group stage scoring ───────────────────────────────────────────
+      const groupPicks: Record<string, string[]> = pick.group_picks || {}
+
+      for (const [group, predicted] of Object.entries(groupPicks)) {
+        const actual = groupStandings[group]
+        if (!actual || actual[0]?.played < 3) continue // group not finished yet
+
+        if (rules.groupFormat === 'standings') {
+          const actualFirst = actual[0]?.team
+          const actualSecond = actual[1]?.team
+          const actualThird = actual[2]?.team
+
+          if (predicted[0] === actualFirst) { totalPts += rules.standingsFirst; breakdown[`group_${group}_1st`] = rules.standingsFirst }
+          if (predicted[1] === actualSecond) { totalPts += rules.standingsSecond; breakdown[`group_${group}_2nd`] = rules.standingsSecond }
+          if (predicted[2] === actualThird) { totalPts += rules.standingsThird; breakdown[`group_${group}_3rd`] = rules.standingsThird }
+        } else if (rules.groupFormat === 'wld') {
+          // Score each game pick — not implemented yet since WLD group picks
+          // require a different data structure
+        }
+      }
+
+      // ── Knockout scoring ──────────────────────────────────────────────
+      const bracketPicksData: Record<string, string> = pick.bracket_picks || {}
+
+      // R32 slots
+      const r32Slots = Object.keys(bracketPicksData).filter(k => k.startsWith('R32_'))
+      for (const slot of r32Slots) {
+        const pickedTeam = bracketPicksData[slot]
+        if (pickedTeam && advancedToRound['R32'].has(pickedTeam)) {
+          totalPts += rules.r32Pts
+          breakdown[slot] = rules.r32Pts
+        }
+      }
+
+      // R16 slots
+      const r16Slots = Object.keys(bracketPicksData).filter(k => k.startsWith('R16_'))
+      for (const slot of r16Slots) {
+        const pickedTeam = bracketPicksData[slot]
+        if (pickedTeam && advancedToRound['R16'].has(pickedTeam)) {
+          totalPts += rules.r16Pts
+          breakdown[slot] = rules.r16Pts
+        }
+      }
+
+      // QF slots
+      const qfSlots = Object.keys(bracketPicksData).filter(k => k.startsWith('QF_'))
+      for (const slot of qfSlots) {
+        const pickedTeam = bracketPicksData[slot]
+        if (pickedTeam && advancedToRound['QF'].has(pickedTeam)) {
+          totalPts += rules.qfPts
+          breakdown[slot] = rules.qfPts
+        }
+      }
+
+      // SF slots
+      const sfSlots = Object.keys(bracketPicksData).filter(k => k.startsWith('SF_'))
+      for (const slot of sfSlots) {
+        const pickedTeam = bracketPicksData[slot]
+        if (pickedTeam && advancedToRound['SF'].has(pickedTeam)) {
+          totalPts += rules.sfPts
+          breakdown[slot] = rules.sfPts
+        }
+      }
+
+      // Final — both finalists get finalPts
+      const finalPick = bracketPicksData['FINAL']
+      if (finalPick && advancedToRound['FINAL'].has(finalPick)) {
+        totalPts += rules.finalPts
+        breakdown['FINAL'] = rules.finalPts
+      }
+
+      // Champion
+      const championPick = bracketPicksData['FINAL'] // champion = picked winner
+      if (championPick && advancedToRound['CHAMPION'].has(championPick)) {
+        totalPts += rules.finalPts // extra finalPts for correct champion
+        breakdown['CHAMPION'] = rules.finalPts
+      }
+
+      // Save scores
+      await supabase
+        .from('bracket_picks')
+        .update({
+          bracket_scores: { total: totalPts, breakdown },
+        })
+        .eq('id', pick.id)
+    }
+  }
+}
+
 export async function POST(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -414,6 +656,15 @@ export async function POST(request: NextRequest) {
 
       fixturesScored++
     }
+
+    // ── Score bracket pools ──────────────────────────────────────────────
+    // Fetch all WC fixtures (not just finished ones) for standings calculation
+    const { data: allFixtures } = await supabase
+      .from('fixtures')
+      .select('*')
+      .eq('tournament_id', 'wc_2026')
+
+    await scoreBracketPools(allFixtures || [])
 
     return NextResponse.json({ ok: true, fixtures_scored: fixturesScored })
   } catch (err) {
