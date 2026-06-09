@@ -645,7 +645,7 @@ function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRules, lo
             {/* Score row */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '10px 8px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
-                <div style={{ fontSize: '9px', color: '#888', marginBottom: 3, textAlign: 'center' as const, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 52 }}>
+                <div style={{ fontSize: '10px', color: '#555', fontWeight: 600, marginBottom: 4, textAlign: 'center' as const, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 56 }}>
                   {FLAGS[sfLeftPick] || ''} {sfLeftPick.split(' ')[0]}
                 </div>
                 <input type="number" min="0" max="15"
@@ -659,11 +659,11 @@ function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRules, lo
                     const a = parseInt(away) || 0
                     if (h !== a) onPick('FINAL', h > a ? sfLeftPick! : sfRightPick!)
                   }}
-                  style={{ width: 40, border: '1px solid #ddd', padding: '4px', textAlign: 'center', fontSize: '16px', fontFamily: 'inherit', fontWeight: 700 }} />
+                  style={{ width: 40, border: '1px solid #ddd', padding: '4px', textAlign: 'center', fontSize: '14px', fontFamily: 'inherit', fontWeight: 600 }} />
               </div>
-              <span style={{ color: '#ccc', fontSize: 13, paddingTop: 14 }}>–</span>
+              <span style={{ color: '#ccc', fontSize: 12, paddingTop: 18 }}>–</span>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
-                <div style={{ fontSize: '9px', color: '#888', marginBottom: 3, textAlign: 'center' as const, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 52 }}>
+                <div style={{ fontSize: '10px', color: '#555', fontWeight: 600, marginBottom: 4, textAlign: 'center' as const, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 56 }}>
                   {FLAGS[sfRightPick] || ''} {sfRightPick.split(' ')[0]}
                 </div>
                 <input type="number" min="0" max="15"
@@ -677,7 +677,7 @@ function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRules, lo
                     const a = parseInt(awayVal) || 0
                     if (h !== a) onPick('FINAL', h > a ? sfLeftPick! : sfRightPick!)
                   }}
-                  style={{ width: 40, border: '1px solid #ddd', padding: '4px', textAlign: 'center', fontSize: '16px', fontFamily: 'inherit', fontWeight: 700 }} />
+                  style={{ width: 40, border: '1px solid #ddd', padding: '4px', textAlign: 'center', fontSize: '14px', fontFamily: 'inherit', fontWeight: 600 }} />
               </div>
             </div>
 
@@ -694,17 +694,17 @@ function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRules, lo
               if (isNaN(h) || isNaN(a) || h !== a) return null
               return (
                 <div style={{ borderTop: '1px solid #f0f0f0', padding: '6px 8px' }}>
-                  <div style={{ fontSize: '9px', color: '#bbb', marginBottom: 4, textAlign: 'center' as const }}>who wins on penalties?</div>
+                  <div style={{ fontSize: '10px', color: '#888', marginBottom: 4, textAlign: 'center' as const }}>who wins on penalties?</div>
                   <div style={{ display: 'flex', gap: 4 }}>
                     {[sfLeftPick, sfRightPick].map(team => (
                       <button key={team}
                         onClick={() => !locked && team && onPick('FINAL', team)}
                         disabled={locked}
                         style={{
-                          flex: 1, padding: '4px 2px', fontSize: '10px', border: '1px solid',
+                          flex: 1, padding: '5px 2px', fontSize: '10px', fontWeight: 600, border: '1px solid',
                           borderColor: champion === team ? '#C8102E' : '#ddd',
                           background: champion === team ? '#C8102E' : 'white',
-                          color: champion === team ? 'white' : '#333',
+                          color: champion === team ? 'white' : '#555',
                           cursor: locked ? 'default' : 'pointer',
                           fontFamily: 'inherit', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
                         }}>
@@ -723,10 +723,10 @@ function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRules, lo
         </div>
 
         {/* Champion — derived from score */}
-        <div style={{ border: '1px solid #e0e0db', background: 'white', width: '100%', padding: '8px', textAlign: 'center' as const }}>
-          <div style={{ fontSize: '9px', color: '#bbb', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>champion</div>
-          <div style={{ fontSize: 18 }}>{champion ? FLAGS[champion] || '🏆' : '🏆'}</div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#111', marginTop: 3 }}>{champion || 'TBD'}</div>
+        <div style={{ border: '1px solid #e0e0db', background: 'white', width: '100%', padding: '10px 8px', textAlign: 'center' as const }}>
+          <div style={{ fontSize: '9px', fontWeight: 600, color: '#bbb', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>champion</div>
+          <div style={{ fontSize: 22 }}>{champion ? FLAGS[champion] || '🏆' : '🏆'}</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#111', marginTop: 4 }}>{champion || 'TBD'}</div>
         </div>
       </div>
 
