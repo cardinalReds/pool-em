@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   WC_2026_GROUPS,
@@ -64,6 +64,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
   const [bracketScores, setBracketScores] = useState<Record<string, string>>({})
   const [r32Bracket, setR32Bracket] = useState<Record<string, { home: string; away: string }>>({})
   const [saving, setSaving] = useState(false)
+  const [autoSaved, setAutoSaved] = useState(false)
   const [loading, setLoading] = useState(true)
 
   // Load existing picks
@@ -111,9 +112,9 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
     }
   }, [groupPicks, bestThirdGroups])
 
-  async function persistPicks(): Promise<boolean> {
+  async function persistPicks() {
     const supabase = createClient()
-    const { error } = await supabase.from('bracket_picks').upsert({
+    await supabase.from('bracket_picks').upsert({
       pool_id: poolId,
       user_id: userId,
       tournament_id: 'wc_2026',
@@ -123,26 +124,19 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       bracket_scores: bracketScores,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'pool_id,user_id' })
-    if (error) {
-      console.error('bracket save error:', error)
-      alert(`Save failed: ${error.message}`)
-      return false
-    }
-    return true
   }
 
   async function handleSave() {
     setSaving(true)
-    const ok = await persistPicks()
+    await persistPicks()
     setSaving(false)
-    if (ok) setShowSummary(true)
+    setShowSummary(true)
   }
 
   async function handleSaveAndExit() {
     setSaving(true)
-    const ok = await persistPicks()
-    if (ok) window.location.href = '/dashboard'
-    else setSaving(false)
+    await persistPicks()
+    window.location.href = '/dashboard'
   }
 
   function setGroupRanking(group: string, ranked: string[]) {
@@ -152,7 +146,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
   function toggleThirdGroup(group: string) {
     setBestThirdGroups(prev => {
       if (prev.includes(group)) return prev.filter(g => g !== group)
-      if (prev.length >= 8) return prev // max 8
+      if (prev.length >= 8) return prev
       return [...prev, group]
     })
   }
@@ -160,16 +154,11 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
   function pickBracket(slot: string, team: string) {
     setBracketPicks(prev => {
       const next = { ...prev, [slot]: team }
-      // Auto-cascade: find the next round slot and set this team as the pick
-      // only if both teams in that next slot are now known
       const cascadeSlot = findNextSlot(slot)
       if (cascadeSlot) {
         const opponents = getNextSlotOpponents(cascadeSlot, next)
-        // Don't auto-pick — just let the user see who they'd face
-        // But DO clear downstream picks if they no longer match
         if (next[cascadeSlot] && opponents.home !== next[cascadeSlot] && opponents.away !== next[cascadeSlot]) {
           delete next[cascadeSlot]
-          // Also clear further downstream
           const further = findNextSlot(cascadeSlot)
           if (further && next[further]) delete next[further]
         }
@@ -177,6 +166,18 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       return next
     })
   }
+
+  // Auto-save whenever picks change (debounced 1.5s)
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (loading) return
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current)
+    autoSaveTimer.current = setTimeout(async () => {
+      const ok = await persistPicks()
+      if (ok) { setAutoSaved(true); setTimeout(() => setAutoSaved(false), 2000) }
+    }, 1500)
+    return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) }
+  }, [groupPicks, bestThirdGroups, bracketPicks, bracketScores])
 
   function findNextSlot(slot: string): string | null {
     if (slot.startsWith('R32')) {
@@ -289,23 +290,28 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
 
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '13px' }}>
-      {/* Step tabs */}
-      <div style={{ display: 'flex', borderBottom: '2px solid #eee', marginBottom: '20px', gap: 0 }}>
-        {([
-          { id: 'groups', label: '1. group stage' },
-          { id: 'thirds', label: '2. best 3rd place' },
-          { id: 'bracket', label: '3. knockout bracket' },
-        ] as const).map(s => (
-          <button key={s.id} onClick={() => setStep(s.id)}
-            style={{
-              padding: '8px 16px', fontSize: '11px', fontWeight: step === s.id ? 700 : 400,
-              border: 'none', borderBottom: step === s.id ? '2px solid #111' : '2px solid transparent',
-              background: 'none', cursor: 'pointer', fontFamily: 'inherit',
-              color: step === s.id ? '#111' : '#aaa', marginBottom: '-2px',
-            }}>
-            {s.label}
-          </button>
-        ))}
+      {/* Step tabs + auto-save indicator */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #eee', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', gap: 0 }}>
+          {([
+            { id: 'groups', label: '1. group stage' },
+            { id: 'thirds', label: '2. best 3rd place' },
+            { id: 'bracket', label: '3. knockout bracket' },
+          ] as const).map(s => (
+            <button key={s.id} onClick={() => setStep(s.id)}
+              style={{
+                padding: '8px 16px', fontSize: '11px', fontWeight: step === s.id ? 700 : 400,
+                border: 'none', borderBottom: step === s.id ? '2px solid #111' : '2px solid transparent',
+                background: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                color: step === s.id ? '#111' : '#aaa', marginBottom: '-2px',
+              }}>
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <div style={{ fontSize: '10px', color: '#2d7a2d', marginBottom: '6px', opacity: autoSaved ? 1 : 0, transition: 'opacity 0.3s' }}>
+          ✓ saved
+        </div>
       </div>
 
       {/* Step 1: Group picks */}
