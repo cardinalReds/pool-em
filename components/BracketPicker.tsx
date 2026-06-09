@@ -637,57 +637,92 @@ function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRules, lo
       {renderHalf(leftRounds, 'left')}
 
       {/* Center: Final + Champion */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, minWidth: 120, padding: '0 6px', alignSelf: 'center' }}>
-        <div style={{ fontSize: '9px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#bbb', textAlign: 'center' }}>final · exact score</div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, minWidth: 150, padding: '0 6px', alignSelf: 'center' }}>
+        <div style={{ fontSize: '9px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#bbb', textAlign: 'center' }}>final</div>
+
         <div style={{ border: '1px solid #e0e0db', background: 'white', overflow: 'hidden', width: '100%' }}>
-          {[sfLeftPick, sfRightPick].map((team, i) => {
-            const active = champion === team
-            return (
-              <button key={i}
-                onClick={() => !locked && team && onPick('FINAL', team)}
-                disabled={locked || !team}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 4, width: '100%',
-                  padding: '5px 7px', border: 'none',
-                  borderBottom: i === 0 ? '1px solid #f0f0f0' : 'none',
-                  background: active ? '#C8102E' : !team ? '#fafafa' : 'white',
-                  color: active ? 'white' : !team ? '#ccc' : '#333',
-                  cursor: locked || !team ? 'default' : 'pointer',
-                  fontFamily: 'inherit', fontSize: '11px', fontWeight: active ? 700 : 400,
-                  textAlign: 'left' as const,
-                }}>
-                <span style={{ fontSize: 12 }}>{team ? FLAGS[team] || '' : ''}</span>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                  {team || '—'}
-                </span>
-              </button>
-            )
-          })}
-          {/* Exact score inputs for final */}
-          {sfLeftPick && sfRightPick && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, padding: '6px 8px', borderTop: '1px solid #f0f0f0' }}>
-              <input type="number" min="0" max="15"
-                value={bracketScores['FINAL']?.split('-')[0] ?? ''}
-                placeholder="0"
-                disabled={locked}
-                onChange={e => {
-                  const away = bracketScores['FINAL']?.split('-')[1] ?? ''
-                  onScore('FINAL', `${e.target.value}-${away}`)
-                }}
-                style={{ width: 36, border: '1px solid #ddd', padding: '3px', textAlign: 'center', fontSize: '13px', fontFamily: 'inherit' }} />
-              <span style={{ color: '#aaa', fontSize: 11 }}>–</span>
-              <input type="number" min="0" max="15"
-                value={bracketScores['FINAL']?.split('-')[1] ?? ''}
-                placeholder="0"
-                disabled={locked}
-                onChange={e => {
-                  const home = bracketScores['FINAL']?.split('-')[0] ?? ''
-                  onScore('FINAL', `${home}-${e.target.value}`)
-                }}
-                style={{ width: 36, border: '1px solid #ddd', padding: '3px', textAlign: 'center', fontSize: '13px', fontFamily: 'inherit' }} />
+          {sfLeftPick && sfRightPick ? (<>
+            {/* Score row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '10px 8px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
+                <div style={{ fontSize: '9px', color: '#888', marginBottom: 3, textAlign: 'center' as const, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 52 }}>
+                  {FLAGS[sfLeftPick] || ''} {sfLeftPick.split(' ')[0]}
+                </div>
+                <input type="number" min="0" max="15"
+                  value={bracketScores['FINAL']?.split('-')[0] ?? ''}
+                  placeholder="0" disabled={locked}
+                  onChange={e => {
+                    const away = bracketScores['FINAL']?.split('-')[1] ?? '0'
+                    const homeVal = e.target.value
+                    onScore('FINAL', `${homeVal}-${away}`)
+                    const h = parseInt(homeVal) || 0
+                    const a = parseInt(away) || 0
+                    if (h !== a) onPick('FINAL', h > a ? sfLeftPick! : sfRightPick!)
+                  }}
+                  style={{ width: 40, border: '1px solid #ddd', padding: '4px', textAlign: 'center', fontSize: '16px', fontFamily: 'inherit', fontWeight: 700 }} />
+              </div>
+              <span style={{ color: '#ccc', fontSize: 13, paddingTop: 14 }}>–</span>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
+                <div style={{ fontSize: '9px', color: '#888', marginBottom: 3, textAlign: 'center' as const, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 52 }}>
+                  {FLAGS[sfRightPick] || ''} {sfRightPick.split(' ')[0]}
+                </div>
+                <input type="number" min="0" max="15"
+                  value={bracketScores['FINAL']?.split('-')[1] ?? ''}
+                  placeholder="0" disabled={locked}
+                  onChange={e => {
+                    const home = bracketScores['FINAL']?.split('-')[0] ?? '0'
+                    const awayVal = e.target.value
+                    onScore('FINAL', `${home}-${awayVal}`)
+                    const h = parseInt(home) || 0
+                    const a = parseInt(awayVal) || 0
+                    if (h !== a) onPick('FINAL', h > a ? sfLeftPick! : sfRightPick!)
+                  }}
+                  style={{ width: 40, border: '1px solid #ddd', padding: '4px', textAlign: 'center', fontSize: '16px', fontFamily: 'inherit', fontWeight: 700 }} />
+              </div>
+            </div>
+
+            {/* After extra time note */}
+            <div style={{ textAlign: 'center' as const, fontSize: '9px', color: '#bbb', padding: '3px 8px', borderTop: '1px solid #f0f0f0' }}>
+              after extra time
+            </div>
+
+            {/* Penalty picker — only shown if draw */}
+            {(() => {
+              const parts = bracketScores['FINAL']?.split('-') ?? []
+              const h = parseInt(parts[0])
+              const a = parseInt(parts[1])
+              if (isNaN(h) || isNaN(a) || h !== a) return null
+              return (
+                <div style={{ borderTop: '1px solid #f0f0f0', padding: '6px 8px' }}>
+                  <div style={{ fontSize: '9px', color: '#bbb', marginBottom: 4, textAlign: 'center' as const }}>who wins on penalties?</div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[sfLeftPick, sfRightPick].map(team => (
+                      <button key={team}
+                        onClick={() => !locked && team && onPick('FINAL', team)}
+                        disabled={locked}
+                        style={{
+                          flex: 1, padding: '4px 2px', fontSize: '10px', border: '1px solid',
+                          borderColor: champion === team ? '#C8102E' : '#ddd',
+                          background: champion === team ? '#C8102E' : 'white',
+                          color: champion === team ? 'white' : '#333',
+                          cursor: locked ? 'default' : 'pointer',
+                          fontFamily: 'inherit', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const,
+                        }}>
+                        {FLAGS[team!] || ''} {team!.split(' ')[0]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
+          </>) : (
+            <div style={{ textAlign: 'center' as const, color: '#ccc', fontSize: '11px', padding: '16px 8px' }}>
+              pick your semi-finalists first
             </div>
           )}
         </div>
+
+        {/* Champion — derived from score */}
         <div style={{ border: '1px solid #e0e0db', background: 'white', width: '100%', padding: '8px', textAlign: 'center' as const }}>
           <div style={{ fontSize: '9px', color: '#bbb', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>champion</div>
           <div style={{ fontSize: 18 }}>{champion ? FLAGS[champion] || '🏆' : '🏆'}</div>
