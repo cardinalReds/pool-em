@@ -131,7 +131,15 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       const { data: members } = await supabase.from('pool_members').select('*').eq('pool_id', pool.id)
 
       const pointsMap: Record<string, number> = {}
-      if (pool.package_id === 'CUSTOM') {
+      if (pool.deadline_type === 'before_tournament') {
+        const { data: bracketScores } = await supabase
+          .from('bracket_picks')
+          .select('user_id, bracket_scores')
+          .eq('pool_id', pool.id)
+        bracketScores?.forEach(b => {
+          if (b.bracket_scores?.total) pointsMap[b.user_id] = b.bracket_scores.total
+        })
+      } else if (pool.package_id === 'CUSTOM') {
         const { data: scores } = await supabase.from('predictions_v2').select('user_id, points_earned').eq('pool_id', pool.id)
         scores?.forEach(s => { if (s.points_earned) pointsMap[s.user_id] = (pointsMap[s.user_id] || 0) + s.points_earned })
       } else {
