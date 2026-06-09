@@ -2,6 +2,8 @@
 // All 12 groups: A-L
 // Each group has 4 teams
 
+import { ANNEX_C } from './annex_c'
+
 export const WC_2026_GROUPS: Record<string, string[]> = {
   A: ['Mexico', 'South Africa', 'South Korea', 'Czechia'],
   B: ['Canada', 'Bosnia and Herzegovina', 'Qatar', 'Switzerland'],
@@ -112,7 +114,7 @@ export function rankThirdPlaceTeams(standings: TeamStanding[]): TeamStanding[] {
 
 export function generateR32FromGroupPicks(
   groupPicks: GroupPicks,
-  bestThirdGroups: string[] // which 8 groups produced 3rd place qualifiers, ranked
+  bestThirdGroups: string[] // which 8 groups produced 3rd place qualifiers
 ): Record<string, { home: string; away: string }> {
   const bracket: Record<string, { home: string; away: string }> = {}
 
@@ -127,47 +129,52 @@ export function generateR32FromGroupPicks(
     thirds[group] = teams[2]
   })
 
-  // Build list of third-place slots and their eligible groups
-  const thirdSlots = R32_MATCHUPS.filter(m => m.away.type === 'third')
-
-  // Make a mutable copy of qualified thirds, shuffle it for random assignment
-  const pool = [...bestThirdGroups.slice(0, 8)]
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]]
-  }
-
-  // Assign each third-place slot a valid team from the pool
-  // Valid = group must be in the slot's eligible groups list
-  // Use backtracking to find a valid assignment
+  // ── Assign third-place teams to R32 slots ─────────────────────────────
   const thirdAssignments: Record<string, string> = {}
+  const qualified = bestThirdGroups.slice(0, 8)
 
-  function assign(slotIdx: number, remaining: string[]): boolean {
-    if (slotIdx === thirdSlots.length) return true
-    const slot = thirdSlots[slotIdx]
-    const eligible = slot.away.groups || []
-    // Try eligible groups first
-    for (let i = 0; i < remaining.length; i++) {
-      if (eligible.includes(remaining[i])) {
-        const group = remaining[i]
-        const next = [...remaining.slice(0, i), ...remaining.slice(i + 1)]
-        thirdAssignments[slot.slot] = thirds[group] || ''
-        if (assign(slotIdx + 1, next)) return true
+  // 1) Try official FIFA Annex C lookup table
+  const annexKey = [...qualified].sort().join('')
+  const annexEntry = ANNEX_C[annexKey]
+
+  if (annexEntry) {
+    // Exact match in the official table — use FIFA's assignment
+    Object.entries(annexEntry).forEach(([slot, group]) => {
+      thirdAssignments[slot] = thirds[group] || ''
+    })
+  } else {
+    // 2) Combination not in table (221 of 495) — use backtracking
+    const thirdSlots = R32_MATCHUPS.filter(m => m.away.type === 'third')
+    const pool = [...qualified]
+    // Shuffle for randomness
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]]
+    }
+
+    function assign(slotIdx: number, remaining: string[]): boolean {
+      if (slotIdx === thirdSlots.length) return true
+      const slot = thirdSlots[slotIdx]
+      const eligible = slot.away.groups || []
+      for (let i = 0; i < remaining.length; i++) {
+        if (eligible.includes(remaining[i])) {
+          const group = remaining[i]
+          const next = [...remaining.slice(0, i), ...remaining.slice(i + 1)]
+          thirdAssignments[slot.slot] = thirds[group] || ''
+          if (assign(slotIdx + 1, next)) return true
+        }
       }
+      // Fallback: any remaining team
+      if (remaining.length > 0) {
+        thirdAssignments[slot.slot] = thirds[remaining[0]] || ''
+        if (assign(slotIdx + 1, remaining.slice(1))) return true
+      }
+      return false
     }
-    // Fallback: assign any remaining team (violates eligibility but avoids blank)
-    if (remaining.length > 0) {
-      thirdAssignments[slot.slot] = thirds[remaining[0]] || ''
-      const next = remaining.slice(1)
-      if (assign(slotIdx + 1, next)) return true
-    }
-    return false
+    assign(0, pool)
   }
 
-  // Try random assignment, fall back to backtracking if it fails
-  assign(0, pool)
-
-  // For each R32 matchup, resolve the teams
+  // ── Resolve all R32 matchups ─────────────────────────────────────────
   for (const matchup of R32_MATCHUPS) {
     let homeTeam = ''
     let awayTeam = ''
