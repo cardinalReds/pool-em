@@ -337,7 +337,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       </Section>
 
       {/* Delete */}
-      {isAdmin && (
+      {isAdmin && new Date() < new Date('2026-06-11T19:00:00Z') && (
         <Section title="danger zone" defaultOpen={false}>
           <DeletePool poolId={pool.id} />
         </Section>
@@ -411,8 +411,8 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           <div style={{background: 'white', borderRight: '1px solid #e0e0db', overflowY: 'auto'}}>
             {sidebarContent}
           </div>
-          <div style={{padding: '40px 24px', overflowY: 'auto'}}>
-            <div style={{maxWidth: 960, margin: '0 auto'}}>
+          <div style={{padding: '40px 24px', overflowY: 'auto', display: 'flex', justifyContent: 'center'}}>
+            <div style={{width: '100%', maxWidth: 560}}>
               {user && pool.deadline_type === 'before_tournament' ? (
                 <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-12T19:00:00Z')} />
               ) : user && (
@@ -422,6 +422,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           </div>
         </div>
       )}
+      <div style={{textAlign: 'center', padding: '12px', fontSize: '11px', color: '#bbb', borderTop: '1px solid #eee', background: 'white'}}>
+        questions or issues? <a href="mailto:fred@cardinalreds.com" style={{color: '#aaa', textDecoration: 'none'}}>fred@cardinalreds.com</a>
+      </div>
     </div>
   )
 }
