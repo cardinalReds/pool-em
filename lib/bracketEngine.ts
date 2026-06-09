@@ -233,119 +233,107 @@ export function calculateGroupStandings(
 }
 
 // ── Scoring rules ─────────────────────────────────────────────────────────
+
+// Group stage format — admin picks one of three
+export type GroupStageFormat = 'standings' | 'wld' | 'exact'
+
 export interface BracketScoringRules {
-  // Group stage
-  group_pred_style: 'wld' | 'exact'
-  group_wld: number
-  group_exact_per_team: number
-  group_exact_bonus: number
-  group_standing_winner: number
-  group_standing_runner_up: number
-  group_standing_third: number
-  // Knockout
-  knockout_pred_style: 'advances' | 'exact'
-  r32_advances: number
-  r32_exact_bonus: number
-  r16_advances: number
-  r16_exact_bonus: number
-  qf_advances: number
-  qf_exact_bonus: number
-  sf_advances: number
-  sf_exact_bonus: number
-  // Final (always exact)
-  final_exact_per_team: number
-  final_exact_bonus: number
-  champion_bonus: number
+  group_format: GroupStageFormat
+  // Knockout points per round (for team appearing in that round)
+  r32_pts: number
+  r16_pts: number
+  qf_pts: number
+  sf_pts: number
 }
 
 export const DEFAULT_BRACKET_SCORING: BracketScoringRules = {
-  group_pred_style: 'wld',
-  group_wld: 2,
-  group_exact_per_team: 2,
-  group_exact_bonus: 3,
-  group_standing_winner: 3,
-  group_standing_runner_up: 3,
-  group_standing_third: 2,
-  knockout_pred_style: 'advances',
-  r32_advances: 2, r32_exact_bonus: 3,
-  r16_advances: 3, r16_exact_bonus: 4,
-  qf_advances: 5, qf_exact_bonus: 6,
-  sf_advances: 8, sf_exact_bonus: 10,
-  final_exact_per_team: 5, final_exact_bonus: 15,
-  champion_bonus: 20,
+  group_format: 'standings',
+  r32_pts: 1,
+  r16_pts: 2,
+  qf_pts: 4,
+  sf_pts: 6,
 }
 
-// Score a bracket pick for a knockout slot
-export function scoreKnockoutPick(
-  slot: string,
-  predictedWinner: string,
-  actualWinner: string,
-  predictedScore: string | null, // "2-1" format, 90 min only
-  actualScore: string | null,
-  rules: BracketScoringRules
-): number {
-  let pts = 0
-  const correctAdvance = predictedWinner === actualWinner
-
-  // Determine round
-  const isFinal = slot === 'FINAL'
-  const roundKey = slot.startsWith('R32') ? 'r32'
-    : slot.startsWith('R16') ? 'r16'
-    : slot.startsWith('QF') ? 'qf'
-    : slot.startsWith('SF') ? 'sf'
-    : null
-
-  if (isFinal) {
-    // Final is always exact score
-    if (predictedScore && actualScore) {
-      const [ph, pa] = predictedScore.split('-').map(Number)
-      const [ah, aa] = actualScore.split('-').map(Number)
-      if (!isNaN(ph) && !isNaN(pa)) {
-        if (ph === ah) pts += rules.final_exact_per_team
-        if (pa === aa) pts += rules.final_exact_per_team
-        if (ph === ah && pa === aa) pts += rules.final_exact_bonus
-      }
-    }
-    if (correctAdvance) pts += rules.champion_bonus
-    return pts
-  }
-
-  if (!roundKey || !correctAdvance) return pts
-
-  // Advances points
-  pts += rules[`${roundKey}_advances` as keyof BracketScoringRules] as number
-
-  // Exact score bonus if applicable
-  if (rules.knockout_pred_style === 'exact' && predictedScore && actualScore) {
-    const [ph, pa] = predictedScore.split('-').map(Number)
-    const [ah, aa] = actualScore.split('-').map(Number)
-    if (!isNaN(ph) && !isNaN(pa) && ph === ah && pa === aa) {
-      pts += rules[`${roundKey}_exact_bonus` as keyof BracketScoringRules] as number
-    }
-  }
-
-  return pts
-}
-
-// Score a group stage game pick
-export function scoreGroupGamePick(
+// Score a group stage game (wld or exact formats)
+export function scoreGroupGame(
   predictedHome: number,
   predictedAway: number,
   actualHome: number,
   actualAway: number,
+  format: GroupStageFormat
+): number {
+  if (format === 'wld') {
+    return getResult(predictedHome, predictedAway) === getResult(actualHome, actualAway) ? 1 : 0
+  }
+  if (format === 'exact') {
+    const correctResult = getResult(predictedHome, predictedAway) === getResult(actualHome, actualAway)
+    const homeCorrect = predictedHome === actualHome
+    const awayCorrect = predictedAway === actualAway
+    let pts = 0
+    if (correctResult) pts += 3
+    if (homeCorrect) pts += 2
+    if (awayCorrect) pts += 2
+    if (homeCorrect && awayCorrect) pts += 3
+    return pts // max 10
+  }
+  return 0
+}
+
+// Score group standings (standings format only)
+export function scoreGroupStandings(
+  predictedFirst: string, predictedSecond: string,
+  actualFirst: string, actualSecond: string,
+  predictedThird: string | null, qualifiedThirds: string[]
+): number {
+  let pts = 0
+  if (predictedFirst === actualFirst) pts += 3
+  if (predictedSecond === actualSecond) pts += 1
+  if (predictedThird && qualifiedThirds.includes(predictedThird)) pts += 1
+  return pts
+}
+
+// Score a knockout round pick (team appearing in that round)
+export function scoreKnockoutPick(
+  slot: string,
+  predictedTeam: string,
+  actualTeam: string,
   rules: BracketScoringRules
 ): number {
-  if (rules.group_pred_style === 'wld') {
-    const predicted = getResult(predictedHome, predictedAway)
-    const actual = getResult(actualHome, actualAway)
-    return predicted === actual ? rules.group_wld : 0
-  } else {
-    let pts = 0
-    if (predictedHome === actualHome) pts += rules.group_exact_per_team
-    if (predictedAway === actualAway) pts += rules.group_exact_per_team
-    if (predictedHome === actualHome && predictedAway === actualAway) pts += rules.group_exact_bonus
-    return pts
+  if (predictedTeam !== actualTeam) return 0
+  if (slot.startsWith('R32')) return rules.r32_pts
+  if (slot.startsWith('R16')) return rules.r16_pts
+  if (slot.startsWith('QF')) return rules.qf_pts
+  if (slot.startsWith('SF')) return rules.sf_pts
+  return 0
+}
+
+// Score the final (always exact score)
+// predictedHome/Away are team names, scores are goals (90 min)
+export function scoreFinal(
+  predictedHome: string, predictedAway: string,
+  predictedHomeGoals: number, predictedAwayGoals: number,
+  actualHome: string, actualAway: string,
+  actualHomeGoals: number, actualAwayGoals: number,
+  sfPts: number
+): number {
+  let pts = 0
+  const finalists = [actualHome, actualAway]
+  // Correct finalist being in the final
+  if (finalists.includes(predictedHome)) pts += sfPts
+  if (finalists.includes(predictedAway)) pts += sfPts
+  // Correct goals per team (must have correct team too)
+  if (predictedHome === actualHome && predictedHomeGoals === actualHomeGoals) pts += 2
+  if (predictedAway === actualAway && predictedAwayGoals === actualAwayGoals) pts += 2
+  // Exact score bonus (correct teams AND correct scores)
+  if (predictedHome === actualHome && predictedAway === actualAway &&
+      predictedHomeGoals === actualHomeGoals && predictedAwayGoals === actualAwayGoals) {
+    pts += 3
   }
+  // Correct winner bonus
+  const actualWinner = actualHomeGoals > actualAwayGoals ? actualHome : actualAway
+  const predictedWinner = predictedHomeGoals > predictedAwayGoals ? predictedHome : predictedAway
+  if (predictedWinner === actualWinner) pts += 10
+  return pts
 }
 
 // ── Get opponents for a bracket slot given current bracket state ──────────

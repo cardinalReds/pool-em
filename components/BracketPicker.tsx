@@ -405,7 +405,7 @@ function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRules, lo
                         away={opponents.away}
                         picked={bracketPicks[slot]}
                         score={bracketScores[slot]}
-                        showExactScore={slot === 'FINAL' || scoringRules.knockout_pred_style === 'exact'}
+                        showExactScore={slot === 'FINAL'}
                         locked={locked}
                         onPick={onPick}
                         onScore={onScore}
