@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 interface Fixture {
@@ -86,72 +86,76 @@ type PredMap = Record<string, PredV2>
 type ScoreInputMap = Record<string, string>
 
 // PlayerSearch component — outside FixturesList to avoid remount
-function PlayerSearch({ value, onChange, disabled, players: externalPlayers }: {
+interface Player {
+  name: string
+  team_name: string
+  position: string | null
+}
+
+const POSITION_ORDER = ['Attacker', 'Midfielder', 'Defender', 'Goalkeeper']
+
+function PlayerDropdown({ value, onChange, disabled, players, homeTeam, awayTeam }: {
   value: string
   onChange: (v: string) => void
   disabled: boolean
-  players?: string[]
+  players: Player[]
+  homeTeam: string
+  awayTeam: string
 }) {
-  const FALLBACK_PLAYERS = [
-    'Hirving Lozano', 'Raúl Jiménez', 'Edson Álvarez', 'Henry Martín',
-    'Percy Tau', 'Lyle Foster', 'Evidence Makgopa',
-    'Robert Lewandowski', 'Piotr Zieliński',
-    'Salem Al-Dawsari', 'Firas Al-Buraikan',
-    'Kylian Mbappé', 'Antoine Griezmann', 'Ousmane Dembélé',
-    'Harry Kane', 'Bukayo Saka', 'Jude Bellingham', 'Phil Foden',
-    'Vinicius Jr.', 'Rodrygo', 'Richarlison',
-    'Erling Haaland', 'Martin Ødegaard',
-    'Mohamed Salah', 'Omar Marmoush',
-    'Lamine Yamal', 'Pedri', 'Álvaro Morata',
-    'Ciro Immobile', 'Federico Chiesa',
-    'Kai Havertz', 'Florian Wirtz', 'Thomas Müller',
-    'Romelu Lukaku', 'Kevin De Bruyne',
-    'Christian Pulisic', 'Ricardo Pepi',
-    'Lionel Messi', 'Julián Álvarez', 'Enzo Fernández',
-  ]
-  const playerList = (externalPlayers && externalPlayers.length > 0) ? externalPlayers : FALLBACK_PLAYERS
-  const [query, setQuery] = useState(value || '')
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  // Group by team then position
+  function getGroup(team: string): Player[] {
+    return players
+      .filter(p => p.team_name === team)
+      .sort((a, b) => {
+        const ai = POSITION_ORDER.indexOf(a.position || '') === -1 ? 99 : POSITION_ORDER.indexOf(a.position || '')
+        const bi = POSITION_ORDER.indexOf(b.position || '') === -1 ? 99 : POSITION_ORDER.indexOf(b.position || '')
+        if (ai !== bi) return ai - bi
+        return a.name.localeCompare(b.name)
+      })
+  }
 
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
+  const homePlayers = getGroup(homeTeam)
+  const awayPlayers = getGroup(awayTeam)
 
-  const filtered = query.length > 0
-    ? playerList.filter(p => p.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
-    : []
+  if (players.length === 0) {
+    // Fallback text input if no players loaded
+    return (
+      <input
+        value={value}
+        disabled={disabled}
+        placeholder="type player name..."
+        onChange={e => onChange(e.target.value)}
+        style={{ width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '14px', fontFamily: 'inherit', background: disabled ? '#fafafa' : 'white' }}
+      />
+    )
+  }
 
   return (
-    <div ref={ref} style={{ position: 'relative', flex: 1 }}>
-      <input
-        value={query}
-        disabled={disabled}
-        placeholder="search player..."
-        onChange={e => { setQuery(e.target.value); onChange(e.target.value); setOpen(true) }}
-        onFocus={() => setOpen(true)}
-        style={{ width: '100%', border: '1px solid #ddd', padding: '5px 8px', fontSize: '11px', fontFamily: 'inherit', boxSizing: 'border-box', background: disabled ? '#fafafa' : 'white' }}
-      />
-      {open && filtered.length > 0 && !disabled && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, background: 'white',
-          border: '1px solid #ddd', borderTop: 'none', zIndex: 100, maxHeight: 160, overflowY: 'auto',
-        }}>
-          {filtered.map(p => (
-            <div key={p}
-              onMouseDown={() => { onChange(p); setQuery(p); setOpen(false) }}
-              style={{ padding: '5px 8px', fontSize: '11px', cursor: 'pointer', borderBottom: '1px solid #f5f5f5' }}
-              onMouseEnter={e => (e.currentTarget.style.background = '#f5f5f5')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'white')}
-            >{p}</div>
+    <select
+      value={value}
+      disabled={disabled}
+      onChange={e => onChange(e.target.value)}
+      style={{
+        width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '14px',
+        fontFamily: 'inherit', background: disabled ? '#fafafa' : 'white', minHeight: 44,
+      }}
+    >
+      <option value="">select player...</option>
+      {homePlayers.length > 0 && (
+        <optgroup label={`${FLAGS[homeTeam] || ''} ${homeTeam}`}>
+          {homePlayers.map(p => (
+            <option key={p.name} value={p.name}>{p.name} ({p.position || '?'})</option>
           ))}
-        </div>
+        </optgroup>
       )}
-    </div>
+      {awayPlayers.length > 0 && (
+        <optgroup label={`${FLAGS[awayTeam] || ''} ${awayTeam}`}>
+          {awayPlayers.map(p => (
+            <option key={p.name} value={p.name}>{p.name} ({p.position || '?'})</option>
+          ))}
+        </optgroup>
+      )}
+    </select>
   )
 }
 
@@ -170,7 +174,7 @@ export default function FixturesList({
   const [preds, setPreds] = useState<PredMap>({})
   const [memberPreds, setMemberPreds] = useState<PredMap>({})
   const [members, setMembers] = useState<Record<string, string>>({})
-  const [fixturePlayers, setFixturePlayers] = useState<Record<number, string[]>>({})
+  const [fixturePlayers, setFixturePlayers] = useState<Record<number, Player[]>>({})
   const [scoreInputs, setScoreInputs] = useState<ScoreInputMap>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<number | null>(null)
@@ -361,7 +365,7 @@ export default function FixturesList({
   const safePage = Math.min(currentPage, Math.max(0, totalPages - 1))
 
   // ── Per-category input inside a fixture card ─────────────────────────────
-  function CategoryInput({ fixture, rule, players }: { fixture: Fixture; rule: PoolRule; players: string[] }) {
+  function CategoryInput({ fixture, rule, players }: { fixture: Fixture; rule: PoolRule; players: Player[] }) {
     const key = `${fixture.id}:${rule.category_id}`
     const pred = preds[key]
     const locked = isLocked(fixture)
@@ -575,10 +579,12 @@ export default function FixturesList({
 
         {/* Player search */}
         {rule.input_type === 'player' && (
-          <PlayerSearch
+          <PlayerDropdown
             value={pred?.value_text || ''}
             disabled={locked || finished}
             players={players}
+            homeTeam={fixture.home_team}
+            awayTeam={fixture.away_team}
             onChange={v => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: v })}
           />
         )}
@@ -600,17 +606,15 @@ export default function FixturesList({
   // Format a prediction value for display in the picks comparison table
   // Fetch players for a fixture's two teams from the players table
   const fetchPlayersForFixture = useCallback(async (fixture: Fixture) => {
-    if (fixturePlayers[fixture.id]) return // already loaded
+    if (fixturePlayers[fixture.id]) return
     const supabase = createClient()
     const { data } = await supabase
       .from('players')
       .select('name, team_name, position')
       .in('team_name', [fixture.home_team, fixture.away_team])
       .eq('tournament_id', 'wc_2026')
-      .order('team_name')
-      .order('name')
     if (data && data.length > 0) {
-      setFixturePlayers(prev => ({ ...prev, [fixture.id]: data.map((p: any) => p.name) }))
+      setFixturePlayers(prev => ({ ...prev, [fixture.id]: data as Player[] }))
     }
   }, [fixturePlayers])
 
