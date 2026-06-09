@@ -7,6 +7,7 @@ import RulesetBuilder from '@/components/RulesetBuilder'
 interface SelectedRule {
   category_id: string
   points: number
+  bonus_points: number
   enabled: boolean
 }
 
@@ -15,20 +16,28 @@ export default function CreatePoolPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Step 1
+  // Step 1 — name
   const [name, setName] = useState('')
-  
-  // Step 2 — tournament selection
+
+  // Step 2 — tournament + deadline
   const [sport, setSport] = useState('soccer')
   const [tournamentId, setTournamentId] = useState('wc_2026')
   const [deadlineType, setDeadlineType] = useState<'before_each_game' | 'before_tournament'>('before_each_game')
 
-  // Step 3 — ruleset
+  // Step 3a — per-game ruleset (before_each_game only)
   const [selectedRules, setSelectedRules] = useState<SelectedRule[]>([])
 
-  // Bracket settings (only when deadline = before_tournament)
+  // Step 3b — bracket settings (before_tournament only)
   const [groupFormat, setGroupFormat] = useState<'standings' | 'wld' | 'exact'>('standings')
-  const [bracketScoring] = useState({ r32_pts: 1, r16_pts: 2, qf_pts: 4, sf_pts: 6 })
+  const [bracketScoring, setBracketScoring] = useState({
+    // standings format
+    standings_first: 3, standings_second: 2, standings_third: 1,
+    // wld format
+    wld_pts: 1,
+    // exact format (fixed: 3+2+2+3=10 max, not configurable)
+    // knockout (same for all formats)
+    r32_pts: 1, r16_pts: 2, qf_pts: 4, sf_pts: 6,
+  })
 
   // Step 4 — buy-in
   const [buyIn, setBuyIn] = useState('')
@@ -48,6 +57,15 @@ export default function CreatePoolPage() {
     { id: 'wc_2026', name: 'FIFA World Cup 2026', sport: 'soccer', description: 'Group stage · Jun 12 – Jul 2' },
   ]
 
+  // Step 2 → step 3: bracket pools skip ruleset builder
+  function goToStep3() {
+    if (deadlineType === 'before_tournament') {
+      setStep(3) // bracket settings
+    } else {
+      setStep(3) // ruleset builder
+    }
+  }
+
   async function handleCreate() {
     setLoading(true)
     setError('')
@@ -57,8 +75,7 @@ export default function CreatePoolPage() {
 
     const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase()
     const { data: pool, error: poolError } = await supabase.from('pools').insert({
-      name,
-      sport,
+      name, sport,
       tournament_id: tournamentId,
       package_id: 'CUSTOM',
       tournament_scope: 'full',
@@ -76,8 +93,8 @@ export default function CreatePoolPage() {
 
     if (poolError) { setError(poolError.message); setLoading(false); return }
 
-    // Save rules
-    if (selectedRules.length > 0) {
+    // Save per-game rules (before_each_game pools)
+    if (deadlineType === 'before_each_game' && selectedRules.length > 0) {
       await supabase.from('pool_rules').insert(
         selectedRules.map(r => ({
           pool_id: pool.id,
@@ -88,12 +105,19 @@ export default function CreatePoolPage() {
       )
     }
 
-    // Save bracket scoring rules if before_tournament pool
+    // Save bracket scoring rules (before_tournament pools)
     if (deadlineType === 'before_tournament') {
       await supabase.from('bracket_scoring_rules').upsert({
         pool_id: pool.id,
         group_format: groupFormat,
-        ...bracketScoring,
+        standings_first: bracketScoring.standings_first,
+        standings_second: bracketScoring.standings_second,
+        standings_third: bracketScoring.standings_third,
+        wld_pts: bracketScoring.wld_pts,
+        r32_pts: bracketScoring.r32_pts,
+        r16_pts: bracketScoring.r16_pts,
+        qf_pts: bracketScoring.qf_pts,
+        sf_pts: bracketScoring.sf_pts,
       }, { onConflict: 'pool_id' })
     }
 
@@ -107,15 +131,30 @@ export default function CreatePoolPage() {
     window.location.href = `/pool/${pool.id}`
   }
 
-  const stepLabels = ['name', 'tournament', 'predictions', 'buy-in']
+  // Step labels differ by deadline type
+  const isBracket = deadlineType === 'before_tournament'
+  const stepLabels = isBracket
+    ? ['name', 'tournament', 'scoring', 'buy-in']
+    : ['name', 'tournament', 'predictions', 'buy-in']
+
+  function NumberInput({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+    return (
+      <div>
+        <div style={{fontSize: '11px', color: '#888', marginBottom: '4px'}}>{label}</div>
+        <input type="number" min="0" max="100" value={value}
+          onChange={e => onChange(parseInt(e.target.value) || 0)}
+          style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontWeight: 600, fontFamily: 'inherit', textAlign: 'center', minHeight: 44}} />
+      </div>
+    )
+  }
 
   return (
     <div style={{minHeight: '100vh', background: '#f7f7f5', fontFamily: "'Inter', system-ui, sans-serif", fontSize: '13px'}}>
-      <div style={{background: '#111', color: 'white', padding: '10px 20px'}}>
+      <div style={{background: '#111', color: 'white', padding: '10px 16px'}}>
         <a href="/dashboard" style={{fontWeight: 700, fontSize: '13px', color: 'white', textDecoration: 'none'}}>pool'em</a>
       </div>
 
-      <div style={{maxWidth: step === 3 ? 1100 : 520, margin: '0 auto', padding: '24px 16px'}}>
+      <div style={{maxWidth: step === 3 && !isBracket ? 1100 : 520, margin: '0 auto', padding: '24px 16px'}}>
         <div style={{marginBottom: '16px'}}>
           <h1 style={{fontWeight: 700, fontSize: '15px', marginBottom: '2px'}}>new pool</h1>
         </div>
@@ -137,7 +176,7 @@ export default function CreatePoolPage() {
           ))}
         </div>
 
-        {/* Step 1: Name */}
+        {/* ── Step 1: Name ─────────────────────────────────────────────── */}
         {step === 1 && (
           <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
             <label style={{display: 'block', fontWeight: 600, marginBottom: '8px'}}>what's this pool called?</label>
@@ -152,7 +191,7 @@ export default function CreatePoolPage() {
           </div>
         )}
 
-        {/* Step 2: Tournament */}
+        {/* ── Step 2: Tournament + deadline ────────────────────────────── */}
         {step === 2 && (
           <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
             <label style={{display: 'block', fontWeight: 600, marginBottom: '12px'}}>pick a tournament</label>
@@ -173,8 +212,8 @@ export default function CreatePoolPage() {
             <label style={{display: 'block', fontWeight: 600, marginBottom: '8px'}}>prediction deadline</label>
             <div style={{display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px'}}>
               {([
-                {id: 'before_each_game', label: 'before each game', desc: 'picks lock at kickoff'},
-                {id: 'before_tournament', label: 'before tournament', desc: 'all picks upfront'},
+                {id: 'before_each_game', label: 'before each game', desc: 'picks lock at kickoff — predict game by game'},
+                {id: 'before_tournament', label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'},
               ] as const).map(opt => (
                 <button key={opt.id} onClick={() => setDeadlineType(opt.id)}
                   style={{
@@ -190,90 +229,117 @@ export default function CreatePoolPage() {
 
             <div style={{display: 'flex', justifyContent: 'space-between'}}>
               <button className="btn-secondary" onClick={() => setStep(1)} style={{padding: '10px 20px', minHeight: 44}}>← back</button>
-              <button className="btn-primary" onClick={() => setStep(3)} style={{padding: '10px 20px', minHeight: 44}}>next →</button>
+              <button className="btn-primary" onClick={goToStep3} style={{padding: '10px 20px', minHeight: 44}}>next →</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 3a: Bracket scoring (before_tournament) ─────────────── */}
+        {step === 3 && isBracket && (
+          <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
+            <h2 style={{fontWeight: 700, fontSize: '14px', marginBottom: '4px'}}>group stage format</h2>
+            <p style={{fontSize: '11px', color: '#aaa', marginBottom: '16px'}}>how do participants predict the group stage?</p>
+
+            <div style={{display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px'}}>
+              {([
+                { id: 'standings', label: 'pick group standings', desc: 'predict 1st, 2nd, and the best 8 third-place finishers' },
+                { id: 'wld', label: 'predict every game — win / draw / loss', desc: 'pick the result of each group stage game' },
+                { id: 'exact', label: 'predict every game — exact score', desc: 'predict the scoreline (max 10pts per game: 3pts result · 2pts per team score · 3pt bonus)' },
+              ] as const).map(opt => (
+                <button key={opt.id} onClick={() => setGroupFormat(opt.id)}
+                  style={{
+                    padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer',
+                    borderColor: groupFormat === opt.id ? '#C8102E' : '#e0e0db',
+                    background: groupFormat === opt.id ? '#fff5f5' : 'white',
+                  }}>
+                  <div style={{fontWeight: 600, fontSize: '13px', color: groupFormat === opt.id ? '#C8102E' : '#111', marginBottom: '3px'}}>{opt.label}</div>
+                  <div style={{fontSize: '11px', color: '#888'}}>{opt.desc}</div>
+                </button>
+              ))}
             </div>
 
-            {/* Bracket settings — only for before_tournament pools */}
-            {deadlineType === 'before_tournament' && (
-              <div style={{marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '16px'}}>
-                <label style={{display: 'block', fontWeight: 600, marginBottom: '4px'}}>group stage format</label>
-                <p style={{fontSize: '11px', color: '#aaa', marginBottom: '12px'}}>how do participants predict the group stage?</p>
-                <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
-                  {([
-                    {
-                      id: 'standings',
-                      label: 'pick group standings',
-                      desc: 'predict 1st, 2nd, and the best 8 third-place finishers',
-                      pts: '3pts · 1pt · 1pt',
-                    },
-                    {
-                      id: 'wld',
-                      label: 'predict every game — win / draw / loss',
-                      desc: 'pick the result of each group stage game',
-                      pts: '1pt per correct result',
-                    },
-                    {
-                      id: 'exact',
-                      label: 'predict every game — exact score',
-                      desc: 'predict the scoreline of each group stage game',
-                      pts: '3pts correct result · 2pts per correct team score · 3pt bonus if everything right (10pts max)',
-                    },
-                  ] as const).map(opt => (
-                    <button key={opt.id} onClick={() => setGroupFormat(opt.id)}
-                      style={{
-                        padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer',
-                        borderColor: groupFormat === opt.id ? '#C8102E' : '#e0e0db',
-                        background: groupFormat === opt.id ? '#fff5f5' : 'white',
-                      }}>
-                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8}}>
-                        <div>
-                          <div style={{fontWeight: 600, fontSize: '13px', color: groupFormat === opt.id ? '#C8102E' : '#111', marginBottom: '3px'}}>{opt.label}</div>
-                          <div style={{fontSize: '11px', color: '#888'}}>{opt.desc}</div>
-                        </div>
-                        <div style={{fontSize: '10px', color: groupFormat === opt.id ? '#C8102E' : '#aaa', whiteSpace: 'nowrap', flexShrink: 0, marginTop: 2}}>{opt.pts}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-
-                <div style={{marginTop: '16px', padding: '10px 12px', background: '#f9f9f9', border: '1px solid #eee', fontSize: '11px', color: '#555', lineHeight: 1.8}}>
-                  <div style={{fontWeight: 600, marginBottom: '4px'}}>knockout rounds (same for all formats)</div>
-                  R32: {bracketScoring.r32_pts}pt · R16: {bracketScoring.r16_pts}pts · QF: {bracketScoring.qf_pts}pts · SF: {bracketScoring.sf_pts}pts for correct team in that round
-                  <br />
-                  <span style={{color: '#aaa'}}>Final: predict both finalists + exact score · 2pts per correct team goal · +3pt exact bonus · +10pts correct winner</span>
+            {/* Scoring inputs — depend on selected format */}
+            {groupFormat === 'standings' && (
+              <div style={{marginBottom: '20px', padding: '12px', background: '#f9f9f9', border: '1px solid #eee'}}>
+                <div style={{fontSize: '11px', fontWeight: 600, color: '#555', marginBottom: '10px'}}>points for correct standings</div>
+                <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px'}}>
+                  <NumberInput label="1st place" value={bracketScoring.standings_first} onChange={v => setBracketScoring(p => ({...p, standings_first: v}))} />
+                  <NumberInput label="2nd place" value={bracketScoring.standings_second} onChange={v => setBracketScoring(p => ({...p, standings_second: v}))} />
+                  <NumberInput label="3rd place qualifier" value={bracketScoring.standings_third} onChange={v => setBracketScoring(p => ({...p, standings_third: v}))} />
                 </div>
               </div>
             )}
-          </div>
-        )}
 
-        {/* Step 3: Ruleset builder */}
-        {step === 3 && (
-          <div>
-            <RulesetBuilder
-              sport={sport}
-              onComplete={(rules) => { setSelectedRules(rules); setStep(4) }}
-            />
-            <div style={{marginTop: '16px'}}>
-              <button className="btn-secondary" onClick={() => setStep(2)}>← back</button>
+            {groupFormat === 'wld' && (
+              <div style={{marginBottom: '20px', padding: '12px', background: '#f9f9f9', border: '1px solid #eee'}}>
+                <div style={{fontSize: '11px', fontWeight: 600, color: '#555', marginBottom: '10px'}}>points per correct result</div>
+                <div style={{maxWidth: 120}}>
+                  <NumberInput label="pts per correct result" value={bracketScoring.wld_pts} onChange={v => setBracketScoring(p => ({...p, wld_pts: v}))} />
+                </div>
+              </div>
+            )}
+
+            {groupFormat === 'exact' && (
+              <div style={{marginBottom: '20px', padding: '12px', background: '#f9f9f9', border: '1px solid #eee', fontSize: '11px', color: '#555', lineHeight: 1.8}}>
+                <div style={{fontWeight: 600, marginBottom: '4px'}}>fixed scoring (not configurable)</div>
+                correct result: 3pts · correct team score: 2pts each · exact score bonus: 3pts<br/>
+                <span style={{color: '#aaa'}}>max 10pts per game</span>
+              </div>
+            )}
+
+            {/* Knockout scoring */}
+            <div style={{marginBottom: '20px'}}>
+              <div style={{fontSize: '12px', fontWeight: 600, color: '#555', marginBottom: '10px'}}>knockout round points</div>
+              <p style={{fontSize: '11px', color: '#aaa', marginBottom: '10px'}}>points earned for each correct team advancing to that round</p>
+              <div style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px'}}>
+                <NumberInput label="Round of 32" value={bracketScoring.r32_pts} onChange={v => setBracketScoring(p => ({...p, r32_pts: v}))} />
+                <NumberInput label="Round of 16" value={bracketScoring.r16_pts} onChange={v => setBracketScoring(p => ({...p, r16_pts: v}))} />
+                <NumberInput label="Quarter Finals" value={bracketScoring.qf_pts} onChange={v => setBracketScoring(p => ({...p, qf_pts: v}))} />
+                <NumberInput label="Semi Finals" value={bracketScoring.sf_pts} onChange={v => setBracketScoring(p => ({...p, sf_pts: v}))} />
+              </div>
+            </div>
+
+            {/* Final — fixed */}
+            <div style={{padding: '10px 12px', background: '#f9f9f9', border: '1px solid #eee', fontSize: '11px', color: '#555', lineHeight: 1.8, marginBottom: '20px'}}>
+              <div style={{fontWeight: 600, marginBottom: '4px'}}>final (always exact score)</div>
+              predict both finalists + exact score (90 min)<br/>
+              2pts per correct team goal · +3pt bonus if exact · +10pts correct winner
+            </div>
+
+            <div style={{display: 'flex', justifyContent: 'space-between'}}>
+              <button className="btn-secondary" onClick={() => setStep(2)} style={{padding: '10px 20px', minHeight: 44}}>← back</button>
+              <button className="btn-primary" onClick={() => setStep(4)} style={{padding: '10px 20px', minHeight: 44}}>next →</button>
             </div>
           </div>
         )}
 
-        {/* Step 4: Buy-in */}
+        {/* ── Step 3b: Ruleset builder (before_each_game) ──────────────── */}
+        {step === 3 && !isBracket && (
+          <div>
+            <RulesetBuilder
+              sport={sport}
+              onComplete={(rules) => { setSelectedRules(rules as SelectedRule[]); setStep(4) }}
+            />
+            <div style={{marginTop: '16px'}}>
+              <button className="btn-secondary" onClick={() => setStep(2)} style={{padding: '10px 20px', minHeight: 44}}>← back</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 4: Buy-in ────────────────────────────────────────────── */}
         {step === 4 && (
           <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
             <label style={{display: 'block', fontWeight: 600, marginBottom: '4px'}}>
               buy-in amount <span style={{fontWeight: 400, color: '#aaa'}}>(optional)</span>
             </label>
             <p style={{fontSize: '11px', color: '#888', marginBottom: '12px'}}>
-              players will be prompted to pay you via venmo when they join. you handle the money — pool'em never touches it.
+              players will be prompted to pay via venmo when they join. you handle the money — pool'em never touches it.
             </p>
             <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px'}}>
               <span style={{fontSize: '16px', color: '#555'}}>$</span>
               <input type="number" min="0" step="1" placeholder="0" value={buyIn}
                 onChange={e => setBuyIn(e.target.value)}
-                style={{border: '1px solid #ddd', padding: '6px 10px', fontSize: '16px', width: 100, fontFamily: 'inherit'}} />
+                style={{border: '1px solid #ddd', padding: '8px 10px', fontSize: '16px', width: 100, fontFamily: 'inherit', minHeight: 44}} />
               <span style={{fontSize: '13px', color: '#888'}}>per person</span>
             </div>
 
@@ -285,7 +351,7 @@ export default function CreatePoolPage() {
                     <span style={{color: '#555', fontSize: '14px'}}>@</span>
                     <input type="text" placeholder="yourhandle" value={venmoHandle}
                       onChange={e => setVenmoHandle(e.target.value.replace('@', ''))}
-                      style={{border: '1px solid #ddd', padding: '6px 10px', fontSize: '13px', flex: 1, fontFamily: 'inherit'}} />
+                      style={{border: '1px solid #ddd', padding: '8px 10px', fontSize: '16px', flex: 1, fontFamily: 'inherit', minHeight: 44}} />
                   </div>
                 </div>
 
@@ -301,39 +367,28 @@ export default function CreatePoolPage() {
                         }}>
                         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                           <span style={{fontWeight: 600, fontSize: '12px', color: payoutTemplate === t.id ? '#C8102E' : '#111'}}>{t.label}</span>
-                          {t.id !== 'custom' && (
-                            <span style={{fontSize: '11px', color: '#888'}}>{t.description}</span>
-                          )}
+                          {t.id !== 'custom' && <span style={{fontSize: '11px', color: '#888'}}>{t.description}</span>}
                         </div>
                       </button>
                     ))}
                   </div>
                   {payoutTemplate === 'custom' && (
-                    <div>
-                      <label style={{display: 'block', fontSize: '11px', color: '#555', marginBottom: '4px'}}>
-                        describe your payout rules
-                      </label>
-                      <textarea
-                        placeholder="e.g. Top 3 places: 1st gets 50%, 2nd gets 30%, 3rd gets 20%. Ties split the prize money evenly."
-                        value={customPayout}
-                        onChange={e => setCustomPayout(e.target.value)}
-                        rows={3}
-                        style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '12px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box'}}
-                      />
-                    </div>
-                  )}
-                  {/* Preview */}
-                  {payoutTemplate !== 'custom' && buyIn && parseFloat(buyIn) > 0 && (
-                    <div style={{fontSize: '11px', color: '#555', padding: '8px', background: '#f9f9f9', border: '1px solid #eee', marginTop: '6px'}}>
-                      members will see: <em>"{PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description}"</em>
-                    </div>
+                    <textarea
+                      placeholder="e.g. 1st: 50%, 2nd: 30%, 3rd: 20%"
+                      value={customPayout}
+                      onChange={e => setCustomPayout(e.target.value)}
+                      rows={3}
+                      style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '13px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' as const}} />
                   )}
                 </div>
               </>
             )}
 
             <div style={{marginBottom: '12px', padding: '10px', background: '#f9f9f9', border: '1px solid #eee', fontSize: '11px', color: '#555'}}>
-              <strong>{selectedRules.length} predictions</strong> selected · {name} · {TOURNAMENTS.find(t => t.id === tournamentId)?.name}
+              {isBracket
+                ? <><strong>{groupFormat}</strong> group format · {name} · {TOURNAMENTS.find(t => t.id === tournamentId)?.name}</>
+                : <><strong>{selectedRules.length} predictions</strong> selected · {name} · {TOURNAMENTS.find(t => t.id === tournamentId)?.name}</>
+              }
             </div>
 
             {error && <p style={{fontSize: '11px', color: '#C8102E', background: '#fff5f5', padding: '8px', marginBottom: '12px'}}>{error}</p>}

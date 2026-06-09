@@ -239,7 +239,13 @@ export type GroupStageFormat = 'standings' | 'wld' | 'exact'
 
 export interface BracketScoringRules {
   group_format: GroupStageFormat
-  // Knockout points per round (for team appearing in that round)
+  // standings format
+  standings_first: number
+  standings_second: number
+  standings_third: number
+  // wld format
+  wld_pts: number
+  // knockout (all formats)
   r32_pts: number
   r16_pts: number
   qf_pts: number
@@ -248,10 +254,9 @@ export interface BracketScoringRules {
 
 export const DEFAULT_BRACKET_SCORING: BracketScoringRules = {
   group_format: 'standings',
-  r32_pts: 1,
-  r16_pts: 2,
-  qf_pts: 4,
-  sf_pts: 6,
+  standings_first: 3, standings_second: 2, standings_third: 1,
+  wld_pts: 1,
+  r32_pts: 1, r16_pts: 2, qf_pts: 4, sf_pts: 6,
 }
 
 // Score a group stage game (wld or exact formats)
@@ -260,10 +265,11 @@ export function scoreGroupGame(
   predictedAway: number,
   actualHome: number,
   actualAway: number,
-  format: GroupStageFormat
+  format: GroupStageFormat,
+  rules: BracketScoringRules
 ): number {
   if (format === 'wld') {
-    return getResult(predictedHome, predictedAway) === getResult(actualHome, actualAway) ? 1 : 0
+    return getResult(predictedHome, predictedAway) === getResult(actualHome, actualAway) ? rules.wld_pts : 0
   }
   if (format === 'exact') {
     const correctResult = getResult(predictedHome, predictedAway) === getResult(actualHome, actualAway)
@@ -279,16 +285,17 @@ export function scoreGroupGame(
   return 0
 }
 
-// Score group standings (standings format only)
+// Score group standings prediction
 export function scoreGroupStandings(
   predictedFirst: string, predictedSecond: string,
   actualFirst: string, actualSecond: string,
-  predictedThird: string | null, qualifiedThirds: string[]
+  predictedThird: string | null, qualifiedThirds: string[],
+  rules: BracketScoringRules
 ): number {
   let pts = 0
-  if (predictedFirst === actualFirst) pts += 3
-  if (predictedSecond === actualSecond) pts += 1
-  if (predictedThird && qualifiedThirds.includes(predictedThird)) pts += 1
+  if (predictedFirst === actualFirst) pts += rules.standings_first
+  if (predictedSecond === actualSecond) pts += rules.standings_second
+  if (predictedThird && qualifiedThirds.includes(predictedThird)) pts += rules.standings_third
   return pts
 }
 
