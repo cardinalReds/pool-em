@@ -35,14 +35,21 @@ export async function POST(request: NextRequest) {
       const hoursUntilKickoff = (kickoff.getTime() - now.getTime()) / (1000 * 60 * 60)
 
       // Get all reminders where hours_before matches the window
-      // e.g. if kickoff is in 1.9-2.4 hours, notify users who set 2h reminder
-      const { data: reminders } = await supabase
+      // Window: kickoff is between (hours_before - 0.5) and (hours_before + 0.5) hours away
+      const { data: allReminders } = await supabase
         .from('reminders')
-        .select('user_id, email, hours_before, pool_id')
-        .gte('hours_before', Math.floor(hoursUntilKickoff))
-        .lte('hours_before', Math.ceil(hoursUntilKickoff) + 0.5)
+        .select('id, user_id, email, hours_before, pool_id, sent_fixture_ids')
 
-      for (const reminder of reminders || []) {
+      const matchingReminders = (allReminders || []).filter(r => {
+        const target = r.hours_before * 60 // minutes
+        const actual = (kickoff.getTime() - now.getTime()) / (1000 * 60) // minutes until kickoff
+        // Match if we're within 30 min of the target window
+        return actual >= target - 15 && actual <= target + 15
+      })
+
+      for (const reminder of matchingReminders) {
+        // Skip if already sent for this fixture
+        if ((reminder.sent_fixture_ids || []).includes(fixture.id)) continue
         // Check this fixture is in the user's pool tournament
         const { data: pool } = await supabase
           .from('pools')
@@ -119,7 +126,14 @@ export async function POST(request: NextRequest) {
           }),
         })
 
-        if (res.ok) sent++
+        if (res.ok) {
+          sent++
+          // Mark this fixture as sent so we don't send again
+          await supabase
+            .from('reminders')
+            .update({ sent_fixture_ids: [...(reminder.sent_fixture_ids || []), fixture.id] })
+            .eq('id', reminder.id)
+        }
         else {
           const err = await res.json()
           console.error('Resend error for', reminder.email, err)
