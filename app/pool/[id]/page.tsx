@@ -354,8 +354,13 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
           {isMobile && (
             <button onClick={() => setShowSidebar(s => !s)}
-              style={{background: 'none', border: '1px solid #444', color: '#aaa', cursor: 'pointer', fontSize: '11px', padding: '4px 10px', fontFamily: 'inherit'}}>
-              {showSidebar ? '✕ close' : '☰ info'}
+              style={{
+                background: showSidebar ? '#444' : '#C8102E',
+                border: 'none', color: 'white', cursor: 'pointer',
+                fontSize: '12px', padding: '6px 14px', fontFamily: 'inherit',
+                fontWeight: 600,
+              }}>
+              {showSidebar ? '✕ close' : '☰ menu'}
             </button>
           )}
           <span style={{fontSize: '11px', color: '#888'}}>
@@ -379,6 +384,20 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           )}
           {/* Main content */}
           <div style={{padding: '16px'}}>
+            {/* Buy-in banner — always visible on mobile so they can't miss it */}
+            {!isAdmin && pool.buy_in_amount && pool.venmo_handle && (
+              <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '12px', marginBottom: '16px'}}>
+                <p style={{fontSize: '13px', fontWeight: 600, marginBottom: '4px'}}>💰 ${pool.buy_in_amount} buy-in due</p>
+                <p style={{fontSize: '11px', color: '#666', marginBottom: '10px'}}>
+                  send to @{pool.venmo_handle} on venmo{pool.payout_structure ? ` · ${pool.payout_structure}` : ''}
+                </p>
+                <a href={`https://venmo.com/${pool.venmo_handle}?txn=pay&amount=${pool.buy_in_amount}&note=${encodeURIComponent(pool.name + ' buy-in')}`} target="_blank" rel="noopener noreferrer">
+                  <button style={{width: '100%', padding: '10px', fontSize: '13px', fontWeight: 600, background: '#3D95CE', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
+                    pay ${pool.buy_in_amount} via venmo →
+                  </button>
+                </a>
+              </div>
+            )}
             {user && pool.deadline_type === 'before_tournament' ? (
               <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-12T19:00:00Z')} />
             ) : user && (
