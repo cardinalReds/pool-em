@@ -104,9 +104,6 @@ async function seedTeam(teamId: number, teamName: string): Promise<{ name: strin
     tournament_id: 'wc_2026',
   }))
 
-  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!
-
   const res2 = await fetch(`${SUPABASE_URL}/rest/v1/players`, {
     method: 'POST',
     headers: {
