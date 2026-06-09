@@ -129,9 +129,9 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
     }
   }, [groupPicks, bestThirdGroups])
 
-  async function persistPicks() {
+  async function persistPicks(): Promise<boolean> {
     const supabase = createClient()
-    await supabase.from('bracket_picks').upsert({
+    const { error } = await supabase.from('bracket_picks').upsert({
       pool_id: poolId,
       user_id: userId,
       tournament_id: 'wc_2026',
@@ -141,13 +141,18 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       bracket_scores: bracketScores,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'pool_id,user_id' })
+    if (error) {
+      console.error('bracket save error:', error)
+      return false
+    }
+    return true
   }
 
   async function handleSave() {
     setSaving(true)
-    await persistPicks()
+    const ok = await persistPicks()
     setSaving(false)
-    setShowSummary(true)
+    if (ok) setShowSummary(true)
   }
 
   async function handleSaveAndExit() {
