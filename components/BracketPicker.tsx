@@ -17,18 +17,21 @@ import {
 } from '@/lib/bracketEngine'
 
 const FLAGS: Record<string, string> = {
-  'Mexico': '🇲🇽', 'South Africa': '🇿🇦', 'Poland': '🇵🇱', 'Saudi Arabia': '🇸🇦',
-  'Argentina': '🇦🇷', 'Chile': '🇨🇱', 'Peru': '🇵🇪', 'Canada': '🇨🇦',
-  'USA': '🇺🇸', 'Panama': '🇵🇦', 'Haiti': '🇭🇹', 'Bosnia and Herzegovina': '🇧🇦',
-  'Brazil': '🇧🇷', 'Norway': '🇳🇴', 'Morocco': '🇲🇦', 'Uruguay': '🇺🇾',
-  'France': '🇫🇷', 'Algeria': '🇩🇿', 'Egypt': '🇪🇬', 'England': '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
-  'Spain': '🇪🇸', 'Senegal': '🇸🇳', 'Japan': '🇯🇵', 'Netherlands': '🇳🇱',
-  'Germany': '🇩🇪', 'Serbia': '🇷🇸', 'Colombia': '🇨🇴', 'Belgium': '🇧🇪',
-  'Portugal': '🇵🇹', 'Croatia': '🇭🇷', 'Ivory Coast': '🇨🇮', 'Ecuador': '🇪🇨',
-  'Sweden': '🇸🇪', 'South Korea': '🇰🇷', 'Iran': '🇮🇷', 'Iraq': '🇮🇶',
-  'Australia': '🇦🇺', 'Jordan': '🇯🇴', 'New Zealand': '🇳🇿', 'Uzbekistan': '🇺🇿',
-  'Türkiye': '🇹🇷', 'Denmark': '🇩🇰', 'Austria': '🇦🇹', 'Ghana': '🇬🇭',
-  'Congo DR': '🇨🇩', 'Cabo Verde': '🇨🇻', 'Tunisia': '🇹🇳', 'Qatar': '🇶🇦',
+  'Mexico': '🇲🇽', 'South Africa': '🇿🇦', 'South Korea': '🇰🇷', 'Czechia': '🇨🇿',
+  'Canada': '🇨🇦', 'Bosnia and Herzegovina': '🇧🇦', 'Qatar': '🇶🇦', 'Switzerland': '🇨🇭',
+  'Brazil': '🇧🇷', 'Morocco': '🇲🇦', 'Haiti': '🇭🇹', 'Scotland': '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
+  'USA': '🇺🇸', 'Paraguay': '🇵🇾', 'Australia': '🇦🇺', 'Türkiye': '🇹🇷',
+  'Germany': '🇩🇪', 'Curaçao': '🇨🇼', 'Ivory Coast': '🇨🇮', 'Ecuador': '🇪🇨',
+  'Netherlands': '🇳🇱', 'Japan': '🇯🇵', 'Sweden': '🇸🇪', 'Tunisia': '🇹🇳',
+  'Belgium': '🇧🇪', 'Egypt': '🇪🇬', 'Iran': '🇮🇷', 'New Zealand': '🇳🇿',
+  'Spain': '🇪🇸', 'Cape Verde': '🇨🇻', 'Saudi Arabia': '🇸🇦', 'Uruguay': '🇺🇾',
+  'France': '🇫🇷', 'Senegal': '🇸🇳', 'Iraq': '🇮🇶', 'Norway': '🇳🇴',
+  'Argentina': '🇦🇷', 'Algeria': '🇩🇿', 'Austria': '🇦🇹', 'Jordan': '🇯🇴',
+  'Portugal': '🇵🇹', 'Congo DR': '🇨🇩', 'Uzbekistan': '🇺🇿', 'Colombia': '🇨🇴',
+  'England': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'Croatia': '🇭🇷', 'Ghana': '🇬🇭', 'Panama': '🇵🇦',
+  // Legacy / other
+  'Poland': '🇵🇱', 'Serbia': '🇷🇸', 'Denmark': '🇩🇰', 'Cabo Verde': '🇨🇻',
+  'Chile': '🇨🇱', 'Peru': '🇵🇪', 'Morocco': '🇲🇦',
 }
 
 type PickMode = 'simple' | 'full'
