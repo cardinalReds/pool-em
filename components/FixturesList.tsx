@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { WC_SQUADS } from '@/lib/wc_squads'
 
 interface Fixture {
   id: number
@@ -86,49 +87,28 @@ type PredMap = Record<string, PredV2>
 type ScoreInputMap = Record<string, string>
 
 // PlayerSearch component — outside FixturesList to avoid remount
-interface Player {
-  name: string
-  team_name: string
-  position: string | null
-}
-
 const POSITION_ORDER = ['Attacker', 'Midfielder', 'Defender', 'Goalkeeper']
 
-function PlayerDropdown({ value, onChange, disabled, players, homeTeam, awayTeam }: {
+function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
   value: string
   onChange: (v: string) => void
   disabled: boolean
-  players: Player[]
   homeTeam: string
   awayTeam: string
 }) {
-  // Group by team then position
-  function getGroup(team: string): Player[] {
-    return players
-      .filter(p => p.team_name === team)
+  function getPlayers(team: string) {
+    return (WC_SQUADS[team] || [])
+      .slice()
       .sort((a, b) => {
-        const ai = POSITION_ORDER.indexOf(a.position || '') === -1 ? 99 : POSITION_ORDER.indexOf(a.position || '')
-        const bi = POSITION_ORDER.indexOf(b.position || '') === -1 ? 99 : POSITION_ORDER.indexOf(b.position || '')
-        if (ai !== bi) return ai - bi
+        const ai = POSITION_ORDER.indexOf(a.position)
+        const bi = POSITION_ORDER.indexOf(b.position)
+        if (ai !== bi) return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
         return a.name.localeCompare(b.name)
       })
   }
 
-  const homePlayers = getGroup(homeTeam)
-  const awayPlayers = getGroup(awayTeam)
-
-  if (players.length === 0) {
-    // Fallback text input if no players loaded
-    return (
-      <input
-        value={value}
-        disabled={disabled}
-        placeholder="type player name..."
-        onChange={e => onChange(e.target.value)}
-        style={{ width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '14px', fontFamily: 'inherit', background: disabled ? '#fafafa' : 'white' }}
-      />
-    )
-  }
+  const homePlayers = getPlayers(homeTeam)
+  const awayPlayers = getPlayers(awayTeam)
 
   return (
     <select
@@ -136,22 +116,23 @@ function PlayerDropdown({ value, onChange, disabled, players, homeTeam, awayTeam
       disabled={disabled}
       onChange={e => onChange(e.target.value)}
       style={{
-        width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '14px',
-        fontFamily: 'inherit', background: disabled ? '#fafafa' : 'white', minHeight: 44,
+        width: '100%', border: '1px solid #ddd', padding: '8px',
+        fontSize: '14px', fontFamily: 'inherit',
+        background: disabled ? '#fafafa' : 'white', minHeight: 44,
       }}
     >
       <option value="">select player...</option>
       {homePlayers.length > 0 && (
-        <optgroup label={`${FLAGS[homeTeam] || ''} ${homeTeam}`}>
+        <optgroup label={homeTeam}>
           {homePlayers.map(p => (
-            <option key={p.name} value={p.name}>{p.name} ({p.position || '?'})</option>
+            <option key={p.name} value={p.name}>{p.name} ({p.position})</option>
           ))}
         </optgroup>
       )}
       {awayPlayers.length > 0 && (
-        <optgroup label={`${FLAGS[awayTeam] || ''} ${awayTeam}`}>
+        <optgroup label={awayTeam}>
           {awayPlayers.map(p => (
-            <option key={p.name} value={p.name}>{p.name} ({p.position || '?'})</option>
+            <option key={p.name} value={p.name}>{p.name} ({p.position})</option>
           ))}
         </optgroup>
       )}
@@ -174,7 +155,6 @@ export default function FixturesList({
   const [preds, setPreds] = useState<PredMap>({})
   const [memberPreds, setMemberPreds] = useState<PredMap>({})
   const [members, setMembers] = useState<Record<string, string>>({})
-  const [fixturePlayers, setFixturePlayers] = useState<Record<number, Player[]>>({})
   const [scoreInputs, setScoreInputs] = useState<ScoreInputMap>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<number | null>(null)
@@ -365,7 +345,7 @@ export default function FixturesList({
   const safePage = Math.min(currentPage, Math.max(0, totalPages - 1))
 
   // ── Per-category input inside a fixture card ─────────────────────────────
-  function CategoryInput({ fixture, rule, players }: { fixture: Fixture; rule: PoolRule; players: Player[] }) {
+  function CategoryInput({ fixture, rule }: { fixture: Fixture; rule: PoolRule }) {
     const key = `${fixture.id}:${rule.category_id}`
     const pred = preds[key]
     const locked = isLocked(fixture)
@@ -577,12 +557,11 @@ export default function FixturesList({
           </div>
         )}
 
-        {/* Player search */}
+        {/* Player dropdown */}
         {rule.input_type === 'player' && (
           <PlayerDropdown
             value={pred?.value_text || ''}
             disabled={locked || finished}
-            players={players}
             homeTeam={fixture.home_team}
             awayTeam={fixture.away_team}
             onChange={v => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: v })}
@@ -602,21 +581,6 @@ export default function FixturesList({
       </div>
     )
   }
-
-  // Format a prediction value for display in the picks comparison table
-  // Fetch players for a fixture's two teams from the players table
-  const fetchPlayersForFixture = useCallback(async (fixture: Fixture) => {
-    if (fixturePlayers[fixture.id]) return
-    const supabase = createClient()
-    const { data } = await supabase
-      .from('players')
-      .select('name, team_name, position')
-      .in('team_name', [fixture.home_team, fixture.away_team])
-      .eq('tournament_id', 'wc_2026')
-    if (data && data.length > 0) {
-      setFixturePlayers(prev => ({ ...prev, [fixture.id]: data as Player[] }))
-    }
-  }, [fixturePlayers])
 
   function formatPickValue(pred: PredV2 | undefined, rule: PoolRule, fixture: Fixture): string {
     if (!pred) return '—'
@@ -640,7 +604,6 @@ export default function FixturesList({
     const locked = isLocked(fixture)
     const finished = fixture.status === 'FT'
     const perGameRules = poolRules.filter(r => r.prediction_type === 'per_game')
-    const players = fixturePlayers[fixture.id] || []
     const hasAnyPick = perGameRules.some(r => {
       const p = preds[`${fixture.id}:${r.category_id}`]
       return p?.value_wld || p?.value_ou || p?.value_text || p?.value_yesno !== null
@@ -650,7 +613,6 @@ export default function FixturesList({
     // Fetch players for this fixture's teams when card mounts
     useEffect(() => {
       const hasPlayerRule = perGameRules.some(r => r.input_type === 'player')
-      if (hasPlayerRule) fetchPlayersForFixture(fixture)
     }, [fixture.id])
 
     return (
@@ -692,7 +654,7 @@ export default function FixturesList({
         {perGameRules.length > 0 && (
           <div style={{ padding: '8px 10px' }}>
             {perGameRules.map(rule => (
-              <CategoryInput key={rule.category_id} fixture={fixture} rule={rule} players={players} />
+              <CategoryInput key={rule.category_id} fixture={fixture} rule={rule} />
             ))}
             {!locked && !finished && (
               <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8 }}>
