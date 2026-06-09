@@ -159,9 +159,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       {step === 'groups' && (
         <div>
           <p style={{ fontSize: '11px', color: '#888', marginBottom: '16px' }}>
-            {pickMode === 'simple'
-              ? 'Rank the teams in each group from 1st to 4th.'
-              : 'Rank the teams in each group from 1st to 4th.'}
+            Drag to reorder teams in each group from 1st to 4th.
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
             {Object.entries(WC_2026_GROUPS).map(([group, teams]) => (
