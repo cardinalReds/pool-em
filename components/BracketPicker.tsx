@@ -266,9 +266,12 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       {/* Step 1: Group picks */}
       {step === 'groups' && (
         <div>
-          <p style={{ fontSize: '11px', color: '#888', marginBottom: '16px' }}>
-            Drag to reorder teams in each group from 1st to 4th.
-          </p>
+          <div style={{ background: '#f9f9f9', border: '1px solid #eee', padding: '12px 14px', marginBottom: '16px', borderLeft: '3px solid #C8102E' }}>
+            <div style={{ fontWeight: 600, fontSize: '12px', marginBottom: '3px' }}>rank each group from 1st to 4th</div>
+            <div style={{ fontSize: '11px', color: '#888', lineHeight: 1.6 }}>
+              The top 2 teams from each group advance to the Round of 32. Drag to reorder — your rankings will be used to build your bracket automatically.
+            </div>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
             {Object.entries(WC_2026_GROUPS).map(([group, teams]) => (
               <GroupPicker
@@ -300,12 +303,12 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       {/* Step 2: Best 8 third place teams */}
       {step === 'thirds' && (
         <div>
-          <p style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>
-            Pick the 8 groups whose 3rd place team advances to the Round of 32.
-          </p>
-          <p style={{ fontSize: '10px', color: '#bbb', marginBottom: '16px' }}>
-            Selected: {bestThirdGroups.length}/8
-          </p>
+          <div style={{ background: '#f9f9f9', border: '1px solid #eee', padding: '12px 14px', marginBottom: '16px', borderLeft: '3px solid #C8102E' }}>
+            <div style={{ fontWeight: 600, fontSize: '12px', marginBottom: '3px' }}>pick the 8 best 3rd-place teams</div>
+            <div style={{ fontSize: '11px', color: '#888', lineHeight: 1.6 }}>
+              In the World Cup, the 8 best 3rd-place finishers also advance to the knockout stage. Select which 8 groups you think will produce a qualifying 3rd-place team. The order you select them is used to rank them.
+            </div>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '20px' }}>
             {Object.entries(WC_2026_GROUPS).map(([group, teams]) => {
               const thirdTeam = groupPicks[group]?.[2] || teams[2]
@@ -358,6 +361,12 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       {/* Step 3: Knockout bracket */}
       {step === 'bracket' && (
         <div>
+          <div style={{ background: '#f9f9f9', border: '1px solid #eee', padding: '12px 14px', marginBottom: '16px', borderLeft: '3px solid #C8102E' }}>
+            <div style={{ fontWeight: 600, fontSize: '12px', marginBottom: '3px' }}>pick who advances each round</div>
+            <div style={{ fontSize: '11px', color: '#888', lineHeight: 1.6 }}>
+              Your R32 matchups are set from your group picks. Click a team to advance them — they'll carry through automatically. The Final always requires an exact score. You earn points for each team you correctly predict in that round.
+            </div>
+          </div>
           <div style={{ overflowX: 'auto', paddingBottom: '16px', marginLeft: '-20px', marginRight: '-20px', paddingLeft: '20px', paddingRight: '20px' }}>
             <BracketView
               r32Bracket={r32Bracket}
