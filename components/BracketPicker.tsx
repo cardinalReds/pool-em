@@ -240,13 +240,6 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
 
   // ── Summary view ───────────────────────────────────────────────────────
   if (showSummary) {
-    const allRounds = [
-      { label: 'Round of 32', slots: R32_MATCHUPS.map(m => m.slot) },
-      { label: 'Round of 16', slots: R16_MATCHUPS.map(m => m.slot) },
-      { label: 'Quarter Finals', slots: QF_MATCHUPS.map(m => m.slot) },
-      { label: 'Semi Finals', slots: SF_MATCHUPS.map(m => m.slot) },
-      { label: 'Final', slots: ['FINAL'] },
-    ]
     return (
       <div style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '13px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap' as const, gap: 8 }}>
@@ -284,38 +277,33 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
           </div>
         </div>
 
-        {/* Bracket picks summary */}
+        {/* Knockout bracket — full visual */}
         <div style={{ marginBottom: '24px' }}>
           <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '10px' }}>knockout bracket</div>
-          {allRounds.map(round => {
-            const picks = round.slots.map(slot => ({ slot, team: bracketPicks[slot], score: bracketScores[slot] })).filter(p => p.team)
-            if (picks.length === 0) return null
-            return (
-              <div key={round.label} style={{ marginBottom: '12px' }}>
-                <div style={{ fontSize: '11px', fontWeight: 600, color: '#555', marginBottom: '6px' }}>{round.label}</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '6px' }}>
-                  {picks.map(({ slot, team, score }) => (
-                    <div key={slot} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'white', border: '1px solid #e0e0db', padding: '4px 8px', fontSize: '11px' }}>
-                      <span>{FLAGS[team!] || ''}</span>
-                      <span style={{ fontWeight: 600 }}>{team}</span>
-                      {score && <span style={{ color: '#aaa', fontSize: '10px' }}>· {score}</span>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-          {bracketPicks['FINAL'] && (
-            <div style={{ marginTop: '12px', padding: '12px', background: '#fff5f5', border: '1px solid #f0d0d0' }}>
-              <div style={{ fontSize: '11px', color: '#C8102E', fontWeight: 600, marginBottom: '4px' }}>🏆 champion</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '14px', fontWeight: 700 }}>
-                <span>{FLAGS[bracketPicks['FINAL']] || ''}</span>
-                <span>{bracketPicks['FINAL']}</span>
-                {bracketScores['FINAL'] && <span style={{ fontSize: '12px', color: '#888', fontWeight: 400 }}>· final score: {bracketScores['FINAL']}</span>}
-              </div>
-            </div>
-          )}
+          <div style={{ overflowX: 'auto', marginLeft: '-20px', marginRight: '-20px', paddingLeft: '20px', paddingRight: '20px' }}>
+            <BracketView
+              r32Bracket={r32Bracket}
+              bracketPicks={bracketPicks}
+              bracketScores={bracketScores}
+              scoringRules={scoringRules}
+              locked={true}
+              onPick={() => {}}
+              onScore={() => {}}
+            />
+          </div>
         </div>
+
+        {/* Champion */}
+        {bracketPicks['FINAL'] && (
+          <div style={{ padding: '12px', background: '#fff5f5', border: '1px solid #f0d0d0', marginBottom: '24px' }}>
+            <div style={{ fontSize: '11px', color: '#C8102E', fontWeight: 600, marginBottom: '4px' }}>🏆 your champion</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '14px', fontWeight: 700 }}>
+              <span>{FLAGS[bracketPicks['FINAL']] || ''}</span>
+              <span>{bracketPicks['FINAL']}</span>
+              {bracketScores['FINAL'] && <span style={{ fontSize: '12px', color: '#888', fontWeight: 400 }}>· final score: {bracketScores['FINAL']}</span>}
+            </div>
+          </div>
+        )}
       </div>
     )
   }
