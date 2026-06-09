@@ -191,7 +191,6 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
   function getNextSlotOpponents(slot: string, picks: BracketPicks): { home: string; away: string } {
     return getSlotOpponents(slot, r32Bracket, picks)
   }
-  }
 
   const groupsComplete = Object.keys(groupPicks).length === 12 &&
     Object.values(groupPicks).every(picks => picks.length === 4)
