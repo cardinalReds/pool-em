@@ -36,7 +36,7 @@ export default function CreatePoolPage() {
     wld_pts: 1,
     // exact format (fixed: 3+2+2+3=10 max, not configurable)
     // knockout (same for all formats)
-    r32_pts: 1, r16_pts: 2, qf_pts: 4, sf_pts: 6,
+    r32_pts: 1, r16_pts: 2, qf_pts: 4, sf_pts: 6, final_pts: 12,
   })
 
   // Step 4 — buy-in
@@ -118,6 +118,7 @@ export default function CreatePoolPage() {
         r16_pts: bracketScoring.r16_pts,
         qf_pts: bracketScoring.qf_pts,
         sf_pts: bracketScoring.sf_pts,
+        final_pts: bracketScoring.final_pts,
       }, { onConflict: 'pool_id' })
     }
 
@@ -296,6 +297,7 @@ export default function CreatePoolPage() {
                 <NumberInput label="Round of 16" value={bracketScoring.r16_pts} onChange={v => setBracketScoring(p => ({...p, r16_pts: v}))} />
                 <NumberInput label="Quarter Finals" value={bracketScoring.qf_pts} onChange={v => setBracketScoring(p => ({...p, qf_pts: v}))} />
                 <NumberInput label="Semi Finals" value={bracketScoring.sf_pts} onChange={v => setBracketScoring(p => ({...p, sf_pts: v}))} />
+                <NumberInput label="Final (per finalist)" value={bracketScoring.final_pts} onChange={v => setBracketScoring(p => ({...p, final_pts: v}))} />
               </div>
             </div>
 
@@ -303,7 +305,7 @@ export default function CreatePoolPage() {
             <div style={{padding: '10px 12px', background: '#f9f9f9', border: '1px solid #eee', fontSize: '11px', color: '#555', lineHeight: 1.8, marginBottom: '20px'}}>
               <div style={{fontWeight: 600, marginBottom: '4px'}}>final (always exact score)</div>
               predict both finalists + exact score (90 min)<br/>
-              2pts per correct team goal · +3pt bonus if exact · +10pts correct winner
+              {bracketScoring.final_pts}pts per correct finalist · 2pts per correct team goal · +3pt bonus if exact · +10pts correct winner
             </div>
 
             <div style={{display: 'flex', justifyContent: 'space-between'}}>

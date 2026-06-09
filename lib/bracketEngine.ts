@@ -250,13 +250,14 @@ export interface BracketScoringRules {
   r16_pts: number
   qf_pts: number
   sf_pts: number
+  final_pts: number
 }
 
 export const DEFAULT_BRACKET_SCORING: BracketScoringRules = {
   group_format: 'standings',
   standings_first: 3, standings_second: 2, standings_third: 1,
   wld_pts: 1,
-  r32_pts: 1, r16_pts: 2, qf_pts: 4, sf_pts: 6,
+  r32_pts: 1, r16_pts: 2, qf_pts: 4, sf_pts: 6, final_pts: 12,
 }
 
 // Score a group stage game (wld or exact formats)
@@ -321,13 +322,13 @@ export function scoreFinal(
   predictedHomeGoals: number, predictedAwayGoals: number,
   actualHome: string, actualAway: string,
   actualHomeGoals: number, actualAwayGoals: number,
-  sfPts: number
+  rules: BracketScoringRules
 ): number {
   let pts = 0
   const finalists = [actualHome, actualAway]
   // Correct finalist being in the final
-  if (finalists.includes(predictedHome)) pts += sfPts
-  if (finalists.includes(predictedAway)) pts += sfPts
+  if (finalists.includes(predictedHome)) pts += rules.final_pts
+  if (finalists.includes(predictedAway)) pts += rules.final_pts
   // Correct goals per team (must have correct team too)
   if (predictedHome === actualHome && predictedHomeGoals === actualHomeGoals) pts += 2
   if (predictedAway === actualAway && predictedAwayGoals === actualAwayGoals) pts += 2
