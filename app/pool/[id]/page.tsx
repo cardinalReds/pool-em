@@ -194,7 +194,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* Buy-in */}
-      {!isAdmin && pool.buy_in_amount && pool.venmo_handle && (
+      {!isAdmin && pool.buy_in_amount && pool.venmo_handle && !leaderboard.find(m => m.user_id === user?.id)?.is_paid && (
         <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '12px', marginBottom: '16px'}}>
           <p style={{fontSize: '12px', fontWeight: 600, marginBottom: '4px'}}>💰 ${pool.buy_in_amount} buy-in due</p>
           <p style={{fontSize: '11px', color: '#888', marginBottom: pool.payout_structure ? '6px' : '10px'}}>send to @{pool.venmo_handle} on venmo</p>
@@ -384,8 +384,8 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           )}
           {/* Main content */}
           <div style={{padding: '16px'}}>
-            {/* Buy-in banner — always visible on mobile so they can't miss it */}
-            {!isAdmin && pool.buy_in_amount && pool.venmo_handle && (
+            {/* Buy-in banner — only shows if not yet marked as paid by admin */}
+            {!isAdmin && pool.buy_in_amount && pool.venmo_handle && !leaderboard.find(m => m.user_id === user?.id)?.is_paid && (
               <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '12px', marginBottom: '16px'}}>
                 <p style={{fontSize: '13px', fontWeight: 600, marginBottom: '4px'}}>💰 ${pool.buy_in_amount} buy-in due</p>
                 <p style={{fontSize: '11px', color: '#666', marginBottom: '10px'}}>
