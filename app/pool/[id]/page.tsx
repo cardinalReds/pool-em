@@ -8,6 +8,7 @@ import ReminderButton from '@/components/ReminderButton'
 import InvitePanel from '@/components/InvitePanel'
 import { DEFAULT_BRACKET_SCORING } from '@/lib/bracketEngine'
 import BracketPicker from '@/components/BracketPicker'
+import BracketViewer from '@/components/BracketViewer'
 
 function getSessionFromCookie() {
   try {
@@ -399,7 +400,15 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               </div>
             )}
             {user && pool.deadline_type === 'before_tournament' ? (
-              <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-12T19:00:00Z')} />
+              <>
+                <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-12T19:00:00Z')} />
+                {new Date() >= new Date('2026-06-12T19:00:00Z') && (
+                  <div style={{ marginTop: 32 }}>
+                    <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 16, paddingTop: 16, borderTop: '1px solid #eee' }}>everyone's picks</div>
+                    <BracketViewer poolId={pool.id} />
+                  </div>
+                )}
+              </>
             ) : user && (
               <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />
             )}
@@ -414,7 +423,15 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           <div style={{padding: '40px 24px', overflowY: 'auto', display: 'flex', justifyContent: 'center'}}>
             <div style={{width: '100%', maxWidth: 560}}>
               {user && pool.deadline_type === 'before_tournament' ? (
-                <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-12T19:00:00Z')} />
+                <>
+                  <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-12T19:00:00Z')} />
+                  {new Date() >= new Date('2026-06-12T19:00:00Z') && (
+                    <div style={{ marginTop: 32 }}>
+                      <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 16, paddingTop: 16, borderTop: '1px solid #eee' }}>everyone's picks</div>
+                      <BracketViewer poolId={pool.id} />
+                    </div>
+                  )}
+                </>
               ) : user && (
                 <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />
               )}
