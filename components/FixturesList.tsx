@@ -603,14 +603,15 @@ export default function FixturesList({
   function FixtureCard({ fixture }: { fixture: Fixture }) {
     const locked = isLocked(fixture)
     const finished = fixture.status === 'FT'
+    const isLive = fixture.status === 'live'
     const perGameRules = poolRules.filter(r => r.prediction_type === 'per_game')
     const hasAnyPick = perGameRules.some(r => {
       const p = preds[`${fixture.id}:${r.category_id}`]
       return p?.value_wld || p?.value_ou || p?.value_text || p?.value_yesno !== null
     })
     const totalPts = totalPointsForFixture(fixture.id)
+    const [showMemberPicks, setShowMemberPicks] = useState(false)
 
-    // Fetch players for this fixture's teams when card mounts
     useEffect(() => {
       const hasPlayerRule = perGameRules.some(r => r.input_type === 'player')
     }, [fixture.id])
@@ -618,33 +619,47 @@ export default function FixturesList({
     return (
       <div style={{
         background: 'white',
-        border: '1px solid #e0e0db',
-        borderLeft: hasAnyPick ? '3px solid #C8102E' : '1px solid #e0e0db',
+        border: isLive ? '2px solid #2d7a2d' : '1px solid #e0e0db',
+        borderLeft: isLive ? '4px solid #2d7a2d' : hasAnyPick ? '3px solid #C8102E' : '1px solid #e0e0db',
         marginBottom: 4,
         width: '100%',
       }}>
-        {/* Meta row */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between',
-          padding: '4px 10px',
-          borderBottom: '1px solid #f0f0f0',
-          fontSize: '10px', color: '#aaa',
-        }}>
-          <span>{formatPT(fixture.date)}</span>
-          <span>{fixture.city}</span>
-          {totalPts !== null && (
-            <span style={{ color: totalPts > 0 ? '#C8102E' : '#aaa', fontWeight: 600 }}>
-              {totalPts > 0 ? `+${totalPts} pts` : '0 pts'}
+
+        {/* Live banner */}
+        {isLive && (
+          <div style={{ background: '#2d7a2d', padding: '4px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: 'white', fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'white', display: 'inline-block' }} />
+              LIVE
             </span>
-          )}
-          {locked && !finished && <span style={{ color: '#aaa' }}>locked</span>}
-        </div>
+            <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '10px' }}>{fixture.city}</span>
+          </div>
+        )}
+
+        {/* Meta row */}
+        {!isLive && (
+          <div style={{
+            display: 'flex', justifyContent: 'space-between',
+            padding: '4px 10px',
+            borderBottom: '1px solid #f0f0f0',
+            fontSize: '10px', color: '#aaa',
+          }}>
+            <span>{formatPT(fixture.date)}</span>
+            <span>{fixture.city}</span>
+            {totalPts !== null && (
+              <span style={{ color: totalPts > 0 ? '#C8102E' : '#aaa', fontWeight: 600 }}>
+                {totalPts > 0 ? `+${totalPts} pts` : '0 pts'}
+              </span>
+            )}
+            {locked && !finished && <span style={{ color: '#aaa' }}>locked</span>}
+          </div>
+        )}
 
         {/* Team header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderBottom: perGameRules.length > 0 ? '1px solid #f5f5f5' : 'none', gap: 4 }}>
           <span style={{ fontWeight: 700, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1 }}>{FLAGS[fixture.home_team]} {fixture.home_team}</span>
-          {finished
-            ? <span style={{ fontWeight: 700, fontSize: '14px', color: '#111', flexShrink: 0, padding: '0 8px' }}>{fixture.home_score} – {fixture.away_score}</span>
+          {(finished || isLive)
+            ? <span style={{ fontWeight: 700, fontSize: isLive ? '18px' : '14px', color: isLive ? '#2d7a2d' : '#111', flexShrink: 0, padding: '0 8px' }}>{fixture.home_score} – {fixture.away_score}</span>
             : <span style={{ fontSize: '11px', color: '#ccc', flexShrink: 0, padding: '0 8px' }}>vs</span>
           }
           <span style={{ fontWeight: 700, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1, textAlign: 'right' as const }}>{fixture.away_team} {FLAGS[fixture.away_team]}</span>
@@ -675,12 +690,21 @@ export default function FixturesList({
               </div>
             )}
 
-            {/* Member picks comparison — visible once locked */}
-            {(locked || finished) && Object.keys(members).length > 0 && (
+            {/* Member picks comparison — visible once locked or live */}
+            {(locked || finished || isLive) && Object.keys(members).length > 0 && (
               <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #f0f0f0' }}>
-                <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '8px' }}>
-                  everyone's picks
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb' }}>
+                    everyone's picks
+                  </div>
+                  {isLive && (
+                    <button onClick={() => setShowMemberPicks(p => !p)}
+                      style={{ fontSize: '10px', color: '#888', background: 'none', border: '1px solid #ddd', padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      {showMemberPicks ? 'hide' : 'show'}
+                    </button>
+                  )}
                 </div>
+                {(!isLive || showMemberPicks) && (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
                     <thead>
@@ -731,6 +755,7 @@ export default function FixturesList({
                     </tbody>
                   </table>
                 </div>
+                )}
               </div>
             )}
           </div>
@@ -762,6 +787,17 @@ export default function FixturesList({
           ))}
         </div>
       </div>
+
+      {/* Live fixtures — always shown at top */}
+      {fixtures.filter(f => f.status === 'live').length > 0 && (
+        <div>
+          <div style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#2d7a2d', padding: '4px 0', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2d7a2d', display: 'inline-block' }} />
+            live now
+          </div>
+          {fixtures.filter(f => f.status === 'live').map(f => <FixtureCard key={f.id} fixture={f} />)}
+        </div>
+      )}
 
       {/* Pager */}
       {viewMode === 'pages' && pages.length > 0 && (

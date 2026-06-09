@@ -9,6 +9,7 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [adminPools, setAdminPools] = useState<any[]>([])
   const [memberPools, setMemberPools] = useState<any[]>([])
+  const [livePoolIds, setLivePoolIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -23,9 +24,26 @@ export default function DashboardPage() {
 
       setAdminPools(admin || [])
       setMemberPools((member || []).filter(m => (m.pools as any)?.admin_id !== user.id))
+
+      // Check for live fixtures across all tournaments
+      const { data: liveFixtures } = await supabase
+        .from('fixtures')
+        .select('tournament_id')
+        .eq('status', 'live')
+
+      if (liveFixtures && liveFixtures.length > 0) {
+        const liveTournaments = new Set(liveFixtures.map(f => f.tournament_id))
+        const allPools = [...(admin || []), ...((member || []).map(m => m.pools as any))]
+        const liveIds = new Set(allPools.filter(p => p && liveTournaments.has(p.tournament_id)).map(p => p.id))
+        setLivePoolIds(liveIds)
+      }
+
       setLoading(false)
     }
     load()
+    // Refresh live status every 2 minutes
+    const interval = setInterval(load, 120000)
+    return () => clearInterval(interval)
   }, [])
 
   if (loading) return <div style={{padding: '2rem', color: 'var(--text-dim)', fontSize: '0.875rem'}}>loading...</div>
@@ -49,7 +67,7 @@ export default function DashboardPage() {
             <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
           </div>
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))', gap: '0.75rem'}}>
-            {adminPools.map(pool => <PoolCard key={pool.id} pool={pool} role="admin" />)}
+            {adminPools.map(pool => <PoolCard key={pool.id} pool={pool} role="admin" isLive={livePoolIds.has(pool.id)} />)}
           </div>
         </section>
       )}
@@ -61,7 +79,7 @@ export default function DashboardPage() {
             <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
           </div>
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))', gap: '0.75rem'}}>
-            {memberPools.map(m => <PoolCard key={m.id} pool={(m.pools as any)} role="member" />)}
+            {memberPools.map(m => <PoolCard key={m.id} pool={(m.pools as any)} role="member" isLive={livePoolIds.has((m.pools as any)?.id)} />)}
           </div>
         </section>
       )}
@@ -78,16 +96,24 @@ export default function DashboardPage() {
   )
 }
 
-function PoolCard({ pool, role }: { pool: any, role: 'admin' | 'member' }) {
+function PoolCard({ pool, role, isLive }: { pool: any, role: 'admin' | 'member', isLive?: boolean }) {
   const pkg = RULE_PACKAGES[pool.package_id as keyof typeof RULE_PACKAGES]
   return (
     <Link href={`/pool/${pool.id}`}>
-      <div className="card" style={{cursor: 'pointer', transition: 'border-color 0.1s', minHeight: 80}}
+      <div className="card" style={{cursor: 'pointer', transition: 'border-color 0.1s', minHeight: 80, position: 'relative'}}
         onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--text-dim)')}
-        onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
+        onMouseLeave={e => (e.currentTarget.style.borderColor = isLive ? '#2d7a2d' : 'var(--border)')}>
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem'}}>
           <span style={{fontSize: '0.7rem', color: role === 'admin' ? 'var(--red)' : 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase'}}>{role}</span>
-          <span style={{fontSize: '0.7rem', color: 'var(--text-faint)'}}>{pool.tournament_scope?.replace('_', ' ')}</span>
+          <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+            {isLive && (
+              <span style={{display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.65rem', fontWeight: 700, color: '#2d7a2d', background: '#f0fff0', border: '1px solid #b7edb7', padding: '1px 6px'}}>
+                <span style={{width: 6, height: 6, borderRadius: '50%', background: '#2d7a2d', display: 'inline-block', animation: 'pulse 1.5s infinite'}} />
+                live
+              </span>
+            )}
+            <span style={{fontSize: '0.7rem', color: 'var(--text-faint)'}}>{pool.tournament_scope?.replace('_', ' ')}</span>
+          </div>
         </div>
         <div style={{fontWeight: 600, fontSize: '1rem', marginBottom: '0.25rem'}}>{pool.name}</div>
         <div style={{fontSize: '0.75rem', color: 'var(--text-dim)'}}>{pkg?.name || pool.package_id}</div>
