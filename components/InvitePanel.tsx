@@ -96,7 +96,7 @@ export default function InvitePanel({ poolId, poolName, inviteUrl, buyInAmount, 
   })
 
   return (
-
+    <div>
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid #eee', marginBottom: '12px' }}>
         <button style={tabStyle('link')} onClick={() => setTab('link')}>link</button>
