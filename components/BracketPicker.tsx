@@ -42,14 +42,25 @@ interface Props {
 }
 
 export default function BracketPicker({ poolId, userId, scoringRules, locked = false }: Props) {
-  const [step, setStep] = useState<Step>('groups')
+  const [step, setStepState] = useState<Step>('groups')
+  const [showSummary, setShowSummary] = useState(false)
+
+  function setStep(s: Step) {
+    setStepState(s)
+    sessionStorage.setItem(`bracket_step_${poolId}`, s)
+  }
+
+  // Restore step from sessionStorage on mount
+  useEffect(() => {
+    const saved = sessionStorage.getItem(`bracket_step_${poolId}`) as Step | null
+    if (saved) setStepState(saved)
+  }, [poolId])
   const [groupPicks, setGroupPicks] = useState<GroupPicks>({})
   const [bestThirdGroups, setBestThirdGroups] = useState<string[]>([])
   const [bracketPicks, setBracketPicks] = useState<BracketPicks>({})
-  const [bracketScores, setBracketScores] = useState<Record<string, string>>({}) // slot → "2-1"
+  const [bracketScores, setBracketScores] = useState<Record<string, string>>({})
   const [r32Bracket, setR32Bracket] = useState<Record<string, { home: string; away: string }>>({})
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
 
   // Load existing picks
@@ -64,7 +75,6 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
         .maybeSingle()
 
       if (data) {
-        // Merge saved picks with defaults so all 12 groups are always populated
         const defaults: GroupPicks = {}
         Object.entries(WC_2026_GROUPS).forEach(([g, teams]) => {
           defaults[g] = [...teams] as [string, string, string, string]
@@ -73,6 +83,10 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
         setBestThirdGroups(data.best_third_groups || [])
         setBracketPicks(data.bracket_picks || {})
         setBracketScores(data.bracket_scores || {})
+        // If bracket has picks, go straight to summary view
+        if (Object.keys(data.bracket_picks || {}).length > 0) {
+          setShowSummary(true)
+        }
       } else {
         // No saved picks — initialize with defaults
         const defaults: GroupPicks = {}
@@ -94,8 +108,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
     }
   }, [groupPicks, bestThirdGroups])
 
-  async function handleSave() {
-    setSaving(true)
+  async function persistPicks() {
     const supabase = createClient()
     await supabase.from('bracket_picks').upsert({
       pool_id: poolId,
@@ -107,9 +120,19 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       bracket_scores: bracketScores,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'pool_id,user_id' })
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    await persistPicks()
     setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+    setShowSummary(true)
+  }
+
+  async function handleSaveAndExit() {
+    setSaving(true)
+    await persistPicks()
+    window.location.href = '/dashboard'
   }
 
   function setGroupRanking(group: string, ranked: string[]) {
@@ -133,6 +156,88 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
   const thirdsComplete = bestThirdGroups.length === 8
 
   if (loading) return <div style={{ color: '#aaa', fontSize: '12px' }}>loading...</div>
+
+  // ── Summary view ───────────────────────────────────────────────────────
+  if (showSummary) {
+    const allRounds = [
+      { label: 'Round of 32', slots: R32_MATCHUPS.map(m => m.slot) },
+      { label: 'Round of 16', slots: R16_MATCHUPS.map(m => m.slot) },
+      { label: 'Quarter Finals', slots: QF_MATCHUPS.map(m => m.slot) },
+      { label: 'Semi Finals', slots: SF_MATCHUPS.map(m => m.slot) },
+      { label: 'Final', slots: ['FINAL'] },
+    ]
+    return (
+      <div style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '13px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap' as const, gap: 8 }}>
+          <div>
+            <h2 style={{ fontWeight: 700, fontSize: '15px', marginBottom: '2px' }}>your bracket</h2>
+            <p style={{ fontSize: '11px', color: '#888' }}>picks are saved · locked at kickoff Jun 12</p>
+          </div>
+          {!locked && (
+            <button onClick={() => setShowSummary(false)}
+              style={{ padding: '8px 16px', background: '#111', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600, minHeight: 44 }}>
+              edit picks
+            </button>
+          )}
+        </div>
+
+        {/* Group picks summary */}
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '10px' }}>group stage</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 160px), 1fr))', gap: '8px' }}>
+            {Object.entries(groupPicks).map(([group, teams]) => (
+              <div key={group} style={{ background: 'white', border: '1px solid #e0e0db', padding: '8px 10px' }}>
+                <div style={{ fontSize: '10px', fontWeight: 700, color: '#bbb', textTransform: 'uppercase' as const, marginBottom: '6px' }}>Group {group}</div>
+                {teams.slice(0, 3).map((team, i) => (
+                  <div key={team} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 0', fontSize: '11px' }}>
+                    <span style={{ fontSize: '9px', color: i === 0 ? '#C8102E' : '#aaa', minWidth: 14, fontWeight: 600 }}>{i + 1}</span>
+                    <span>{FLAGS[team] || ''}</span>
+                    <span style={{ fontWeight: i < 2 ? 600 : 400, color: i < 2 ? '#111' : '#888' }}>{team}</span>
+                    {i === 2 && bestThirdGroups.includes(group) && (
+                      <span style={{ fontSize: '9px', color: '#2d7a2d', marginLeft: 2 }}>✓ adv</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Bracket picks summary */}
+        <div style={{ marginBottom: '24px' }}>
+          <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '10px' }}>knockout bracket</div>
+          {allRounds.map(round => {
+            const picks = round.slots.map(slot => ({ slot, team: bracketPicks[slot], score: bracketScores[slot] })).filter(p => p.team)
+            if (picks.length === 0) return null
+            return (
+              <div key={round.label} style={{ marginBottom: '12px' }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: '#555', marginBottom: '6px' }}>{round.label}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '6px' }}>
+                  {picks.map(({ slot, team, score }) => (
+                    <div key={slot} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'white', border: '1px solid #e0e0db', padding: '4px 8px', fontSize: '11px' }}>
+                      <span>{FLAGS[team!] || ''}</span>
+                      <span style={{ fontWeight: 600 }}>{team}</span>
+                      {score && <span style={{ color: '#aaa', fontSize: '10px' }}>· {score}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+          {bracketPicks['FINAL'] && (
+            <div style={{ marginTop: '12px', padding: '12px', background: '#fff5f5', border: '1px solid #f0d0d0' }}>
+              <div style={{ fontSize: '11px', color: '#C8102E', fontWeight: 600, marginBottom: '4px' }}>🏆 champion</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '14px', fontWeight: 700 }}>
+                <span>{FLAGS[bracketPicks['FINAL']] || ''}</span>
+                <span>{bracketPicks['FINAL']}</span>
+                {bracketScores['FINAL'] && <span style={{ fontSize: '12px', color: '#888', fontWeight: 400 }}>· final score: {bracketScores['FINAL']}</span>}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '13px' }}>
@@ -173,10 +278,16 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
               />
             ))}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: 8 }}>
+            {!locked && (
+              <button onClick={handleSaveAndExit} disabled={saving}
+                style={{ padding: '8px 16px', background: 'white', color: '#555', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', minHeight: 44 }}>
+                {saving ? 'saving...' : 'save & exit'}
+              </button>
+            )}
             <button
               onClick={() => setStep('thirds')}
-              style={{ padding: '7px 20px', background: '#111', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600 }}>
+              style={{ padding: '8px 20px', background: '#111', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600, minHeight: 44, marginLeft: 'auto' }}>
               next: pick best 3rd place teams →
             </button>
           </div>
@@ -218,15 +329,23 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
               )
             })}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <button onClick={() => setStep('groups')}
-              style={{ padding: '7px 16px', background: 'white', color: '#555', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px' }}>
-              ← back
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setStep('groups')}
+                style={{ padding: '8px 16px', background: 'white', color: '#555', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', minHeight: 44 }}>
+                ← back
+              </button>
+              {!locked && (
+                <button onClick={handleSaveAndExit} disabled={saving}
+                  style={{ padding: '8px 16px', background: 'white', color: '#555', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', minHeight: 44 }}>
+                  {saving ? 'saving...' : 'save & exit'}
+                </button>
+              )}
+            </div>
             <button
               onClick={() => setStep('bracket')}
               disabled={!thirdsComplete}
-              style={{ padding: '7px 20px', background: thirdsComplete ? '#111' : '#ddd', color: 'white', border: 'none', cursor: thirdsComplete ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600 }}>
+              style={{ padding: '8px 20px', background: thirdsComplete ? '#111' : '#ddd', color: 'white', border: 'none', cursor: thirdsComplete ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600, minHeight: 44 }}>
               next: fill in bracket →
             </button>
           </div>
@@ -247,20 +366,25 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
               onScore={(slot, score) => setBracketScores(prev => ({ ...prev, [slot]: score }))}
             />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #eee' }}>
-            <button onClick={() => setStep('thirds')}
-              style={{ padding: '7px 16px', background: 'white', color: '#555', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px' }}>
-              ← back
-            </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              {saved && <span style={{ fontSize: '11px', color: '#2d7a2d' }}>✓ bracket saved</span>}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #eee', flexWrap: 'wrap' as const, gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setStep('thirds')}
+                style={{ padding: '8px 16px', background: 'white', color: '#555', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', minHeight: 44 }}>
+                ← back
+              </button>
               {!locked && (
-                <button onClick={handleSave} disabled={saving}
-                  style={{ padding: '7px 20px', background: '#C8102E', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600 }}>
-                  {saving ? 'saving...' : 'save bracket →'}
+                <button onClick={handleSaveAndExit} disabled={saving}
+                  style={{ padding: '8px 16px', background: 'white', color: '#555', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', minHeight: 44 }}>
+                  {saving ? 'saving...' : 'save & exit'}
                 </button>
               )}
             </div>
+            {!locked && (
+              <button onClick={handleSave} disabled={saving}
+                style={{ padding: '8px 24px', background: '#C8102E', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '13px', fontWeight: 600, minHeight: 44 }}>
+                {saving ? 'saving...' : 'save bracket →'}
+              </button>
+            )}
           </div>
         </div>
       )}
