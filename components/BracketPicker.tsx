@@ -87,17 +87,34 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
         setBestThirdGroups(data.best_third_groups || [])
         setBracketPicks(data.bracket_picks || {})
         setBracketScores(data.bracket_scores || {})
-        // If bracket has picks, go straight to summary view
         if (Object.keys(data.bracket_picks || {}).length > 0) {
           setShowSummary(true)
         }
       } else {
-        // No saved picks — initialize with defaults
+        // Try sessionStorage backup first
+        const savedGroups = sessionStorage.getItem(`bracket_groups_${poolId}`)
+        const savedThirds = sessionStorage.getItem(`bracket_thirds_${poolId}`)
+        const savedPicks = sessionStorage.getItem(`bracket_picks_${poolId}`)
+        const savedScores = sessionStorage.getItem(`bracket_scores_${poolId}`)
+
         const defaults: GroupPicks = {}
         Object.entries(WC_2026_GROUPS).forEach(([g, teams]) => {
           defaults[g] = [...teams] as [string, string, string, string]
         })
-        setGroupPicks(defaults)
+
+        if (savedGroups) {
+          try { setGroupPicks({ ...defaults, ...JSON.parse(savedGroups) }) } catch { setGroupPicks(defaults) }
+        } else {
+          setGroupPicks(defaults)
+        }
+        if (savedThirds) { try { setBestThirdGroups(JSON.parse(savedThirds)) } catch {} }
+        if (savedPicks) { try { setBracketPicks(JSON.parse(savedPicks)) } catch {} }
+        if (savedScores) { try { setBracketScores(JSON.parse(savedScores)) } catch {} }
+
+        // If we had session picks, try to save them to DB
+        if (savedPicks && Object.keys(JSON.parse(savedPicks)).length > 0) {
+          setShowSummary(true)
+        }
       }
       setLoading(false)
     }
@@ -167,7 +184,22 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
     })
   }
 
-  // Auto-save whenever picks change (debounced 1.5s)
+  // Save picks to sessionStorage on every change as backup
+  useEffect(() => {
+    if (loading) return
+    sessionStorage.setItem(`bracket_groups_${poolId}`, JSON.stringify(groupPicks))
+  }, [groupPicks, loading])
+
+  useEffect(() => {
+    if (loading) return
+    sessionStorage.setItem(`bracket_thirds_${poolId}`, JSON.stringify(bestThirdGroups))
+  }, [bestThirdGroups, loading])
+
+  useEffect(() => {
+    if (loading) return
+    sessionStorage.setItem(`bracket_picks_${poolId}`, JSON.stringify(bracketPicks))
+    sessionStorage.setItem(`bracket_scores_${poolId}`, JSON.stringify(bracketScores))
+  }, [bracketPicks, bracketScores, loading])
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     if (loading) return
