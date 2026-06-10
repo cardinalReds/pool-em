@@ -129,7 +129,6 @@ export default function EditPoolPage() {
     }
 
     // Log changes if any
-    console.log('changes:', JSON.stringify(changes), 'pool.name:', pool.name, 'name:', name)
     if (Object.keys(changes).length > 0) {
       await supabase.from('pool_changes').insert({
         pool_id: poolId,
