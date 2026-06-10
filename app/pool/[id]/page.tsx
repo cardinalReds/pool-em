@@ -203,18 +203,24 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* Buy-in */}
-      {!isAdmin && pool.buy_in_amount && pool.venmo_handle && !leaderboard.find(m => m.user_id === user?.id)?.is_paid && (
+      {!isAdmin && pool.buy_in_amount && (pool.venmo_handle || pool.zelle_handle) && !leaderboard.find(m => m.user_id === user?.id)?.is_paid && (
         <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '12px', marginBottom: '16px'}}>
           <p style={{fontSize: '12px', fontWeight: 600, marginBottom: '4px'}}>💰 ${pool.buy_in_amount} buy-in due</p>
-          <p style={{fontSize: '11px', color: '#888', marginBottom: pool.payout_structure ? '6px' : '10px'}}>send to @{pool.venmo_handle} on venmo</p>
-          {pool.payout_structure && (
-            <p style={{fontSize: '11px', color: '#666', marginBottom: '10px'}}>🏆 payout: {pool.payout_structure}</p>
-          )}
-          <a href={`https://venmo.com/${pool.venmo_handle}?txn=pay&amount=${pool.buy_in_amount}&note=${encodeURIComponent(pool.name + ' buy-in')}`} target="_blank" rel="noopener noreferrer">
-            <button style={{width: '100%', padding: '10px', fontSize: '13px', fontWeight: 600, background: '#3D95CE', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
-              pay via venmo →
-            </button>
-          </a>
+          {pool.payout_structure && <p style={{fontSize: '11px', color: '#666', marginBottom: '8px'}}>🏆 {pool.payout_structure}</p>}
+          <div style={{display: 'flex', flexDirection: 'column', gap: 6}}>
+            {pool.venmo_handle && (
+              <a href={`https://venmo.com/${pool.venmo_handle}?txn=pay&amount=${pool.buy_in_amount}&note=${encodeURIComponent(pool.name + ' buy-in')}`} target="_blank" rel="noopener noreferrer">
+                <button style={{width: '100%', padding: '10px', fontSize: '13px', fontWeight: 600, background: '#008CFF', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
+                  pay @{pool.venmo_handle} via venmo →
+                </button>
+              </a>
+            )}
+            {pool.zelle_handle && (
+              <div style={{padding: '10px', background: '#6D1ED4', color: 'white', fontSize: '12px', fontWeight: 600, textAlign: 'center' as const}}>
+                zelle: {pool.zelle_handle}
+              </div>
+            )}
+          </div>
         </div>
       )}
       {isAdmin && pool.buy_in_amount && pool.payout_structure && (
@@ -394,17 +400,24 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           {/* Main content */}
           <div style={{padding: '16px'}}>
             {/* Buy-in banner — only shows if not yet marked as paid by admin */}
-            {!isAdmin && pool.buy_in_amount && pool.venmo_handle && !leaderboard.find(m => m.user_id === user?.id)?.is_paid && (
+            {!isAdmin && pool.buy_in_amount && (pool.venmo_handle || pool.zelle_handle) && !leaderboard.find(m => m.user_id === user?.id)?.is_paid && (
               <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '12px', marginBottom: '16px'}}>
                 <p style={{fontSize: '13px', fontWeight: 600, marginBottom: '4px'}}>💰 ${pool.buy_in_amount} buy-in due</p>
-                <p style={{fontSize: '11px', color: '#666', marginBottom: '10px'}}>
-                  send to @{pool.venmo_handle} on venmo{pool.payout_structure ? ` · ${pool.payout_structure}` : ''}
-                </p>
-                <a href={`https://venmo.com/${pool.venmo_handle}?txn=pay&amount=${pool.buy_in_amount}&note=${encodeURIComponent(pool.name + ' buy-in')}`} target="_blank" rel="noopener noreferrer">
-                  <button style={{width: '100%', padding: '10px', fontSize: '13px', fontWeight: 600, background: '#3D95CE', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
-                    pay ${pool.buy_in_amount} via venmo →
-                  </button>
-                </a>
+                {pool.payout_structure && <p style={{fontSize: '11px', color: '#666', marginBottom: '8px'}}>🏆 {pool.payout_structure}</p>}
+                <div style={{display: 'flex', flexDirection: 'column', gap: 6}}>
+                  {pool.venmo_handle && (
+                    <a href={`https://venmo.com/${pool.venmo_handle}?txn=pay&amount=${pool.buy_in_amount}&note=${encodeURIComponent(pool.name + ' buy-in')}`} target="_blank" rel="noopener noreferrer">
+                      <button style={{width: '100%', padding: '10px', fontSize: '13px', fontWeight: 600, background: '#008CFF', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
+                        pay @{pool.venmo_handle} via venmo →
+                      </button>
+                    </a>
+                  )}
+                  {pool.zelle_handle && (
+                    <div style={{padding: '10px', background: '#6D1ED4', color: 'white', fontSize: '12px', fontWeight: 600, textAlign: 'center' as const}}>
+                      zelle: {pool.zelle_handle}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             {user && pool.deadline_type === 'before_tournament' ? (

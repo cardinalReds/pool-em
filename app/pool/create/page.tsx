@@ -42,6 +42,7 @@ export default function CreatePoolPage() {
   // Step 4 — buy-in
   const [buyIn, setBuyIn] = useState('')
   const [venmoHandle, setVenmoHandle] = useState('')
+  const [zelleHandle, setZelleHandle] = useState('')
   const [payoutTemplate, setPayoutTemplate] = useState<string>('winner')
   const [customPayout, setCustomPayout] = useState('')
 
@@ -85,6 +86,7 @@ export default function CreatePoolPage() {
       is_active: true,
       buy_in_amount: buyIn ? parseFloat(buyIn) : null,
       venmo_handle: venmoHandle.replace('@', '').trim() || null,
+      zelle_handle: zelleHandle.trim() || null,
       payout_structure: buyIn && parseFloat(buyIn) > 0
         ? (payoutTemplate === 'custom' ? customPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description || null)
         : null,
@@ -335,7 +337,7 @@ export default function CreatePoolPage() {
               buy-in amount <span style={{fontWeight: 400, color: '#aaa'}}>(optional)</span>
             </label>
             <p style={{fontSize: '11px', color: '#888', marginBottom: '12px'}}>
-              players will be prompted to pay via venmo when they join. you handle the money — pool'em never touches it.
+              players will be prompted to pay via venmo or zelle when they join. you handle the money — pool'em never touches it.
             </p>
             <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px'}}>
               <span style={{fontSize: '16px', color: '#555'}}>$</span>
@@ -348,13 +350,20 @@ export default function CreatePoolPage() {
             {buyIn && parseFloat(buyIn) > 0 && (
               <>
                 <div style={{marginBottom: '16px'}}>
-                  <label style={{display: 'block', fontWeight: 600, marginBottom: '6px'}}>your venmo handle</label>
+                  <label style={{display: 'block', fontWeight: 600, marginBottom: '6px'}}>your venmo handle <span style={{fontWeight: 400, color: '#aaa'}}>(optional)</span></label>
                   <div style={{display: 'flex', alignItems: 'center', gap: '4px'}}>
                     <span style={{color: '#555', fontSize: '14px'}}>@</span>
                     <input type="text" placeholder="yourhandle" value={venmoHandle}
                       onChange={e => setVenmoHandle(e.target.value.replace('@', ''))}
                       style={{border: '1px solid #ddd', padding: '8px 10px', fontSize: '16px', flex: 1, fontFamily: 'inherit', minHeight: 44}} />
                   </div>
+                </div>
+
+                <div style={{marginBottom: '16px'}}>
+                  <label style={{display: 'block', fontWeight: 600, marginBottom: '6px'}}>your zelle phone or email <span style={{fontWeight: 400, color: '#aaa'}}>(optional)</span></label>
+                  <input type="text" placeholder="phone or email" value={zelleHandle}
+                    onChange={e => setZelleHandle(e.target.value)}
+                    style={{border: '1px solid #ddd', padding: '8px 10px', fontSize: '16px', width: '100%', fontFamily: 'inherit', minHeight: 44, boxSizing: 'border-box' as const}} />
                 </div>
 
                 <div style={{marginBottom: '16px'}}>
