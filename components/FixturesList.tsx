@@ -163,6 +163,7 @@ export default function FixturesList({
   const [roundSpecialPicks, setRoundSpecialPicks] = useState<Record<string, Record<string, string>>>({})
   const [roundSpecialSaving, setRoundSpecialSaving] = useState<string | null>(null)
   const [roundSpecialSaved, setRoundSpecialSaved] = useState<Record<string, boolean>>({})
+  const [sortMode, setSortMode] = useState<'date' | 'group'>('date')
   const [viewMode, setViewMode] = useState<'pages' | 'list'>('pages')
   const [currentPage, setCurrentPage] = useState(0)
 
