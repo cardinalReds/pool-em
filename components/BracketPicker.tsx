@@ -84,14 +84,16 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
           defaults[g] = [...teams] as [string, string, string, string]
         })
         const loadedGroupPicks = { ...defaults, ...(data.group_picks || {}) }
-        const loadedThirds = data.best_third_groups || []
+        const loadedThirds = (data.best_third_groups && data.best_third_groups.length > 0) 
+          ? data.best_third_groups 
+          : Object.keys(WC_2026_GROUPS)
         setGroupPicks(loadedGroupPicks)
         setBestThirdGroups(loadedThirds)
         setBracketPicks(data.bracket_picks || {})
         setBracketScores(data.bracket_scores || {})
         // Regenerate r32Bracket immediately so summary view is correct
         if (Object.keys(loadedGroupPicks).length === 12) {
-          setR32Bracket(generateR32FromGroupPicks(loadedGroupPicks, loadedThirds))
+          setR32Bracket(generateR32FromGroupPicks(loadedGroupPicks, loadedThirds.slice(0, 8)))
         }
         if (Object.keys(data.bracket_picks || {}).length > 0) {
           setShowSummary(true)
@@ -108,7 +110,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
         })
 
         const loadedGroupPicks = savedGroups ? (() => { try { return { ...defaults, ...JSON.parse(savedGroups) } } catch { return defaults } })() : defaults
-        const loadedThirds = savedThirds ? (() => { try { return JSON.parse(savedThirds) } catch { return [] } })() : []
+        const loadedThirds = savedThirds ? (() => { try { return JSON.parse(savedThirds) } catch { return [] } })() : Object.keys(WC_2026_GROUPS)
 
         setGroupPicks(loadedGroupPicks)
         setBestThirdGroups(loadedThirds)
@@ -117,7 +119,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
 
         // Regenerate r32Bracket from session data too
         if (Object.keys(loadedGroupPicks).length === 12) {
-          setR32Bracket(generateR32FromGroupPicks(loadedGroupPicks, loadedThirds))
+          setR32Bracket(generateR32FromGroupPicks(loadedGroupPicks, loadedThirds.slice(0, 8)))
         }
 
         if (savedPicks && Object.keys(JSON.parse(savedPicks)).length > 0) {
@@ -132,7 +134,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
   // Regenerate R32 bracket whenever group picks or third place picks change
   useEffect(() => {
     if (Object.keys(groupPicks).length === 12) {
-      const r32 = generateR32FromGroupPicks(groupPicks, bestThirdGroups)
+      const r32 = generateR32FromGroupPicks(groupPicks, bestThirdGroups.slice(0, 8))
       setR32Bracket(r32)
     }
   }, [groupPicks, bestThirdGroups])
@@ -171,14 +173,6 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
 
   function setGroupRanking(group: string, ranked: string[]) {
     setGroupPicks(prev => ({ ...prev, [group]: ranked as [string, string, string, string] }))
-  }
-
-  function toggleThirdGroup(group: string) {
-    setBestThirdGroups(prev => {
-      if (prev.includes(group)) return prev.filter(g => g !== group)
-      if (prev.length >= 8) return prev
-      return [...prev, group]
-    })
   }
 
   function pickBracket(slot: string, team: string) {
@@ -247,7 +241,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
 
   const groupsComplete = Object.keys(groupPicks).length === 12 &&
     Object.values(groupPicks).every(picks => picks.length === 4)
-  const thirdsComplete = bestThirdGroups.length === 8
+  const thirdsComplete = bestThirdGroups.length >= 8
 
   if (loading) return <div style={{ color: '#aaa', fontSize: '12px' }}>loading...</div>
 
@@ -388,38 +382,21 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       {step === 'thirds' && (
         <div>
           <div style={{ background: '#f9f9f9', border: '1px solid #eee', padding: '12px 14px', marginBottom: '16px', borderLeft: '3px solid #C8102E' }}>
-            <div style={{ fontWeight: 600, fontSize: '12px', marginBottom: '3px' }}>pick the 8 best 3rd-place teams</div>
+            <div style={{ fontWeight: 600, fontSize: '12px', marginBottom: '3px' }}>rank the 3rd-place teams — top 8 advance</div>
             <div style={{ fontSize: '11px', color: '#888', lineHeight: 1.6 }}>
-              In the World Cup, the 8 best 3rd-place finishers also advance to the knockout stage. Select which 8 groups you think will produce a qualifying 3rd-place team. The order you select them is used to rank them.
+              The 8 best 3rd-place finishers across all 12 groups advance to the Round of 32. Drag to rank them — the top 8 in your list are used to build your bracket.
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '20px' }}>
-            {Object.entries(WC_2026_GROUPS).map(([group, teams]) => {
-              const thirdTeam = groupPicks[group]?.[2] || teams[2]
-              const selected = bestThirdGroups.includes(group)
-              const rank = bestThirdGroups.indexOf(group) + 1
-              return (
-                <button key={group}
-                  onClick={() => !locked && toggleThirdGroup(group)}
-                  disabled={locked || (!selected && bestThirdGroups.length >= 8)}
-                  style={{
-                    padding: '10px', border: '1px solid', textAlign: 'left', cursor: locked ? 'default' : 'pointer',
-                    borderColor: selected ? '#C8102E' : '#ddd',
-                    background: selected ? '#fff5f5' : 'white',
-                    opacity: !selected && bestThirdGroups.length >= 8 ? 0.4 : 1,
-                  }}>
-                  <div style={{ fontSize: '10px', fontWeight: 700, color: selected ? '#C8102E' : '#888', marginBottom: '3px' }}>
-                    Group {group} {selected ? `· #${rank}` : ''}
-                  </div>
-                  <div style={{ fontSize: '12px', fontWeight: 600, color: '#111' }}>
-                    {FLAGS[thirdTeam]} {thirdTeam}
-                  </div>
-                  <div style={{ fontSize: '10px', color: '#aaa', marginTop: '2px' }}>3rd place</div>
-                </button>
-              )
-            })}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: 8 }}>
+
+          <ThirdsPicker
+            groups={Object.keys(WC_2026_GROUPS)}
+            groupPicks={groupPicks}
+            ranked={bestThirdGroups}
+            locked={locked}
+            onChange={setBestThirdGroups}
+          />
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' as const, gap: 8, marginTop: 20 }}>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setStep('groups')}
                 style={{ padding: '8px 16px', background: 'white', color: '#555', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', minHeight: 44 }}>
@@ -434,8 +411,8 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
             </div>
             <button
               onClick={() => setStep('bracket')}
-              disabled={!thirdsComplete}
-              style={{ padding: '8px 20px', background: thirdsComplete ? '#111' : '#ddd', color: 'white', border: 'none', cursor: thirdsComplete ? 'pointer' : 'default', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600, minHeight: 44 }}>
+              disabled={bestThirdGroups.length < 12}
+              style={{ padding: '8px 20px', background: '#111', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: '12px', fontWeight: 600, minHeight: 44 }}>
               next: fill in bracket →
             </button>
           </div>
@@ -489,6 +466,79 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
 }
 
 // ── Group Picker: drag-rank 4 teams ───────────────────────────────────────
+function ThirdsPicker({ groups, groupPicks, ranked, locked, onChange }: {
+  groups: string[]
+  groupPicks: Record<string, string[]>
+  ranked: string[]
+  locked: boolean
+  onChange: (ranked: string[]) => void
+}) {
+  // Build full ordered list — ranked first, then unranked at bottom
+  const all = [...ranked, ...groups.filter(g => !ranked.includes(g))]
+  const [dragging, setDragging] = useState<number | null>(null)
+
+  function handleDragStart(i: number) { setDragging(i) }
+  function handleDragOver(e: React.DragEvent, i: number) {
+    e.preventDefault()
+    if (dragging === null || dragging === i) return
+    const next = [...all]
+    const item = next.splice(dragging, 1)[0]
+    next.splice(i, 0, item)
+    setDragging(i)
+    onChange(next.slice(0, 12)) // keep all 12 but pass full order; top 8 advance
+  }
+  function handleDrop() { setDragging(null) }
+
+  return (
+    <div>
+      {/* Header row */}
+      <div style={{ display: 'flex', padding: '4px 10px', fontSize: '9px', fontWeight: 700, color: '#bbb', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 2 }}>
+        <span style={{ minWidth: 32 }}>rank</span>
+        <span style={{ flex: 1 }}>team</span>
+        <span>group</span>
+      </div>
+
+      {all.map((group, i) => {
+        const thirdTeam = groupPicks[group]?.[2] || group
+        const advances = i < 8
+        return (
+          <div key={group}
+            draggable={!locked}
+            onDragStart={() => handleDragStart(i)}
+            onDragOver={e => handleDragOver(e, i)}
+            onDrop={handleDrop}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 10px', marginBottom: 2,
+              background: dragging === i ? '#f5f5f5' : advances ? 'white' : '#fafafa',
+              border: `1px solid ${i === 7 ? '#C8102E' : '#f0f0f0'}`,
+              borderLeft: advances ? '3px solid #C8102E' : '3px solid #eee',
+              cursor: locked ? 'default' : 'grab',
+              userSelect: 'none' as const,
+              opacity: advances ? 1 : 0.5,
+            }}>
+            <span style={{ minWidth: 32, fontSize: '11px', fontWeight: 700, color: advances ? '#C8102E' : '#ccc' }}>
+              #{i + 1}
+            </span>
+            <span style={{ fontSize: 14 }}>{FLAGS[thirdTeam] || ''}</span>
+            <span style={{ flex: 1, fontSize: '12px', fontWeight: advances ? 600 : 400, color: advances ? '#111' : '#bbb' }}>
+              {thirdTeam}
+            </span>
+            <span style={{ fontSize: '10px', color: '#aaa' }}>Group {group}</span>
+            {advances && <span style={{ fontSize: '9px', color: '#2d7a2d', fontWeight: 600 }}>advances</span>}
+            {i === 8 && <span style={{ fontSize: '9px', color: '#aaa' }}>eliminated</span>}
+            {!locked && <span style={{ color: '#ccc', fontSize: '10px', marginLeft: 4 }}>⠿</span>}
+          </div>
+        )
+      })}
+
+      <div style={{ fontSize: '10px', color: '#aaa', marginTop: 8, textAlign: 'center' as const }}>
+        drag to reorder · top 8 advance to the Round of 32
+      </div>
+    </div>
+  )
+}
+
 function GroupPicker({ group, teams, picks, locked, onChange }: {
   group: string
   teams: string[]
