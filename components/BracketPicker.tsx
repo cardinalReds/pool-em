@@ -83,15 +83,20 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
         Object.entries(WC_2026_GROUPS).forEach(([g, teams]) => {
           defaults[g] = [...teams] as [string, string, string, string]
         })
-        setGroupPicks({ ...defaults, ...(data.group_picks || {}) })
-        setBestThirdGroups(data.best_third_groups || [])
+        const loadedGroupPicks = { ...defaults, ...(data.group_picks || {}) }
+        const loadedThirds = data.best_third_groups || []
+        setGroupPicks(loadedGroupPicks)
+        setBestThirdGroups(loadedThirds)
         setBracketPicks(data.bracket_picks || {})
         setBracketScores(data.bracket_scores || {})
+        // Regenerate r32Bracket immediately so summary view is correct
+        if (Object.keys(loadedGroupPicks).length === 12) {
+          setR32Bracket(generateR32FromGroupPicks(loadedGroupPicks, loadedThirds))
+        }
         if (Object.keys(data.bracket_picks || {}).length > 0) {
           setShowSummary(true)
         }
       } else {
-        // Try sessionStorage backup first
         const savedGroups = sessionStorage.getItem(`bracket_groups_${poolId}`)
         const savedThirds = sessionStorage.getItem(`bracket_thirds_${poolId}`)
         const savedPicks = sessionStorage.getItem(`bracket_picks_${poolId}`)
@@ -102,16 +107,19 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
           defaults[g] = [...teams] as [string, string, string, string]
         })
 
-        if (savedGroups) {
-          try { setGroupPicks({ ...defaults, ...JSON.parse(savedGroups) }) } catch { setGroupPicks(defaults) }
-        } else {
-          setGroupPicks(defaults)
-        }
-        if (savedThirds) { try { setBestThirdGroups(JSON.parse(savedThirds)) } catch {} }
+        const loadedGroupPicks = savedGroups ? (() => { try { return { ...defaults, ...JSON.parse(savedGroups) } } catch { return defaults } })() : defaults
+        const loadedThirds = savedThirds ? (() => { try { return JSON.parse(savedThirds) } catch { return [] } })() : []
+
+        setGroupPicks(loadedGroupPicks)
+        setBestThirdGroups(loadedThirds)
         if (savedPicks) { try { setBracketPicks(JSON.parse(savedPicks)) } catch {} }
         if (savedScores) { try { setBracketScores(JSON.parse(savedScores)) } catch {} }
 
-        // If we had session picks, try to save them to DB
+        // Regenerate r32Bracket from session data too
+        if (Object.keys(loadedGroupPicks).length === 12) {
+          setR32Bracket(generateR32FromGroupPicks(loadedGroupPicks, loadedThirds))
+        }
+
         if (savedPicks && Object.keys(JSON.parse(savedPicks)).length > 0) {
           setShowSummary(true)
         }
