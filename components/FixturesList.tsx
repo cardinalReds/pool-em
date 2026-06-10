@@ -26,8 +26,9 @@ interface PredV2 {
   id?: string
   pool_id: string
   user_id: string
-  fixture_id: number
+  fixture_id: number | null
   category_id: string
+  matchday?: string
   value_wld: string | null
   value_number: number | null
   value_text: string | null
@@ -159,11 +160,13 @@ export default function FixturesList({
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<number | null>(null)
   const [saved, setSaved] = useState<Record<number, boolean>>({})
-  const [sortMode, setSortMode] = useState<'date' | 'group'>('date')
+  const [roundSpecialPicks, setRoundSpecialPicks] = useState<Record<string, Record<string, string>>>({})
+  const [roundSpecialSaving, setRoundSpecialSaving] = useState<string | null>(null)
+  const [roundSpecialSaved, setRoundSpecialSaved] = useState<Record<string, boolean>>({})
   const [viewMode, setViewMode] = useState<'pages' | 'list'>('pages')
   const [currentPage, setCurrentPage] = useState(0)
 
-  const isCustom = packageId === 'CUSTOM'
+  const isCustom = packageId?.toUpperCase() === 'CUSTOM'
 
   useEffect(() => {
     async function load() {
@@ -212,6 +215,14 @@ export default function FixturesList({
         })
         setPreds(predMap)
         setScoreInputs(scoreMap)
+
+        // Load round special picks (fixture_id is null, keyed by matchday)
+        const roundPicks: Record<string, Record<string, string>> = {}
+        ;(v2preds || []).filter((p: PredV2) => !p.fixture_id && p.matchday).forEach((p: any) => {
+          if (!roundPicks[p.matchday]) roundPicks[p.matchday] = {}
+          roundPicks[p.matchday][p.category_id] = p.value_text || p.value_wld || ''
+        })
+        setRoundSpecialPicks(roundPicks)
 
         // Fetch all members' display names
         const { data: memberRows } = await supabase
@@ -330,19 +341,152 @@ export default function FixturesList({
   // ── Sorted + paged ──────────────────────────────────────────────────────
   const sorted = [...fixtures].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
   const dateMap: Record<string, Fixture[]> = {}
+  const dateIsoMap: Record<string, string> = {} // label → ISO date
   const groupMap: Record<string, Fixture[]> = {}
   sorted.forEach(f => {
     const day = formatDatePT(f.date)
-    if (!dateMap[day]) dateMap[day] = []
+    if (!dateMap[day]) { dateMap[day] = []; dateIsoMap[day] = f.date.slice(0, 10) }
     dateMap[day].push(f)
     if (!groupMap[f.round]) groupMap[f.round] = []
     groupMap[f.round].push(f)
   })
   const pages = sortMode === 'date'
-    ? Object.entries(dateMap).map(([label, fx]) => ({ label, sub: `${fx.length} game${fx.length > 1 ? 's' : ''}`, fixtures: fx }))
-    : Object.entries(groupMap).map(([label, fx]) => ({ label, sub: [...new Set(fx.flatMap(f => [f.home_team, f.away_team]))].slice(0, 4).join(' · '), fixtures: fx }))
+    ? Object.entries(dateMap).map(([label, fx]) => ({ label, isoDate: dateIsoMap[label], sub: `${fx.length} game${fx.length > 1 ? 's' : ''}`, fixtures: fx }))
+    : Object.entries(groupMap).map(([label, fx]) => ({ label, isoDate: null, sub: [...new Set(fx.flatMap(f => [f.home_team, f.away_team]))].slice(0, 4).join(' · '), fixtures: fx }))
   const totalPages = pages.length
   const safePage = Math.min(currentPage, Math.max(0, totalPages - 1))
+
+  // ── Round specials save ────────────────────────────────────────────────────
+  async function saveRoundSpecials(matchday: string) {
+    setRoundSpecialSaving(matchday)
+    const supabase = createClient()
+    const picks = roundSpecialPicks[matchday] || {}
+
+    for (const [categoryId, value] of Object.entries(picks)) {
+      if (!value) continue
+      const rule = poolRules.find(r => r.category_id === categoryId)
+      const isPlayer = rule?.input_type === 'player' || categoryId === 'soccer_brace_round'
+
+      // Check if row exists
+      const { data: existing } = await supabase
+        .from('predictions_v2')
+        .select('id')
+        .eq('pool_id', poolId)
+        .eq('user_id', userId)
+        .eq('category_id', categoryId)
+        .eq('matchday', matchday)
+        .is('fixture_id', null)
+        .maybeSingle()
+
+      const row = {
+        pool_id: poolId,
+        user_id: userId,
+        fixture_id: null,
+        category_id: categoryId,
+        matchday,
+        value_text: isPlayer ? value : value,
+        value_wld: null,
+        submitted_at: new Date().toISOString(),
+      }
+
+      if (existing?.id) {
+        await supabase.from('predictions_v2').update(row).eq('id', existing.id)
+      } else {
+        await supabase.from('predictions_v2').insert(row)
+      }
+    }
+
+    setRoundSpecialSaving(null)
+    setRoundSpecialSaved(prev => ({ ...prev, [matchday]: true }))
+    setTimeout(() => setRoundSpecialSaved(prev => ({ ...prev, [matchday]: false })), 3000)
+  }
+
+  // ── Round Specials Card ────────────────────────────────────────────────────
+  function RoundSpecialsCard({ matchday, locked }: { matchday: string; locked: boolean }) {
+    const roundRules = poolRules.filter(r => r.prediction_type === 'per_round')
+    if (roundRules.length === 0) return null
+
+    const picks = roundSpecialPicks[matchday] || {}
+    const [braceTeam, setBraceTeam] = useState('')
+
+    function updatePick(categoryId: string, value: string) {
+      setRoundSpecialPicks(prev => ({
+        ...prev,
+        [matchday]: { ...(prev[matchday] || {}), [categoryId]: value }
+      }))
+    }
+
+    const allTeams = Object.keys(WC_SQUADS).sort()
+
+    return (
+      <div style={{ background: 'white', border: '1px solid #e0e0db', borderLeft: '3px solid #8b5cf6', marginBottom: 8 }}>
+        <div style={{ background: '#f9f7ff', padding: '6px 10px', borderBottom: '1px solid #e0e0db', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#8b5cf6' }}>round specials</span>
+          <span style={{ fontSize: '10px', color: '#aaa' }}>one pick per matchday</span>
+        </div>
+        <div style={{ padding: '10px' }}>
+          {roundRules.map(rule => {
+            const val = picks[rule.category_id] || ''
+            const isPlayer = rule.input_type === 'player' || rule.category_id === 'soccer_brace_round'
+            const categoryTeam = braceTeam
+
+            return (
+              <div key={rule.category_id} style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: '10px', fontWeight: 600, color: '#555', marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
+                  <span>{rule.name}</span>
+                  <span style={{ color: '#8b5cf6' }}>{rule.points} pt{rule.points !== 1 ? 's' : ''}</span>
+                </div>
+
+                {isPlayer ? (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <select
+                      value={categoryTeam}
+                      disabled={locked}
+                      onChange={e => setBraceTeam(e.target.value)}
+                      style={{ flex: 1, border: '1px solid #ddd', padding: '6px', fontSize: '12px', fontFamily: 'inherit', background: locked ? '#fafafa' : 'white' }}>
+                      <option value="">select team...</option>
+                      {allTeams.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <select
+                      value={val}
+                      disabled={locked || !categoryTeam}
+                      onChange={e => updatePick(rule.category_id, e.target.value)}
+                      style={{ flex: 1, border: '1px solid #ddd', padding: '6px', fontSize: '12px', fontFamily: 'inherit', background: locked ? '#fafafa' : 'white' }}>
+                      <option value="">select player...</option>
+                      {(WC_SQUADS[categoryTeam] || []).map(p => (
+                        <option key={p.name} value={p.name}>{p.name} ({p.position})</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <select
+                    value={val}
+                    disabled={locked}
+                    onChange={e => updatePick(rule.category_id, e.target.value)}
+                    style={{ width: '100%', border: '1px solid #ddd', padding: '6px', fontSize: '12px', fontFamily: 'inherit', background: locked ? '#fafafa' : 'white' }}>
+                    <option value="">select team...</option>
+                    {allTeams.map(t => <option key={t} value={t}>{FLAGS[t] || ''} {t}</option>)}
+                  </select>
+                )}
+              </div>
+            )
+          })}
+
+          {!locked && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, paddingTop: 8, borderTop: '1px solid #f0f0f0' }}>
+              <button
+                onClick={() => saveRoundSpecials(matchday)}
+                disabled={roundSpecialSaving === matchday}
+                style={{ padding: '8px 20px', fontSize: '12px', fontWeight: 600, background: '#8b5cf6', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit', minHeight: 44 }}>
+                {roundSpecialSaving === matchday ? 'saving...' : 'save round picks'}
+              </button>
+              {roundSpecialSaved[matchday] && <span style={{ fontSize: '11px', color: '#2d7a2d' }}>✓ saved</span>}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   // ── Per-category input inside a fixture card ─────────────────────────────
   function CategoryInput({ fixture, rule }: { fixture: Fixture; rule: PoolRule }) {
@@ -816,7 +960,12 @@ export default function FixturesList({
       {/* Fixture cards */}
       <div>
         {viewMode === 'pages'
-          ? pages[safePage]?.fixtures.map(f => <FixtureCard key={f.id} fixture={f} />)
+          ? <>
+              {pages[safePage]?.isoDate && isCustom && (
+                <RoundSpecialsCard matchday={pages[safePage].isoDate!} locked={false} />
+              )}
+              {pages[safePage]?.fixtures.map(f => <FixtureCard key={f.id} fixture={f} />)}
+            </>
           : pages.map(page => (
             <div key={page.label}>
               <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', padding: '8px 0 4px', borderBottom: '1px solid #e8e8e4', marginBottom: 4, width: '100%' }}>
