@@ -61,12 +61,11 @@ export async function GET(request: NextRequest) {
       .select('id, home_team, away_team, date, api_fixture_id')
       .gte('date', min.toISOString())
       .lte('date', max.toISOString())
-      .is('odds_updated_at', null)
-      .not('api_fixture_id', 'is', null)
       .eq('status', 'NS')
+      .gt('api_fixture_id', 0)
 
     if (!fixtures?.length) {
-      return NextResponse.json({ ok: true, updated: 0, debug: 'no fixtures in window', min: min.toISOString(), max: max.toISOString(), error: fixturesError?.message, fixturesRaw: fixtures })
+      return NextResponse.json({ ok: true, updated: 0, debug: 'no fixtures in window', min: min.toISOString(), max: max.toISOString(), error: fixturesError?.message, count: fixtures?.length })
     }
 
     let updated = 0
