@@ -58,10 +58,11 @@ export async function GET(request: NextRequest) {
 
     const { data: fixtures } = await supabase
       .from('fixtures')
-      .select('id, home_team, away_team, date')
+      .select('id, home_team, away_team, date, api_fixture_id')
       .gte('date', min.toISOString())
       .lte('date', max.toISOString())
       .is('odds_updated_at', null)
+      .not('api_fixture_id', 'is', null)
       .eq('status', 'NS')
 
     if (!fixtures?.length) {
@@ -70,8 +71,9 @@ export async function GET(request: NextRequest) {
 
     let updated = 0
     for (const fixture of fixtures) {
-      await new Promise(r => setTimeout(r, 300)) // rate limit
-      const bets = await fetchOddsForFixture(fixture.id)
+      if (!fixture.api_fixture_id) continue
+      await new Promise(r => setTimeout(r, 300))
+      const bets = await fetchOddsForFixture(fixture.api_fixture_id)
       if (!bets.length) continue
 
       const lineGoals = extractLine(bets, 'Goals Over/Under') ?? extractLine(bets, 'Total Goals')
