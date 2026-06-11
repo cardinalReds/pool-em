@@ -8,15 +8,32 @@ const supabase = createClient(
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY!
 
 async function fetchOddsForFixture(fixtureId: number): Promise<any[]> {
-  // Fetch from both Bet365 (goals, cards, handicap) and 10Bet (corners)
-  const [res8, res1] = await Promise.all([
-    fetch(`https://v3.football.api-sports.io/odds?fixture=${fixtureId}&bookmaker=8`, { headers: { 'x-apisports-key': API_FOOTBALL_KEY } }),
-    fetch(`https://v3.football.api-sports.io/odds?fixture=${fixtureId}&bookmaker=1`, { headers: { 'x-apisports-key': API_FOOTBALL_KEY } }),
-  ])
-  const [data8, data1] = await Promise.all([res8.json(), res1.json()])
-  const bets8 = data8.response?.[0]?.bookmakers?.[0]?.bets || []
-  const bets1 = data1.response?.[0]?.bookmakers?.[0]?.bets || []
-  return [...bets8, ...bets1]
+  // Fetch all bookmakers, no filter
+  const res = await fetch(
+    `https://v3.football.api-sports.io/odds?fixture=${fixtureId}`,
+    { headers: { 'x-apisports-key': API_FOOTBALL_KEY } }
+  )
+  const data = await res.json()
+  // Flatten all bets from all bookmakers, Bet365 first (most reliable)
+  const bookmakers: any[] = data.response?.[0]?.bookmakers || []
+  const bet365 = bookmakers.filter((bm: any) => bm.name === 'Bet365')
+  const others = bookmakers.filter((bm: any) => bm.name !== 'Bet365')
+  const ordered = [...bet365, ...others]
+  return ordered.flatMap((bm: any) => bm.bets.map((b: any) => ({ ...b, bookmaker: bm.name })))
+}
+
+function extractLine(bets: any[], betName: string): number | null {
+  // Find exact bet name match first, then partial
+  const bet = bets.find((b: any) => b.name === betName)
+    ?? bets.find((b: any) => b.name.toLowerCase().includes(betName.toLowerCase()))
+  if (!bet) return null
+  // Find the "Over X" value and extract X
+  const overValue = bet.values?.find((v: any) =>
+    v.value?.toString().toLowerCase().startsWith('over')
+  )
+  if (!overValue) return null
+  const match = overValue.value.toString().match(/over\s*([\d.]+)/i)
+  return match ? parseFloat(match[1]) : null
 }
 
 function extractLine(bets: any[], betName: string): number | null {
@@ -34,16 +51,22 @@ function extractLine(bets: any[], betName: string): number | null {
 }
 
 function extractHandicap(bets: any[]): { home: number | null; away: number | null } {
-  const bet = bets.find((b: any) => b.name.toLowerCase().includes('asian handicap'))
+  // Use Bet365 Asian Handicap first
+  const bet = bets.find((b: any) => b.name === 'Asian Handicap' && b.bookmaker === 'Bet365')
+    ?? bets.find((b: any) => b.name === 'Asian Handicap')
   if (!bet) return { home: null, away: null }
-  const home = bet.values?.find((v: any) => v.value?.toString().includes('Home'))
-  const away = bet.values?.find((v: any) => v.value?.toString().includes('Away'))
-  const parseHandicap = (v: any) => {
+  
+  const homeVal = bet.values?.find((v: any) => v.value?.toString().toLowerCase().includes('home'))
+  const awayVal = bet.values?.find((v: any) => v.value?.toString().toLowerCase().includes('away'))
+  
+  const parseHandicap = (v: any): number | null => {
     if (!v) return null
-    const match = v.value.toString().match(/([-+]?\d+\.?\d*)/)
-    return match ? parseFloat(match[1]) : null
+    // e.g. "Home -1.25" → -1.25
+    const match = v.value.toString().match(/[-+]?\d+\.?\d*/)
+    return match ? parseFloat(match[0]) : null
   }
-  return { home: parseHandicap(home), away: parseHandicap(away) }
+  
+  return { home: parseHandicap(homeVal), away: parseHandicap(awayVal) }
 }
 
 export async function GET(request: NextRequest) {
@@ -79,7 +102,7 @@ export async function GET(request: NextRequest) {
       if (!bets.length) continue
 
       const lineGoals = extractLine(bets, 'Goals Over/Under')
-      const lineCorners = extractLine(bets, 'Corners Over Under') ?? extractLine(bets, 'Total Corners')
+      const lineCorners = extractLine(bets, 'Corners Over Under')
       const lineCards = extractLine(bets, 'Cards Over/Under')
       const { home: handicapHome, away: handicapAway } = extractHandicap(bets)
 
