@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     const min = new Date(now.getTime() + 1 * 60 * 60 * 1000)   // 1 hour
     const max = new Date(now.getTime() + 48 * 60 * 60 * 1000)  // 48 hours
 
-    const { data: fixtures } = await supabase
+    const { data: fixtures, error: fixturesError } = await supabase
       .from('fixtures')
       .select('id, home_team, away_team, date, api_fixture_id')
       .gte('date', min.toISOString())
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
       .eq('status', 'NS')
 
     if (!fixtures?.length) {
-      return NextResponse.json({ ok: true, updated: 0, debug: 'no fixtures in window', min: min.toISOString(), max: max.toISOString() })
+      return NextResponse.json({ ok: true, updated: 0, debug: 'no fixtures in window', min: min.toISOString(), max: max.toISOString(), error: fixturesError?.message, fixturesRaw: fixtures })
     }
 
     let updated = 0
