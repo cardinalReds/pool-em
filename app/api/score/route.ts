@@ -615,23 +615,27 @@ export async function POST(request: NextRequest) {
           ;(rulesData || []).forEach((r: any) => { ruleMap[r.category_id] = r })
 
           // Load all predictions_v2 for this fixture in this pool
-          const { data: v2preds } = await supabase
+          const { data: v2preds, error: v2err } = await supabase
             .from('predictions_v2')
             .select('*')
             .eq('pool_id', pool.id)
             .eq('fixture_id', internalFixtureId)
 
+          console.log(`Pool ${pool.id}: ${v2preds?.length ?? 0} preds, rules: ${Object.keys(ruleMap).length}, error: ${v2err?.message}`)
+
           for (const pred of v2preds || []) {
             const rule = ruleMap[pred.category_id]
-            if (!rule) continue
+            if (!rule) { console.log(`No rule for ${pred.category_id}`); continue }
 
             const points = scoreCustomPrediction(pred.category_id, pred, facts, rule, fixtureRow)
             const isCorrect = points > 0
+            console.log(`${pred.category_id}: ${points} pts`)
 
-            await supabase
+            const { error: updateErr } = await supabase
               .from('predictions_v2')
               .update({ points_earned: points, is_correct: isCorrect })
               .eq('id', pred.id)
+            if (updateErr) console.log(`Update error: ${updateErr.message}`)
           }
 
         // ── Legacy pools → predictions ──────────────────────────────────
