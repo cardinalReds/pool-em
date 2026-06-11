@@ -7,13 +7,16 @@ const supabase = createClient(
 )
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY!
 
-async function fetchOddsForFixture(fixtureId: number) {
-  const res = await fetch(
-    `https://v3.football.api-sports.io/odds?fixture=${fixtureId}&bookmaker=8`,
-    { headers: { 'x-apisports-key': API_FOOTBALL_KEY } }
-  )
-  const data = await res.json()
-  return data.response?.[0]?.bookmakers?.[0]?.bets || []
+async function fetchOddsForFixture(fixtureId: number): Promise<any[]> {
+  // Fetch from both Bet365 (goals, cards, handicap) and 10Bet (corners)
+  const [res8, res1] = await Promise.all([
+    fetch(`https://v3.football.api-sports.io/odds?fixture=${fixtureId}&bookmaker=8`, { headers: { 'x-apisports-key': API_FOOTBALL_KEY } }),
+    fetch(`https://v3.football.api-sports.io/odds?fixture=${fixtureId}&bookmaker=1`, { headers: { 'x-apisports-key': API_FOOTBALL_KEY } }),
+  ])
+  const [data8, data1] = await Promise.all([res8.json(), res1.json()])
+  const bets8 = data8.response?.[0]?.bookmakers?.[0]?.bets || []
+  const bets1 = data1.response?.[0]?.bookmakers?.[0]?.bets || []
+  return [...bets8, ...bets1]
 }
 
 function extractLine(bets: any[], betName: string): number | null {
@@ -53,8 +56,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const now = new Date()
-    const min = new Date(now.getTime() + 1 * 60 * 60 * 1000)   // 1 hour
-    const max = new Date(now.getTime() + 48 * 60 * 60 * 1000)  // 48 hours
+    const min = new Date(now.getTime() + 1 * 60 * 60 * 1000)
+    const max = new Date(now.getTime() + 48 * 60 * 60 * 1000)
 
     const { data: fixtures, error: fixturesError } = await supabase
       .from('fixtures')
@@ -65,7 +68,7 @@ export async function GET(request: NextRequest) {
       .gt('api_fixture_id', 0)
 
     if (!fixtures?.length) {
-      return NextResponse.json({ ok: true, updated: 0, debug: 'no fixtures in window', min: min.toISOString(), max: max.toISOString(), error: fixturesError?.message, count: fixtures?.length })
+      return NextResponse.json({ ok: true, updated: 0, error: fixturesError?.message })
     }
 
     let updated = 0
@@ -75,9 +78,9 @@ export async function GET(request: NextRequest) {
       const bets = await fetchOddsForFixture(fixture.api_fixture_id)
       if (!bets.length) continue
 
-      const lineGoals = extractLine(bets, 'Goals Over/Under') ?? extractLine(bets, 'Total Goals')
-      const lineCorners = extractLine(bets, 'Total Corners') ?? extractLine(bets, 'Corners')
-      const lineCards = extractLine(bets, 'Booking Points') ?? extractLine(bets, 'Total Bookings') ?? extractLine(bets, 'Cards')
+      const lineGoals = extractLine(bets, 'Goals Over/Under')
+      const lineCorners = extractLine(bets, 'Corners Over Under') ?? extractLine(bets, 'Total Corners')
+      const lineCards = extractLine(bets, 'Cards Over/Under')
       const { home: handicapHome, away: handicapAway } = extractHandicap(bets)
 
       await supabase.from('fixtures').update({
