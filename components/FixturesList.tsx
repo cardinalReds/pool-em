@@ -19,6 +19,11 @@ interface Fixture {
   odds_home: number | null
   odds_draw: number | null
   odds_away: number | null
+  line_total_goals: number | null
+  line_total_corners: number | null
+  line_card_points: number | null
+  line_asian_handicap_home: number | null
+  line_asian_handicap_away: number | null
 }
 
 // One row per category per fixture in predictions_v2
@@ -509,9 +514,15 @@ export default function FixturesList({
         <div style={{ fontSize: '10px', color: '#888', marginBottom: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontWeight: 600 }}>{rule.name}</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            {rule.requires_line && !finished && (
-              <span style={{ fontSize: '9px', color: '#bbb', fontStyle: 'italic' }}>line TBD 24h before</span>
-            )}
+            {rule.requires_line && !finished && (() => {
+              let line: number | null = null
+              if (rule.category_id === 'soccer_total_goals_ou') line = fixture.line_total_goals
+              else if (rule.category_id === 'soccer_total_corners_ou') line = fixture.line_total_corners
+              else if (rule.category_id === 'soccer_card_points_ou') line = fixture.line_card_points
+              else if (rule.category_id === 'soccer_asian_handicap') line = fixture.line_asian_handicap_home
+              if (line != null) return null // line shown inline on buttons
+              return <span style={{ fontSize: '9px', color: '#bbb', fontStyle: 'italic' }}>line TBD 24h before</span>
+            })()}
             {feedback}
           </div>
         </div>
@@ -526,6 +537,11 @@ export default function FixturesList({
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
                 {FLAGS[fixture.home_team]} {fixture.home_team}
+                {rule.category_id === 'soccer_asian_handicap' && fixture.line_asian_handicap_home != null && (
+                  <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: 3 }}>
+                    ({fixture.line_asian_handicap_home > 0 ? '+' : ''}{fixture.line_asian_handicap_home})
+                  </span>
+                )}
               </span>
             </button>
             {rule.category_id !== 'soccer_asian_handicap' && (
@@ -540,6 +556,11 @@ export default function FixturesList({
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
                 {fixture.away_team} {FLAGS[fixture.away_team]}
+                {rule.category_id === 'soccer_asian_handicap' && fixture.line_asian_handicap_away != null && (
+                  <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: 3 }}>
+                    ({fixture.line_asian_handicap_away > 0 ? '+' : ''}{fixture.line_asian_handicap_away})
+                  </span>
+                )}
               </span>
             </button>
           </div>
@@ -596,20 +617,28 @@ export default function FixturesList({
         )}
 
         {/* Over / Under */}
-        {rule.input_type === 'ou' && (
-          <div style={{ display: 'flex', gap: 0 }}>
-            <button style={{ ...btnStyle('over'), borderRight: 'none' }}
-              disabled={locked || finished}
-              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'over' })}>
-              over {rule.requires_line ? '—' : '2.5'}
-            </button>
-            <button style={btnStyle('under')}
-              disabled={locked || finished}
-              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'under' })}>
-              under {rule.requires_line ? '—' : '2.5'}
-            </button>
-          </div>
-        )}
+        {rule.input_type === 'ou' && (() => {
+          // Pick the right line based on category
+          let line: number | null = null
+          if (rule.category_id === 'soccer_total_goals_ou') line = fixture.line_total_goals
+          else if (rule.category_id === 'soccer_total_corners_ou') line = fixture.line_total_corners
+          else if (rule.category_id === 'soccer_card_points_ou') line = fixture.line_card_points
+          const lineLabel = line != null ? line.toString() : '—'
+          return (
+            <div style={{ display: 'flex', gap: 0 }}>
+              <button style={{ ...btnStyle('over'), borderRight: 'none' }}
+                disabled={locked || finished}
+                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'over' })}>
+                over {lineLabel}
+              </button>
+              <button style={btnStyle('under')}
+                disabled={locked || finished}
+                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'under' })}>
+                under {lineLabel}
+              </button>
+            </div>
+          )
+        })()}
 
         {/* Exact score */}
         {isExact && (() => {

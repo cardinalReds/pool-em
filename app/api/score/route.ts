@@ -148,6 +148,7 @@ function scoreCustomPrediction(
   pred: any,
   facts: MatchFacts,
   rule: PoolRule,
+  fixtureRow?: any,
 ): number {
   const { homeScore, awayScore, htHome, htAway, firstScorerName } = facts
   const actual = getResult(homeScore, awayScore)
@@ -163,8 +164,12 @@ function scoreCustomPrediction(
       return htHome !== null && pred.value_wld === htActual ? rule.points : 0
 
     case 'soccer_asian_handicap': {
-      // handicap_line stored on fixture as odds_home for now — skip if missing
-      return 0 // TODO: wire up when odds API is live
+      // handicap: home wins if (homeScore + handicapHome) > awayScore
+      if (!fixtureRow?.line_asian_handicap_home) return 0
+      const handicap = fixtureRow.line_asian_handicap_home
+      const adjustedHome = homeScore + handicap
+      const ahResult = adjustedHome > awayScore ? 'home' : adjustedHome < awayScore ? 'away' : 'draw'
+      return pred.value_wld === ahResult ? rule.points : 0
     }
 
     case 'soccer_first_team_score':
@@ -567,6 +572,13 @@ export async function POST(request: NextRequest) {
       }, { onConflict: 'id' })
 
       // Build match facts
+      // Fetch stored odds lines for this fixture
+      const { data: fixtureRow } = await supabase
+        .from('fixtures')
+        .select('line_total_goals, line_total_corners, line_card_points, line_asian_handicap_home, line_asian_handicap_away')
+        .eq('id', fixtureId)
+        .maybeSingle()
+
       const facts: MatchFacts = {
         homeScore, awayScore,
         htHome: match.score?.halftime?.home ?? null,
@@ -579,9 +591,9 @@ export async function POST(request: NextRequest) {
         awayCorners: cornerFacts.awayCorners,
         homeCardPts,
         awayCardPts,
-        goalsLine: null,    // TODO: odds API
-        cornersLine: null,  // TODO: odds API
-        cardPtsLine: null,  // TODO: odds API
+        goalsLine: fixtureRow?.line_total_goals ?? null,
+        cornersLine: fixtureRow?.line_total_corners ?? null,
+        cardPtsLine: fixtureRow?.line_card_points ?? null,
       }
 
       // Get all pools using this tournament
@@ -615,7 +627,7 @@ export async function POST(request: NextRequest) {
             const rule = ruleMap[pred.category_id]
             if (!rule) continue
 
-            const points = scoreCustomPrediction(pred.category_id, pred, facts, rule)
+            const points = scoreCustomPrediction(pred.category_id, pred, facts, rule, fixtureRow)
             const isCorrect = points > 0
 
             await supabase
