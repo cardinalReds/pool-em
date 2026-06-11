@@ -529,30 +529,33 @@ export async function POST(request: NextRequest) {
     let fixturesScored = 0
 
     for (const match of finishedMatches) {
-      const fixtureId: number = match.fixture.id
+      const apiFixtureId: number = match.fixture.id
       const homeScore: number = match.goals.home
       const awayScore: number = match.goals.away
 
       if (homeScore === null || awayScore === null) continue
 
-      // Skip already scored
-      const { data: existing } = await supabase
+      // Find our internal fixture by api_fixture_id
+      const { data: ourFixture } = await supabase
         .from('fixtures')
-        .select('scored')
-        .eq('id', fixtureId)
-        .single()
-      if (existing?.scored) continue
+        .select('id, scored, line_total_goals, line_total_corners, line_card_points, line_asian_handicap_home, line_asian_handicap_away')
+        .eq('api_fixture_id', apiFixtureId)
+        .maybeSingle()
+
+      if (!ourFixture) continue
+      if (ourFixture.scored) continue
+
+      const internalFixtureId = ourFixture.id
 
       // Fetch events (goals, cards) and stats (corners) in parallel
-      // Also seed squad rosters if not already in DB
       const homeTeamId: number = match.teams.home.id
       const awayTeamId: number = match.teams.away.id
       const homeTeamName: string = match.teams.home.name
       const awayTeamName: string = match.teams.away.name
 
       const [eventFacts, cornerFacts] = await Promise.all([
-        fetchFixtureEvents(fixtureId, homeTeamId),
-        fetchFixtureStats(fixtureId),
+        fetchFixtureEvents(apiFixtureId, homeTeamId),
+        fetchFixtureStats(apiFixtureId),
       ])
 
       // Seed squads in background (non-blocking)
@@ -562,24 +565,17 @@ export async function POST(request: NextRequest) {
       const { firstScorerName, allScorerNames, firstTeamScore, firstYellow, homeCardPts, awayCardPts } = eventFacts
       const actualResult = getResult(homeScore, awayScore)
 
-      // Update fixture row
-      await supabase.from('fixtures').upsert({
-        id: fixtureId,
+      // Update our fixture row
+      await supabase.from('fixtures').update({
         status: 'FT',
         home_score: homeScore,
         away_score: awayScore,
         first_scorer_name: firstScorerName,
         scored: true,
-        tournament_id: 'wc_2026',
-      }, { onConflict: 'id' })
+      }).eq('id', internalFixtureId)
 
-      // Build match facts
-      // Fetch stored odds lines for this fixture
-      const { data: fixtureRow } = await supabase
-        .from('fixtures')
-        .select('line_total_goals, line_total_corners, line_card_points, line_asian_handicap_home, line_asian_handicap_away')
-        .eq('id', fixtureId)
-        .maybeSingle()
+      // Use odds lines from fixture row
+      const fixtureRow = ourFixture
 
       const facts: MatchFacts = {
         homeScore, awayScore,
@@ -623,7 +619,7 @@ export async function POST(request: NextRequest) {
             .from('predictions_v2')
             .select('*')
             .eq('pool_id', pool.id)
-            .eq('fixture_id', fixtureId)
+            .eq('fixture_id', internalFixtureId)
 
           for (const pred of v2preds || []) {
             const rule = ruleMap[pred.category_id]
@@ -644,7 +640,7 @@ export async function POST(request: NextRequest) {
             .from('predictions')
             .select('*')
             .eq('pool_id', pool.id)
-            .eq('fixture_id', fixtureId)
+            .eq('fixture_id', internalFixtureId)
 
           for (const pred of predictions || []) {
             let points = 0
