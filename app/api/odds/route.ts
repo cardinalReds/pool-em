@@ -1,13 +1,12 @@
-
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
- 
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_KEY!
 )
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY!
- 
+
 async function fetchOddsForFixture(fixtureId: number): Promise<any[]> {
   // Fetch all bookmakers, no filter
   const res = await fetch(
@@ -22,7 +21,7 @@ async function fetchOddsForFixture(fixtureId: number): Promise<any[]> {
   const ordered = [...bet365, ...others]
   return ordered.flatMap((bm: any) => bm.bets.map((b: any) => ({ ...b, bookmaker: bm.name })))
 }
- 
+
 function extractLine(bets: any[], betName: string): number | null {
   // Find exact bet name match first, then partial
   const bet = bets.find((b: any) => b.name === betName)
@@ -36,7 +35,7 @@ function extractLine(bets: any[], betName: string): number | null {
   const match = overValue.value.toString().match(/over\s*([\d.]+)/i)
   return match ? parseFloat(match[1]) : null
 }
- 
+
 function extractHandicap(bets: any[]): { home: number | null; away: number | null } {
   // Use Bet365 Asian Handicap first
   const bet = bets.find((b: any) => b.name === 'Asian Handicap' && b.bookmaker === 'Bet365')
@@ -55,7 +54,7 @@ function extractHandicap(bets: any[]): { home: number | null; away: number | nul
   
   return { home: parseHandicap(homeVal), away: parseHandicap(awayVal) }
 }
- 
+
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   const { searchParams } = new URL(request.url)
@@ -63,36 +62,50 @@ export async function GET(request: NextRequest) {
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}` && secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
- 
+
   try {
     const now = new Date()
-    const min = new Date(now.getTime() + 1 * 60 * 60 * 1000)
-    const max = new Date(now.getTime() + 48 * 60 * 60 * 1000)
- 
+    const min = new Date(now.getTime() + 1 * 60 * 60 * 1000)       // 1 hour out
+    const max = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000) // 14 days out (API limit)
+    const refresh48 = new Date(now.getTime() + 48 * 60 * 60 * 1000) // t-48hrs refresh threshold
+
+    // Fetch fixtures that either:
+    // 1. Have never had odds fetched (odds_updated_at IS NULL), or
+    // 2. Are within 48 hours and odds haven't been refreshed in the last 6 hours
     const { data: fixtures, error: fixturesError } = await supabase
       .from('fixtures')
-      .select('id, home_team, away_team, date, api_fixture_id')
+      .select('id, home_team, away_team, date, api_fixture_id, odds_updated_at')
       .gte('date', min.toISOString())
       .lte('date', max.toISOString())
       .eq('status', 'NS')
       .gt('api_fixture_id', 0)
- 
+
     if (!fixtures?.length) {
       return NextResponse.json({ ok: true, updated: 0, error: fixturesError?.message })
     }
- 
+
+    // Filter: never fetched OR within 48hrs and stale (>6hrs since last fetch)
+    const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000)
+    const toFetch = fixtures.filter(f => {
+      if (!f.odds_updated_at) return true // never fetched
+      const kickoff = new Date(f.date)
+      const isWithin48hrs = kickoff <= refresh48
+      const isStale = new Date(f.odds_updated_at) < sixHoursAgo
+      return isWithin48hrs && isStale
+    })
+
     let updated = 0
-    for (const fixture of fixtures) {
+    for (const fixture of toFetch) {
       if (!fixture.api_fixture_id) continue
       await new Promise(r => setTimeout(r, 300))
       const bets = await fetchOddsForFixture(fixture.api_fixture_id)
       if (!bets.length) continue
- 
+
       const lineGoals = extractLine(bets, 'Goals Over/Under')
       const lineCorners = extractLine(bets, 'Corners Over Under')
       const lineCards = extractLine(bets, 'Cards Over/Under')
       const { home: handicapHome, away: handicapAway } = extractHandicap(bets)
- 
+
       await supabase.from('fixtures').update({
         line_total_goals: lineGoals,
         line_total_corners: lineCorners,
@@ -101,18 +114,17 @@ export async function GET(request: NextRequest) {
         line_asian_handicap_away: handicapAway,
         odds_updated_at: new Date().toISOString(),
       }).eq('id', fixture.id)
- 
+
       updated++
     }
- 
-    return NextResponse.json({ ok: true, updated })
+
+    return NextResponse.json({ ok: true, updated, total_in_window: fixtures.length })
   } catch (err) {
     console.error('Odds cron error:', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
 }
- 
+
 export async function POST(request: NextRequest) {
   return GET(request)
 }
- 
