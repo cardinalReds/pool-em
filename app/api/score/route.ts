@@ -35,6 +35,8 @@ interface EventFacts {
   firstYellow: 'home' | 'away' | 'none'
   homeCardPts: number
   awayCardPts: number
+  htHomeCardPts: number
+  htAwayCardPts: number
 }
 
 async function fetchFixtureEvents(fixtureId: number, homeTeamId: number): Promise<EventFacts> {
@@ -55,10 +57,14 @@ async function fetchFixtureEvents(fixtureId: number, homeTeamId: number): Promis
   let firstYellow: 'home' | 'away' | 'none' = 'none'
   let homeCardPts = 0
   let awayCardPts = 0
+  let htHomeCardPts = 0
+  let htAwayCardPts = 0
 
   for (const event of events) {
     const isHome = event.team.id === homeTeamId
     const side = isHome ? 'home' : 'away'
+    const elapsed = event.time.elapsed + (event.time.extra || 0)
+    const isFirstHalf = elapsed <= 45
 
     if (event.type === 'Goal' && event.detail !== 'Missed Penalty') {
       const scorerName = event.player?.name || null
@@ -72,17 +78,24 @@ async function fetchFixtureEvents(fixtureId: number, homeTeamId: number): Promis
     if (event.type === 'Card') {
       if (event.detail === 'Yellow Card') {
         if (firstYellow === 'none') firstYellow = side
-        if (isHome) homeCardPts += 10
-        else awayCardPts += 10
+        if (isHome) { homeCardPts += 10; if (isFirstHalf) htHomeCardPts += 10 }
+        else { awayCardPts += 10; if (isFirstHalf) htAwayCardPts += 10 }
       }
-      if (event.detail === 'Red Card' || event.detail === 'Second Yellow Card') {
-        if (isHome) homeCardPts += 25
-        else awayCardPts += 25
+      if (event.detail === 'Red Card') {
+        // Straight red = 25pts
+        if (isHome) { homeCardPts += 25; if (isFirstHalf) htHomeCardPts += 25 }
+        else { awayCardPts += 25; if (isFirstHalf) htAwayCardPts += 25 }
+      }
+      if (event.detail === 'Second Yellow Card') {
+        // Second yellow = 35pts total (10 for yellow already counted + 25 for red)
+        // The yellow was already counted above, so add 25 more
+        if (isHome) { homeCardPts += 25; if (isFirstHalf) htHomeCardPts += 25 }
+        else { awayCardPts += 25; if (isFirstHalf) htAwayCardPts += 25 }
       }
     }
   }
 
-  return { firstScorerName, allScorerNames, firstTeamScore, firstYellow, homeCardPts, awayCardPts }
+  return { firstScorerName, allScorerNames, firstTeamScore, firstYellow, homeCardPts, awayCardPts, htHomeCardPts, htAwayCardPts }
 }
 
 interface CornerFacts {
@@ -215,7 +228,7 @@ function scoreCustomPrediction(
     }
 
     case 'soccer_cards_ht':
-      return 0 // HT card data not available
+      return pred.value_wld === getResult(facts.htHomeCardPts, facts.htAwayCardPts) ? rule.points : 0
 
     case 'soccer_cards_home_away':
       return pred.value_wld === getResult(facts.homeCardPts, facts.awayCardPts) ? rule.points : 0
@@ -308,6 +321,8 @@ interface MatchFacts {
   htAwayCorners: number | null
   homeCardPts: number
   awayCardPts: number
+  htHomeCardPts: number
+  htAwayCardPts: number
   goalsLine: number | null
   cornersLine: number | null
   cardPtsLine: number | null
@@ -610,7 +625,7 @@ export async function POST(request: NextRequest) {
       fetchAndSeedSquad(homeTeamId, homeTeamName).catch(console.error)
       fetchAndSeedSquad(awayTeamId, awayTeamName).catch(console.error)
 
-      const { firstScorerName, allScorerNames, firstTeamScore, firstYellow, homeCardPts, awayCardPts } = eventFacts
+      const { firstScorerName, allScorerNames, firstTeamScore, firstYellow, homeCardPts, awayCardPts, htHomeCardPts, htAwayCardPts } = eventFacts
       const actualResult = getResult(homeScore, awayScore)
 
       // Update our fixture row — only mark scored=true for finished games
@@ -627,6 +642,8 @@ export async function POST(request: NextRequest) {
         ht_away_corners: cornerFacts.htAwayCorners,
         live_home_cards: homeCardPts,
         live_away_cards: awayCardPts,
+        ht_home_card_pts: htHomeCardPts,
+        ht_away_card_pts: htAwayCardPts,
         first_yellow_team: firstYellow === 'none' ? null : firstYellow,
       }).eq('id', internalFixtureId)
 
@@ -647,6 +664,8 @@ export async function POST(request: NextRequest) {
         htAwayCorners: cornerFacts.htAwayCorners,
         homeCardPts,
         awayCardPts,
+        htHomeCardPts,
+        htAwayCardPts,
         goalsLine: fixtureRow?.line_total_goals ?? null,
         cornersLine: fixtureRow?.line_total_corners ?? null,
         cardPtsLine: fixtureRow?.line_card_points ?? null,

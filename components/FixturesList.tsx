@@ -34,6 +34,8 @@ interface Fixture {
   ht_home_corners: number | null
   ht_away_corners: number | null
   first_yellow_team: string | null
+  ht_home_card_pts: number | null
+  ht_away_card_pts: number | null
 }
 
 // One row per category per fixture in predictions_v2
@@ -1043,7 +1045,13 @@ export default function FixturesList({
                               case 'soccer_ht_corners_winner': actual = htHomeCorn != null && htAwayCorn != null ? (htHomeCorn > htAwayCorn ? `${FLAGS[fixture.home_team]} HT` : htAwayCorn > htHomeCorn ? `${FLAGS[fixture.away_team]} HT` : 'draw HT') : '—'; break
                               case 'soccer_card_points_ou': actual = `${homeCards + awayCards} card pts`; break
                               case 'soccer_cards_home_away': actual = homeCards > awayCards ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : awayCards > homeCards ? `${FLAGS[fixture.away_team]} ${fixture.away_team}` : 'draw'; break
-                              case 'soccer_cards_ht': actual = '—'; break
+                              case 'soccer_cards_ht': {
+                                const htHC = fixture.ht_home_card_pts ?? 0
+                                const htAC = fixture.ht_away_card_pts ?? 0
+                                actual = htHC > htAC ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : htAC > htHC ? `${FLAGS[fixture.away_team]} ${fixture.away_team}` : 'draw'
+                                break
+                              }
+                              case 'soccer_ht_corners_winner': actual = '— (unavailable)'; break
                               case 'soccer_first_yellow_team': actual = fixture.first_yellow_team ? (fixture.first_yellow_team === 'home' ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : `${FLAGS[fixture.away_team]} ${fixture.away_team}`) : '—'; break
                               case 'soccer_asian_handicap': actual = result === 'home' ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : result === 'away' ? `${FLAGS[fixture.away_team]} ${fixture.away_team}` : 'draw'; break
                               case 'soccer_btts': actual = (h > 0 && a > 0) ? 'Yes' : 'No'; break

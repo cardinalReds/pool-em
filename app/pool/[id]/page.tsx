@@ -395,12 +395,20 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           <div>
             {poolRules.map((rule: any) => {
               const isExact = rule.category_id === 'soccer_exact_score' || rule.category_id === 'soccer_ht_exact_score'
+              const isCardPts = rule.category_id === 'soccer_card_points_ou' || rule.category_id === 'soccer_cards_home_away' || rule.category_id === 'soccer_cards_ht'
               return (
-                <div key={rule.category_id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 0', borderBottom: '1px solid #f5f5f5'}}>
-                  <span style={{fontSize: '12px', color: '#555'}}>{rule.ruleset_categories?.name || rule.category_id}</span>
-                  <span style={{fontSize: '12px', color: '#111', fontWeight: 600, marginLeft: '8px', flexShrink: 0}}>
-                    {isExact ? `${rule.points}pt/team${rule.bonus_points > 0 ? ` +${rule.bonus_points}` : ''}` : `${rule.points} pt${rule.points !== 1 ? 's' : ''}`}
-                  </span>
+                <div key={rule.category_id}>
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '5px 0', borderBottom: '1px solid #f5f5f5'}}>
+                    <span style={{fontSize: '12px', color: '#555'}}>{rule.ruleset_categories?.name || rule.category_id}</span>
+                    <span style={{fontSize: '12px', color: '#111', fontWeight: 600, marginLeft: '8px', flexShrink: 0}}>
+                      {isExact ? `${rule.points}pt/team${rule.bonus_points > 0 ? ` +${rule.bonus_points}` : ''}` : `${rule.points} pt${rule.points !== 1 ? 's' : ''}`}
+                    </span>
+                  </div>
+                  {isCardPts && (
+                    <div style={{fontSize: '10px', color: '#aaa', padding: '3px 0 5px', lineHeight: 1.6}}>
+                      🟨 yellow = 10pts · 🟥 straight red = 25pts · 2nd yellow = 35pts
+                    </div>
+                  )}
                 </div>
               )
             })}
