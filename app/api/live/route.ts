@@ -147,7 +147,6 @@ export async function GET(request: Request) {
             away_score: awayScore,
             first_scorer_name: firstScorer,
             status,
-            scored: status === 'finished',
           })
           .eq('id', ourFixture.id)
 
