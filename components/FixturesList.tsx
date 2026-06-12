@@ -346,7 +346,7 @@ export default function FixturesList({
 
   function totalPointsForFixture(fixtureId: number): number | null {
     const keys = Object.keys(preds).filter(k => k.startsWith(`${fixtureId}:`))
-    const pts = keys.map(k => preds[k].points_earned ?? 0)
+    const pts = keys.map(k => preds[k]?.points_earned ?? 0)
     if (pts.length === 0 || pts.every(p => p === 0 && preds[keys[0]]?.points_earned === null)) return null
     return pts.reduce((a, b) => a + b, 0)
   }
