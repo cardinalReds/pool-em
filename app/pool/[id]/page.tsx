@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { RULE_PACKAGES } from '@/types'
 import FixturesList from '@/components/FixturesList'
@@ -62,7 +62,7 @@ function DeletePool({ poolId }: { poolId: string }) {
 }
 
 function Section({ title, children, defaultOpen = true }: {
-  title: string
+  title: string | React.ReactNode
   children: React.ReactNode
   defaultOpen?: boolean
 }) {
@@ -96,6 +96,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const [showSidebar, setShowSidebar] = useState(false)
   const [recentChanges, setRecentChanges] = useState<any[]>([])
   const [changesDismissed, setChangesDismissed] = useState(false)
+  const [isLive, setIsLive] = useState(false)
 
   useEffect(() => {
     function checkMobile() { setIsMobile(window.innerWidth < 768) }
@@ -185,10 +186,33 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         setBracketScoringRules(bsr)
       }
 
+      // Check for live fixtures
+      const { data: liveFixtures } = await supabase
+        .from('fixtures')
+        .select('id')
+        .eq('tournament_id', pool.tournament_id)
+        .eq('status', 'live')
+        .limit(1)
+      setIsLive((liveFixtures?.length ?? 0) > 0)
+
       setLoading(false)
     }
     load()
-  }, [params.id])
+
+    // Subscribe to fixture status changes for live indicator
+    const supabase = createClient()
+    const channel = supabase
+      .channel('pool-live-status')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fixtures' }, (payload) => {
+        if (payload.new.status === 'live') setIsLive(true)
+        else if (payload.new.status === 'finished' || payload.new.status === 'NS') {
+          // Re-check if any games still live
+          supabase.from('fixtures').select('id').eq('status', 'live').limit(1)
+            .then(({ data }) => setIsLive((data?.length ?? 0) > 0))
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
 
   async function togglePaid(memberId: string, currentValue: boolean) {
     const supabase = createClient()
@@ -278,7 +302,13 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       )}
 
       {/* Leaderboard */}
-      <Section title="leaderboard" defaultOpen={true}>
+      <Section title={isLive
+        ? <span style={{display:'flex',alignItems:'center',gap:5}}>
+            <span style={{width:6,height:6,borderRadius:'50%',background:'#2d7a2d',display:'inline-block'}}/>
+            live scoreboard <span style={{fontWeight:400,color:'#2d7a2d',fontSize:'9px',marginLeft:2}}>· if results hold</span>
+          </span>
+        : 'leaderboard'
+      } defaultOpen={true}>
         {isAdmin && pool.buy_in_amount && (
           <div style={{fontSize: '10px', color: '#aaa', marginBottom: '8px', display: 'flex', justifyContent: 'space-between'}}>
             <span>player</span>
