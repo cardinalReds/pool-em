@@ -19,6 +19,15 @@ async function fetchFinished() {
   return data.response || []
 }
 
+async function fetchLive() {
+  const res = await fetch(
+    `https://v3.football.api-sports.io/fixtures?league=${WC_LEAGUE_ID}&season=${WC_SEASON}&live=all`,
+    { headers: { 'x-apisports-key': API_FOOTBALL_KEY } }
+  )
+  const data = await res.json()
+  return data.response || []
+}
+
 interface EventFacts {
   firstScorerName: string | null
   allScorerNames: string[]
@@ -526,10 +535,16 @@ export async function POST(request: NextRequest) {
 
   try {
     const finishedMatches = await fetchFinished()
-    console.log(`Found ${finishedMatches.length} finished matches from API`)
+    const liveMatches = await fetchLive()
+    // Combine: finished first, then live. Use a flag to track which are live-only
+    const allMatches = [
+      ...finishedMatches.map((m: any) => ({ ...m, _isLive: false })),
+      ...liveMatches.map((m: any) => ({ ...m, _isLive: true })),
+    ]
     let fixturesScored = 0
 
-    for (const match of finishedMatches) {
+    for (const match of allMatches) {
+      const isLiveMatch = match._isLive
       const apiFixtureId: number = match.fixture.id
       const homeScore: number = match.goals.home
       const awayScore: number = match.goals.away
@@ -543,10 +558,10 @@ export async function POST(request: NextRequest) {
         .eq('api_fixture_id', apiFixtureId)
         .maybeSingle()
 
-      console.log(`API fixture ${apiFixtureId}: ourFixture=${ourFixture?.id}, scored=${ourFixture?.scored}`)
+      console.log(`API fixture ${apiFixtureId}: ourFixture=${ourFixture?.id}, scored=${ourFixture?.scored}, live=${isLiveMatch}`)
 
       if (!ourFixture) continue
-      if (ourFixture.scored) continue
+      if (ourFixture.scored && !isLiveMatch) continue // skip already-scored finished games; always re-score live games
 
       const internalFixtureId = ourFixture.id
 
@@ -568,9 +583,9 @@ export async function POST(request: NextRequest) {
       const { firstScorerName, allScorerNames, firstTeamScore, firstYellow, homeCardPts, awayCardPts } = eventFacts
       const actualResult = getResult(homeScore, awayScore)
 
-      // Update our fixture row — but DON'T mark scored=true yet
+      // Update our fixture row — only mark scored=true for finished games
       await supabase.from('fixtures').update({
-        status: 'FT',
+        status: isLiveMatch ? 'live' : 'FT',
         home_score: homeScore,
         away_score: awayScore,
         first_scorer_name: firstScorerName,
@@ -680,8 +695,10 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // All predictions scored — now mark fixture as done
-      await supabase.from('fixtures').update({ scored: true }).eq('id', internalFixtureId)
+      // All predictions scored — mark finished fixtures as done (not live ones)
+      if (!isLiveMatch) {
+        await supabase.from('fixtures').update({ scored: true }).eq('id', internalFixtureId)
+      }
       fixturesScored++
     }
 
