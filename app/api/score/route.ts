@@ -526,6 +526,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const finishedMatches = await fetchFinished()
+    console.log(`Found ${finishedMatches.length} finished matches from API`)
     let fixturesScored = 0
 
     for (const match of finishedMatches) {
@@ -541,6 +542,8 @@ export async function POST(request: NextRequest) {
         .select('id, scored, line_total_goals, line_total_corners, line_card_points, line_asian_handicap_home, line_asian_handicap_away')
         .eq('api_fixture_id', apiFixtureId)
         .maybeSingle()
+
+      console.log(`API fixture ${apiFixtureId}: ourFixture=${ourFixture?.id}, scored=${ourFixture?.scored}`)
 
       if (!ourFixture) continue
       if (ourFixture.scored) continue
