@@ -503,9 +503,9 @@ export default function FixturesList({
     }
 
     // Points feedback
-    const feedback = finished && pred?.points_earned !== null ? (
-      <span style={{ fontSize: '10px', color: pred.points_earned! > 0 ? '#2d7a2d' : '#aaa', marginLeft: 6 }}>
-        {pred.points_earned! > 0 ? `+${pred.points_earned} pts` : '✗'}
+    const feedback = finished && pred?.points_earned !== null && pred?.points_earned !== undefined ? (
+      <span style={{ fontSize: '10px', color: pred.points_earned > 0 ? '#2d7a2d' : '#aaa', marginLeft: 6 }}>
+        {pred.points_earned > 0 ? `+${pred.points_earned} pts` : '✗'}
       </span>
     ) : null
 
