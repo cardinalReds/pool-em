@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { WC_SQUADS } from '@/lib/wc_squads'
 
@@ -894,14 +895,39 @@ export default function FixturesList({
                             {perGameRules.map(rule => {
                               const p = memberPreds[`${memberId}:${fixture.id}:${rule.category_id}`]
                               const isCorrect = p?.is_correct
+                              const isExact = rule.category_id === 'soccer_exact_score' || rule.category_id === 'soccer_ht_exact_score'
+                              
+                              // For exact score — show per-team checkmarks
+                              let displayContent: ReactNode
+                              if (isExact && finished && p?.value_text && fixture.home_score !== null && fixture.away_score !== null) {
+                                const parts = p.value_text.split('-')
+                                const predHome = parseInt(parts[0])
+                                const predAway = parseInt(parts[1])
+                                const homeOk = predHome === fixture.home_score
+                                const awayOk = predAway === fixture.away_score
+                                displayContent = (
+                                  <span>
+                                    <span style={{ color: homeOk ? '#2d7a2d' : '#aaa' }}>{predHome}{homeOk ? ' ✓' : ' ✗'}</span>
+                                    {' - '}
+                                    <span style={{ color: awayOk ? '#2d7a2d' : '#aaa' }}>{predAway}{awayOk ? ' ✓' : ' ✗'}</span>
+                                  </span>
+                                )
+                              } else {
+                                displayContent = (
+                                  <>
+                                    {formatPickValue(p, rule, fixture)}
+                                    {finished && isCorrect && <span style={{ marginLeft: 3 }}>✓</span>}
+                                  </>
+                                )
+                              }
+
                               return (
                                 <td key={rule.category_id} style={{
                                   padding: '4px 6px', textAlign: 'center' as const, whiteSpace: 'nowrap' as const,
                                   borderTop: '1px solid #f5f5f5',
-                                  color: finished ? (isCorrect ? '#2d7a2d' : isCorrect === false ? '#aaa' : '#555') : '#555',
+                                  color: finished && !isExact ? (isCorrect ? '#2d7a2d' : isCorrect === false ? '#aaa' : '#555') : '#555',
                                 }}>
-                                  {formatPickValue(p, rule, fixture)}
-                                  {finished && isCorrect && <span style={{ marginLeft: 3 }}>✓</span>}
+                                  {displayContent}
                                 </td>
                               )
                             })}
