@@ -597,10 +597,12 @@ export async function POST(request: NextRequest) {
       }
 
       // Get all pools using this tournament
-      const { data: pools } = await supabase
+      const { data: pools, error: poolsErr } = await supabase
         .from('pools')
         .select('id, package_id')
         .eq('tournament_id', 'wc_2026')
+
+      console.log(`Pools found: ${pools?.length ?? 0}, error: ${poolsErr?.message}`)
 
       for (const pool of pools || []) {
 
