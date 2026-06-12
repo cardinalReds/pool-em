@@ -25,6 +25,10 @@ interface Fixture {
   line_card_points: number | null
   line_asian_handicap_home: number | null
   line_asian_handicap_away: number | null
+  live_home_corners: number | null
+  live_away_corners: number | null
+  live_home_cards: number | null
+  live_away_cards: number | null
 }
 
 // One row per category per fixture in predictions_v2
@@ -843,6 +847,29 @@ export default function FixturesList({
         </div>
 
         {/* Per-game predictions */}
+        {/* Live stats bar — corners and cards */}
+        {isLive && (() => {
+          const hasCorners = perGameRules.some(r => r.category_id === 'soccer_total_corners_ou' || r.category_id === 'soccer_corners_winner')
+          const hasCards = perGameRules.some(r => r.category_id === 'soccer_card_points_ou' || r.category_id === 'soccer_cards_home_away')
+          if (!hasCorners && !hasCards) return null
+          return (
+            <div style={{ display: 'flex', gap: 16, padding: '6px 10px', background: '#f0fff4', borderBottom: '1px solid #d0f0d8', fontSize: '11px', color: '#2d7a2d', flexWrap: 'wrap' as const }}>
+              {hasCorners && (
+                <span>
+                  🚩 corners: {FLAGS[fixture.home_team]} {fixture.live_home_corners ?? 0} – {fixture.live_away_corners ?? 0} {FLAGS[fixture.away_team]}
+                  {fixture.line_total_corners && <span style={{ color: '#aaa', marginLeft: 4 }}>(line {fixture.line_total_corners})</span>}
+                </span>
+              )}
+              {hasCards && (
+                <span>
+                  🟨 cards: {FLAGS[fixture.home_team]} {fixture.live_home_cards ?? 0} – {fixture.live_away_cards ?? 0} {FLAGS[fixture.away_team]}
+                  {fixture.line_card_points && <span style={{ color: '#aaa', marginLeft: 4 }}>(line {fixture.line_card_points})</span>}
+                </span>
+              )}
+            </div>
+          )
+        })()}
+
         {perGameRules.length > 0 && (
           <div style={{ padding: '8px 10px' }}>
             {perGameRules.map(rule => (

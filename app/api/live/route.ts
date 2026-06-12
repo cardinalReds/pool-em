@@ -69,6 +69,26 @@ function extractFirstScorer(events: any[]): string | null {
   return goals[0]?.player?.name ?? null
 }
 
+
+async function fetchFixtureStats(apiFixtureId: number): Promise<{ homeCorners: number; awayCorners: number; homeCards: number; awayCards: number }> {
+  const res = await fetch(
+    `${API_FOOTBALL_BASE}/fixtures/statistics?fixture=${apiFixtureId}`,
+    { headers: { 'x-apisports-key': process.env.API_FOOTBALL_KEY! } }
+  )
+  if (!res.ok) return { homeCorners: 0, awayCorners: 0, homeCards: 0, awayCards: 0 }
+  const data = await res.json()
+  const teams = data.response ?? []
+  const getStat = (team: any, name: string) => parseInt(team.statistics?.find((s: any) => s.type === name)?.value ?? '0') || 0
+  const home = teams[0] ?? {}
+  const away = teams[1] ?? {}
+  return {
+    homeCorners: getStat(home, 'Corner Kicks'),
+    awayCorners: getStat(away, 'Corner Kicks'),
+    homeCards: getStat(home, 'Yellow Cards') + getStat(home, 'Red Cards'),
+    awayCards: getStat(away, 'Yellow Cards') + getStat(away, 'Red Cards'),
+  }
+}
+
 async function triggerScoring(fixtureId: string) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL
   await fetch(`${appUrl}/api/score`, {
@@ -139,6 +159,9 @@ export async function GET(request: Request) {
           firstScorer = extractFirstScorer(events)
         }
 
+        // Fetch live stats (corners, cards)
+        const stats = await fetchFixtureStats(apiId)
+
         // Update fixture
         const { error } = await supabase
           .from('fixtures')
@@ -147,6 +170,10 @@ export async function GET(request: Request) {
             away_score: awayScore,
             first_scorer_name: firstScorer,
             status,
+            live_home_corners: stats.homeCorners,
+            live_away_corners: stats.awayCorners,
+            live_home_cards: stats.homeCards,
+            live_away_cards: stats.awayCards,
           })
           .eq('id', ourFixture.id)
 
