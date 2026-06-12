@@ -213,6 +213,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
+  }, [params.id])
 
   async function togglePaid(memberId: string, currentValue: boolean) {
     const supabase = createClient()
