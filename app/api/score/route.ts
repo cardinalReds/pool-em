@@ -628,25 +628,6 @@ export async function POST(request: NextRequest) {
       const { firstScorerName, allScorerNames, firstTeamScore, firstYellow, homeCardPts, awayCardPts, htHomeCardPts, htAwayCardPts } = eventFacts
       const actualResult = getResult(homeScore, awayScore)
 
-      // Update our fixture row — only mark scored=true for finished games
-      await supabase.from('fixtures').update({
-        status: isLiveMatch ? 'live' : 'FT',
-        home_score: homeScore,
-        away_score: awayScore,
-        first_scorer_name: firstScorerName,
-        ht_home_score: facts.htHome,
-        ht_away_score: facts.htAway,
-        live_home_corners: cornerFacts.homeCorners,
-        live_away_corners: cornerFacts.awayCorners,
-        ht_home_corners: cornerFacts.htHomeCorners,
-        ht_away_corners: cornerFacts.htAwayCorners,
-        live_home_cards: homeCardPts,
-        live_away_cards: awayCardPts,
-        ht_home_card_pts: htHomeCardPts,
-        ht_away_card_pts: htAwayCardPts,
-        first_yellow_team: firstYellow === 'none' ? null : firstYellow,
-      }).eq('id', internalFixtureId)
-
       // Use odds lines from fixture row
       const fixtureRow = ourFixture
 
@@ -670,6 +651,25 @@ export async function POST(request: NextRequest) {
         cornersLine: fixtureRow?.line_total_corners ?? null,
         cardPtsLine: fixtureRow?.line_card_points ?? null,
       }
+
+      // Update our fixture row — only mark scored=true for finished games
+      await supabase.from('fixtures').update({
+        status: isLiveMatch ? 'live' : 'FT',
+        home_score: homeScore,
+        away_score: awayScore,
+        first_scorer_name: firstScorerName,
+        ht_home_score: facts.htHome,
+        ht_away_score: facts.htAway,
+        live_home_corners: cornerFacts.homeCorners,
+        live_away_corners: cornerFacts.awayCorners,
+        ht_home_corners: cornerFacts.htHomeCorners,
+        ht_away_corners: cornerFacts.htAwayCorners,
+        live_home_cards: homeCardPts,
+        live_away_cards: awayCardPts,
+        ht_home_card_pts: htHomeCardPts,
+        ht_away_card_pts: htAwayCardPts,
+        first_yellow_team: firstYellow === 'none' ? null : firstYellow,
+      }).eq('id', internalFixtureId)
 
       // Get all pools using this tournament
       const { data: pools, error: poolsErr } = await supabase
