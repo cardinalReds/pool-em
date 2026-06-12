@@ -589,6 +589,10 @@ export async function POST(request: NextRequest) {
         home_score: homeScore,
         away_score: awayScore,
         first_scorer_name: firstScorerName,
+        live_home_corners: cornerFacts.homeCorners,
+        live_away_corners: cornerFacts.awayCorners,
+        live_home_cards: homeCardPts,
+        live_away_cards: awayCardPts,
       }).eq('id', internalFixtureId)
 
       // Use odds lines from fixture row

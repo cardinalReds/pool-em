@@ -195,6 +195,19 @@ export default function FixturesList({
       const data = await res.json()
       setFixtures(data.fixtures || [])
 
+      // Set initial page to today or next available date
+      if (data.fixtures?.length > 0) {
+        const todayStr = new Date().toISOString().slice(0, 10)
+        const sorted = [...(data.fixtures)].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        const dateMap: Record<string, boolean> = {}
+        sorted.forEach((f: any) => { dateMap[f.date.slice(0, 10)] = true })
+        const dates = Object.keys(dateMap).sort()
+        // Find today or next future date
+        const targetDate = dates.find(d => d >= todayStr) ?? dates[dates.length - 1]
+        const pageIndex = dates.indexOf(targetDate)
+        if (pageIndex >= 0) setCurrentPage(pageIndex)
+      }
+
       if (isCustom) {
         // Load pool_rules joined with ruleset_categories for input_type etc.
         const { data: rules } = await supabase
@@ -679,8 +692,11 @@ export default function FixturesList({
                   setScoreInputs(prev => {
                     const away = prev[awayKey] ?? ''
                     const newInputs = { ...prev, [homeKey]: v }
-                    const combined = `${v}-${away}`
-                    updateLocal(fixture.id, rule.category_id, { value_text: combined })
+                    if (v !== '' && away !== '') {
+                      updateLocal(fixture.id, rule.category_id, { value_text: `${v}-${away}` })
+                    } else {
+                      updateLocal(fixture.id, rule.category_id, { value_text: null })
+                    }
                     return newInputs
                   })
                 }}
@@ -697,8 +713,11 @@ export default function FixturesList({
                   setScoreInputs(prev => {
                     const home = prev[homeKey] ?? ''
                     const newInputs = { ...prev, [awayKey]: v }
-                    const combined = `${home}-${v}`
-                    updateLocal(fixture.id, rule.category_id, { value_text: combined })
+                    if (home !== '' && v !== '') {
+                      updateLocal(fixture.id, rule.category_id, { value_text: `${home}-${v}` })
+                    } else {
+                      updateLocal(fixture.id, rule.category_id, { value_text: null })
+                    }
                     return newInputs
                   })
                 }}
