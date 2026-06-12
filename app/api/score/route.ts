@@ -88,6 +88,8 @@ async function fetchFixtureEvents(fixtureId: number, homeTeamId: number): Promis
 interface CornerFacts {
   homeCorners: number | null
   awayCorners: number | null
+  htHomeCorners: number | null
+  htAwayCorners: number | null
 }
 
 async function fetchFixtureStats(fixtureId: number): Promise<CornerFacts> {
@@ -108,7 +110,25 @@ async function fetchFixtureStats(fixtureId: number): Promise<CornerFacts> {
     else awayCorners = val
   })
 
-  return { homeCorners, awayCorners }
+  // Fetch HT stats
+  let htHomeCorners: number | null = null
+  let htAwayCorners: number | null = null
+  try {
+    const htRes = await fetch(
+      `https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}&half=true`,
+      { headers: { 'x-apisports-key': API_FOOTBALL_KEY } }
+    )
+    const htData = await htRes.json()
+    const htTeams: any[] = htData.response || []
+    htTeams.forEach((team: any, idx: number) => {
+      const stat = team.statistics?.find((s: any) => s.type === 'Corner Kicks')
+      const val = stat ? parseInt(stat.value) || 0 : null
+      if (idx === 0) htHomeCorners = val
+      else htAwayCorners = val
+    })
+  } catch {}
+
+  return { homeCorners, awayCorners, htHomeCorners, htAwayCorners }
 }
 
 async function fetchAndSeedSquad(teamId: number, teamName: string): Promise<void> {
@@ -188,6 +208,14 @@ function scoreCustomPrediction(
       if (facts.homeCorners === null || facts.awayCorners === null) return 0
       return pred.value_wld === getResult(facts.homeCorners, facts.awayCorners) ? rule.points : 0
     }
+
+    case 'soccer_ht_corners_winner': {
+      if (facts.htHomeCorners === null || facts.htAwayCorners === null) return 0
+      return pred.value_wld === getResult(facts.htHomeCorners, facts.htAwayCorners) ? rule.points : 0
+    }
+
+    case 'soccer_cards_ht':
+      return 0 // HT card data not available
 
     case 'soccer_cards_home_away':
       return pred.value_wld === getResult(facts.homeCardPts, facts.awayCardPts) ? rule.points : 0
@@ -276,6 +304,8 @@ interface MatchFacts {
   firstYellow: 'home' | 'away' | 'none'
   homeCorners: number | null
   awayCorners: number | null
+  htHomeCorners: number | null
+  htAwayCorners: number | null
   homeCardPts: number
   awayCardPts: number
   goalsLine: number | null
@@ -589,10 +619,15 @@ export async function POST(request: NextRequest) {
         home_score: homeScore,
         away_score: awayScore,
         first_scorer_name: firstScorerName,
+        ht_home_score: facts.htHome,
+        ht_away_score: facts.htAway,
         live_home_corners: cornerFacts.homeCorners,
         live_away_corners: cornerFacts.awayCorners,
+        ht_home_corners: cornerFacts.htHomeCorners,
+        ht_away_corners: cornerFacts.htAwayCorners,
         live_home_cards: homeCardPts,
         live_away_cards: awayCardPts,
+        first_yellow_team: firstYellow === 'none' ? null : firstYellow,
       }).eq('id', internalFixtureId)
 
       // Use odds lines from fixture row
@@ -608,6 +643,8 @@ export async function POST(request: NextRequest) {
         firstYellow,
         homeCorners: cornerFacts.homeCorners,
         awayCorners: cornerFacts.awayCorners,
+        htHomeCorners: cornerFacts.htHomeCorners,
+        htAwayCorners: cornerFacts.htAwayCorners,
         homeCardPts,
         awayCardPts,
         goalsLine: fixtureRow?.line_total_goals ?? null,
