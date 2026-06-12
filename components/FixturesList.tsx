@@ -923,12 +923,17 @@ export default function FixturesList({
                       </tr>
                     </thead>
                     <tbody>
-                      {Object.entries(members).map(([memberId, displayName]) => {
+                      {Object.entries(members)
+                        .map(([memberId, displayName]) => {
+                          const memberTotalPts = perGameRules.reduce((sum, rule) => {
+                            const p = memberPreds[`${memberId}:${fixture.id}:${rule.category_id}`]
+                            return sum + (p?.points_earned ?? 0)
+                          }, 0)
+                          return { memberId, displayName, memberTotalPts }
+                        })
+                        .sort((a, b) => b.memberTotalPts - a.memberTotalPts)
+                        .map(({ memberId, displayName, memberTotalPts }) => {
                         const isMe = memberId === userId
-                        const memberTotalPts = perGameRules.reduce((sum, rule) => {
-                          const p = memberPreds[`${memberId}:${fixture.id}:${rule.category_id}`]
-                          return sum + (p?.points_earned ?? 0)
-                        }, 0)
                         return (
                           <tr key={memberId} style={{ background: isMe ? '#fff5f5' : 'transparent' }}>
                             <td style={{ padding: '4px 6px', fontWeight: isMe ? 700 : 400, color: isMe ? '#C8102E' : '#555', whiteSpace: 'nowrap' as const, borderTop: '1px solid #f5f5f5' }}>
