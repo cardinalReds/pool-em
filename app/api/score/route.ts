@@ -568,13 +568,12 @@ export async function POST(request: NextRequest) {
       const { firstScorerName, allScorerNames, firstTeamScore, firstYellow, homeCardPts, awayCardPts } = eventFacts
       const actualResult = getResult(homeScore, awayScore)
 
-      // Update our fixture row
+      // Update our fixture row — but DON'T mark scored=true yet
       await supabase.from('fixtures').update({
         status: 'FT',
         home_score: homeScore,
         away_score: awayScore,
         first_scorer_name: firstScorerName,
-        scored: true,
       }).eq('id', internalFixtureId)
 
       // Use odds lines from fixture row
@@ -679,6 +678,8 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // All predictions scored — now mark fixture as done
+      await supabase.from('fixtures').update({ scored: true }).eq('id', internalFixtureId)
       fixturesScored++
     }
 
