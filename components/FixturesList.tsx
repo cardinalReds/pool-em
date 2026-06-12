@@ -974,6 +974,9 @@ export default function FixturesList({
                                 const parts = p.value_text.split('-')
                                 const predHome = parseInt(parts[0])
                                 const predAway = parseInt(parts[1])
+                                if (isNaN(predHome) || isNaN(predAway)) {
+                                  displayContent = <span style={{ color: '#ccc' }}>—</span>
+                                } else {
                                 const homeOk = predHome === fixture.home_score
                                 const awayOk = predAway === fixture.away_score
                                 displayContent = (
@@ -983,6 +986,7 @@ export default function FixturesList({
                                     <span style={{ color: awayOk ? '#2d7a2d' : '#aaa' }}>{predAway}{awayOk ? ' ✓' : ' ✗'}</span>
                                   </span>
                                 )
+                                }
                               } else {
                                 displayContent = (
                                   <>
