@@ -352,7 +352,22 @@ export default function FixturesList({
     return pts.reduce((a, b) => a + b, 0)
   }
 
-  // ── Matchday round definitions ──────────────────────────────────────────
+  // Subscribe to realtime fixture updates
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('fixtures-live')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'fixtures',
+      }, (payload) => {
+        const updated = payload.new as Fixture
+        setFixtures(prev => prev.map(f => f.id === updated.id ? { ...f, ...updated } : f))
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [])
   const MATCHDAY_ROUNDS = [
     { id: 'round_1', label: 'Round 1', start: '2026-06-11', end: '2026-06-17' },
     { id: 'round_2', label: 'Round 2', start: '2026-06-18', end: '2026-06-23' },

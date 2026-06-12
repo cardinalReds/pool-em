@@ -1,7 +1,7 @@
 {
   "crons": [
     { "path": "/api/score", "schedule": "*/30 * * * *" },
-    { "path": "/api/live", "schedule": "*/2 * * * *" },
+    { "path": "/api/live", "schedule": "* * * * *" },
     { "path": "/api/reminders", "schedule": "*/30 * * * *" },
     { "path": "/api/odds", "schedule": "0 */6 * * *" }
   ]
