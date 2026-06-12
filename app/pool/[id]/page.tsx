@@ -62,7 +62,7 @@ function DeletePool({ poolId }: { poolId: string }) {
 }
 
 function Section({ title, children, defaultOpen = true }: {
-  title: string | React.ReactNode
+  title: string
   children: React.ReactNode
   defaultOpen?: boolean
 }) {
@@ -302,13 +302,13 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       )}
 
       {/* Leaderboard */}
-      <Section title={isLive
-        ? <span style={{display:'flex',alignItems:'center',gap:5}}>
-            <span style={{width:6,height:6,borderRadius:'50%',background:'#2d7a2d',display:'inline-block'}}/>
-            live scoreboard <span style={{fontWeight:400,color:'#2d7a2d',fontSize:'9px',marginLeft:2}}>· if results hold</span>
-          </span>
-        : 'leaderboard'
-      } defaultOpen={true}>
+      {isLive && (
+        <div style={{display:'flex',alignItems:'center',gap:5,padding:'4px 0 8px',fontSize:'10px',fontWeight:700,color:'#2d7a2d',textTransform:'uppercase' as const,letterSpacing:'0.06em'}}>
+          <span style={{width:6,height:6,borderRadius:'50%',background:'#2d7a2d',display:'inline-block'}}/>
+          live scoreboard · if results hold
+        </div>
+      )}
+      <Section title="leaderboard" defaultOpen={true}>
         {isAdmin && pool.buy_in_amount && (
           <div style={{fontSize: '10px', color: '#aaa', marginBottom: '8px', display: 'flex', justifyContent: 'space-between'}}>
             <span>player</span>
