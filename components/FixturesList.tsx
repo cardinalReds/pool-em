@@ -853,7 +853,7 @@ export default function FixturesList({
           const hasCards = perGameRules.some(r => r.category_id === 'soccer_card_points_ou' || r.category_id === 'soccer_cards_home_away')
           if (!hasCorners && !hasCards) return null
           return (
-            <div style={{ display: 'flex', gap: 16, padding: '6px 10px', background: '#f0fff4', borderBottom: '1px solid #d0f0d8', fontSize: '11px', color: '#2d7a2d', flexWrap: 'wrap' as const }}>
+            <div style={{ display: 'flex', gap: 16, padding: '6px 10px', background: '#f0fff4', borderBottom: '1px solid #d0f0d8', fontSize: '11px', color: '#2d7a2d', flexWrap: 'wrap' as const, justifyContent: 'center' as const }}>
               {hasCorners && (
                 <span>
                   🚩 corners: {FLAGS[fixture.home_team]} {fixture.live_home_corners ?? 0} – {fixture.live_away_corners ?? 0} {FLAGS[fixture.away_team]}
