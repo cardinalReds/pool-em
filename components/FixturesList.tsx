@@ -987,6 +987,41 @@ export default function FixturesList({
                         )
                       })}
                     </tbody>
+                    {finished && (
+                      <tfoot>
+                        <tr>
+                          <td style={{ padding: '6px 6px 2px', fontSize: '10px', fontWeight: 700, color: '#2d7a2d', borderTop: '2px solid #eee', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>actual</td>
+                          {perGameRules.map(rule => {
+                            let actual = '—'
+                            const h = fixture.home_score ?? 0
+                            const a = fixture.away_score ?? 0
+                            const result = h > a ? 'Home' : a > h ? 'Away' : 'Draw'
+                            switch (rule.category_id) {
+                              case 'soccer_result': actual = result; break
+                              case 'soccer_ht_result': actual = '—'; break
+                              case 'soccer_exact_score': actual = `${h}-${a}`; break
+                              case 'soccer_ht_exact_score': actual = '—'; break
+                              case 'soccer_first_goalscorer':
+                              case 'soccer_anytime_goalscorer':
+                                actual = fixture.first_scorer_name || '—'; break
+                              case 'soccer_first_team_score': actual = result === 'Draw' ? '—' : (h > 0 || a > 0) ? (h > 0 ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : `${FLAGS[fixture.away_team]} ${fixture.away_team}`) : '—'; break
+                              case 'soccer_btts': actual = (h > 0 && a > 0) ? 'Yes' : 'No'; break
+                              case 'soccer_total_goals_ou': actual = `${h + a} goals`; break
+                              case 'soccer_total_corners_ou': actual = fixture.live_home_corners != null ? `${(fixture.live_home_corners ?? 0) + (fixture.live_away_corners ?? 0)} corners` : '—'; break
+                              case 'soccer_card_points_ou': actual = fixture.live_home_cards != null ? `${(fixture.live_home_cards ?? 0) + (fixture.live_away_cards ?? 0)} cards` : '—'; break
+                              case 'soccer_first_yellow_team': actual = '—'; break
+                              case 'soccer_asian_handicap': actual = result; break
+                            }
+                            return (
+                              <td key={rule.category_id} style={{ padding: '6px 6px 2px', textAlign: 'center' as const, fontSize: '11px', color: '#2d7a2d', fontWeight: 600, borderTop: '2px solid #eee' }}>
+                                {actual}
+                              </td>
+                            )
+                          })}
+                          {finished && <td style={{ borderTop: '2px solid #eee' }} />}
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
                 )}
