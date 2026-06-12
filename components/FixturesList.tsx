@@ -684,7 +684,6 @@ export default function FixturesList({
               <input
                 type="number" min="0" max="15"
                 value={homeVal}
-                placeholder="0"
                 disabled={locked || finished}
                 style={{ width: 52, border: '1px solid #ddd', padding: '8px 4px', textAlign: 'center', fontSize: '16px', fontFamily: 'inherit', background: locked || finished ? '#fafafa' : 'white' }}
                 onChange={e => {
@@ -705,7 +704,6 @@ export default function FixturesList({
               <input
                 type="number" min="0" max="15"
                 value={awayVal}
-                placeholder="0"
                 disabled={locked || finished}
                 style={{ width: 52, border: '1px solid #ddd', padding: '8px 4px', textAlign: 'center', fontSize: '16px', fontFamily: 'inherit', background: locked || finished ? '#fafafa' : 'white' }}
                 onChange={e => {
