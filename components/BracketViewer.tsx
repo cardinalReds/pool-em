@@ -214,28 +214,32 @@ function Team({ team }: { team: string | undefined }) {
   )
 }
 
-function BracketRound({ label, teams, highlight }: { label: string; teams: (string | undefined)[]; highlight?: boolean }) {
-  const slotHeight = 48
-  const totalHeight = teams.length * slotHeight
+function BracketRound({ label, teams, slotHeight }: { label: string; teams: (string | undefined)[]; slotHeight: number }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column' as const, minWidth: 140 }}>
-      <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, color: highlight ? '#C8102E' : '#bbb', letterSpacing: '0.06em', marginBottom: 6, height: 16 }}>{label}</div>
-      <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 0, height: totalHeight }}>
-        {teams.map((team, i) => {
-          const isFirstInPair = i % 2 === 0
-          return (
-            <div key={i} style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: isFirstInPair ? 'flex-end' : 'flex-start',
-              paddingBottom: isFirstInPair ? 1 : 0,
-              paddingTop: isFirstInPair ? 0 : 1,
-            }}>
-              <Team team={team} />
-            </div>
-          )
-        })}
-      </div>
+      <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, color: '#bbb', letterSpacing: '0.06em', marginBottom: 6, height: 16 }}>{label}</div>
+      {teams.map((team, i) => (
+        <div key={i} style={{
+          height: slotHeight,
+          display: 'flex',
+          alignItems: 'center',
+        }}>
+          <Team team={team} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function BracketConnector({ count, slotHeight }: { count: number; slotHeight: number }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' as const, width: 16, marginTop: 22 }}>
+      {Array.from({ length: count / 2 }, (_, i) => (
+        <div key={i} style={{ height: slotHeight * 2, display: 'flex', flexDirection: 'column' as const }}>
+          <div style={{ flex: 1, borderBottom: '1px solid #ddd', borderRight: '1px solid #ddd' }} />
+          <div style={{ flex: 1, borderTop: '1px solid #ddd', borderRight: '1px solid #ddd' }} />
+        </div>
+      ))}
     </div>
   )
 }
@@ -251,36 +255,25 @@ function BracketTree({ picks, finalHomeScore, finalAwayScore }: {
   const sf = Array.from({ length: 2 }, (_, i) => picks[`SF_${i + 1}`])
   const final = picks['FINAL']
 
-  const connector = (count: number) => (
-    <div style={{ display: 'flex', flexDirection: 'column' as const, justifyContent: 'space-around', width: 12, alignSelf: 'stretch', marginTop: 22 }}>
-      {Array.from({ length: count }, (_, i) => (
-        <div key={i} style={{
-          flex: 1,
-          borderTop: i % 2 === 0 ? '1px solid #ddd' : 'none',
-          borderBottom: i % 2 === 1 ? '1px solid #ddd' : 'none',
-          borderRight: '1px solid #ddd',
-        }} />
-      ))}
-    </div>
-  )
+  const BASE = 36 // height per slot in R32
 
   return (
     <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
-      <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start', minWidth: 780 }}>
-        <BracketRound label="Round of 32" teams={r32} />
-        {connector(16)}
-        <BracketRound label="Round of 16" teams={r16} />
-        {connector(8)}
-        <BracketRound label="Quarter-finals" teams={qf} />
-        {connector(4)}
-        <BracketRound label="Semi-finals" teams={sf} />
-        {connector(2)}
+      <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start', minWidth: 820 }}>
+        <BracketRound label="Round of 32" teams={r32} slotHeight={BASE} />
+        <BracketConnector count={16} slotHeight={BASE} />
+        <BracketRound label="Round of 16" teams={r16} slotHeight={BASE * 2} />
+        <BracketConnector count={8} slotHeight={BASE * 2} />
+        <BracketRound label="Quarter-finals" teams={qf} slotHeight={BASE * 4} />
+        <BracketConnector count={4} slotHeight={BASE * 4} />
+        <BracketRound label="Semi-finals" teams={sf} slotHeight={BASE * 8} />
+        <BracketConnector count={2} slotHeight={BASE * 8} />
         <div style={{ display: 'flex', flexDirection: 'column' as const, minWidth: 140 }}>
           <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, color: '#C8102E', letterSpacing: '0.06em', marginBottom: 6, height: 16 }}>🏆 Champion</div>
-          <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 2, marginTop: 184 }}>
+          <div style={{ height: BASE * 16, display: 'flex', flexDirection: 'column' as const, justifyContent: 'center', gap: 4 }}>
             <Team team={final} />
             {finalHomeScore != null && finalAwayScore != null && (
-              <div style={{ fontSize: '10px', color: '#888', marginTop: 4 }}>{finalHomeScore}–{finalAwayScore}</div>
+              <div style={{ fontSize: '10px', color: '#888' }}>{finalHomeScore}–{finalAwayScore}</div>
             )}
           </div>
         </div>
