@@ -179,6 +179,7 @@ export default function FixturesList({
   const [roundSpecialPicks, setRoundSpecialPicks] = useState<Record<string, Record<string, string>>>({})
   const [roundSpecialSaving, setRoundSpecialSaving] = useState<string | null>(null)
   const [roundSpecialSaved, setRoundSpecialSaved] = useState<Record<string, boolean>>({})
+  const [braceTeamByMatchday, setBraceTeamByMatchday] = useState<Record<string, string>>({})
   const [sortMode, setSortMode] = useState<'date' | 'group' | 'round'>('date')
   const [viewMode, setViewMode] = useState<'pages' | 'list'>('pages')
   const [currentPage, setCurrentPage] = useState(0)
@@ -256,11 +257,23 @@ export default function FixturesList({
 
         // Load round special picks (no fixture_id)
         const roundPicks: Record<string, Record<string, string>> = {}
+        const braceTeams: Record<string, string> = {}
         ;(v2preds || []).filter((p: any) => !p.fixture_id && p.matchday).forEach((p: any) => {
           if (!roundPicks[p.matchday]) roundPicks[p.matchday] = {}
           roundPicks[p.matchday][p.category_id] = p.value_text || p.value_wld || ''
+          // Restore brace team from saved player name
+          if (p.category_id === 'soccer_brace_round' && p.value_text) {
+            // Find which team this player belongs to
+            for (const [team, players] of Object.entries(WC_SQUADS)) {
+              if ((players as any[]).some((pl: any) => pl.name === p.value_text)) {
+                braceTeams[p.matchday] = team
+                break
+              }
+            }
+          }
         })
         setRoundSpecialPicks(roundPicks)
+        setBraceTeamByMatchday(braceTeams)
 
         // Fetch all members' display names
         const { data: memberRows } = await supabase
@@ -462,6 +475,9 @@ export default function FixturesList({
     if (roundRules.length === 0) return null
     const picks = roundSpecialPicks[matchday] || {}
     const [braceTeam, setBraceTeam] = useState('')
+    // Use lifted state to persist across re-renders
+    const braceTeam2 = braceTeamByMatchday[matchday] || ''
+    const setBraceTeam2 = (v: string) => setBraceTeamByMatchday(prev => ({ ...prev, [matchday]: v }))
     const allTeams = Object.keys(WC_SQUADS).sort()
 
     function updatePick(categoryId: string, value: string) {
@@ -486,15 +502,15 @@ export default function FixturesList({
                 </div>
                 {isBrace ? (
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <select value={braceTeam} disabled={locked} onChange={e => setBraceTeam(e.target.value)}
+                    <select value={braceTeam2} disabled={locked} onChange={e => setBraceTeam2(e.target.value)}
                       style={{ flex: 1, border: '1px solid #ddd', padding: '6px', fontSize: '12px', fontFamily: 'inherit', background: locked ? '#fafafa' : 'white' }}>
                       <option value="">select team...</option>
                       {allTeams.map(t => <option key={t} value={t}>{FLAGS[t] || ''} {t}</option>)}
                     </select>
-                    <select value={val} disabled={locked || !braceTeam} onChange={e => updatePick(rule.category_id, e.target.value)}
+                    <select value={val} disabled={locked || !braceTeam2} onChange={e => updatePick(rule.category_id, e.target.value)}
                       style={{ flex: 1, border: '1px solid #ddd', padding: '6px', fontSize: '12px', fontFamily: 'inherit', background: locked ? '#fafafa' : 'white' }}>
                       <option value="">select player...</option>
-                      {(WC_SQUADS[braceTeam] || []).map(p => <option key={p.name} value={p.name}>{p.name} ({p.position})</option>)}
+                      {(WC_SQUADS[braceTeam2] || []).map(p => <option key={p.name} value={p.name}>{p.name} ({p.position})</option>)}
                     </select>
                   </div>
                 ) : (
