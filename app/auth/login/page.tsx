@@ -7,6 +7,7 @@ import Link from 'next/link'
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [rememberMe, setRememberMe] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [inviteCode, setInviteCode] = useState<string | null>(null)
@@ -15,6 +16,9 @@ export default function LoginPage() {
     const params = new URLSearchParams(window.location.search)
     const invite = params.get('invite') || localStorage.getItem('pending_invite')
     if (invite) setInviteCode(invite)
+    // Restore remember me preference
+    const remembered = localStorage.getItem('remember_me')
+    if (remembered) setRememberMe(true)
   }, [])
 
   async function handleLogin(e: React.FormEvent) {
@@ -27,6 +31,13 @@ export default function LoginPage() {
       setError(error.message)
       setLoading(false)
     } else if (data.session) {
+      if (rememberMe) {
+        localStorage.setItem('remember_me', '1')
+      } else {
+        localStorage.removeItem('remember_me')
+        // Clear session on browser close by using sessionStorage
+        sessionStorage.setItem('session_only', '1')
+      }
       await supabase.auth.setSession({ access_token: data.session.access_token, refresh_token: data.session.refresh_token })
       window.location.href = inviteCode ? `/pool/join/${inviteCode}` : '/dashboard'
     }
@@ -54,6 +65,14 @@ export default function LoginPage() {
             onChange={e => setPassword(e.target.value)} required
             style={{fontSize: '16px', padding: '0.65rem 0.75rem'}} />
         </div>
+
+        {/* Remember me */}
+        <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-dim)'}}>
+          <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)}
+            style={{width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--red)'}} />
+          remember me
+        </label>
+
         {error && <p style={{fontSize: '0.8rem', color: 'var(--red)', background: 'var(--red-light)', padding: '0.5rem 0.75rem'}}>{error}</p>}
         <button className="btn-primary" type="submit" disabled={loading}
           style={{width: '100%', marginTop: '0.25rem', padding: '0.85rem', fontSize: '1rem', minHeight: 48}}>
