@@ -171,6 +171,7 @@ export default function FixturesList({
   const [poolRules, setPoolRules] = useState<PoolRule[]>([])
   const [preds, setPreds] = useState<PredMap>({})
   const [memberPreds, setMemberPreds] = useState<PredMap>({})
+  const [memberRoundPreds, setMemberRoundPreds] = useState<Record<string, Record<string, Record<string, string>>>>({}) // matchday → memberId → categoryId → value
   const [members, setMembers] = useState<Record<string, string>>({})
   const [scoreInputs, setScoreInputs] = useState<ScoreInputMap>({})
   const [loading, setLoading] = useState(true)
@@ -290,10 +291,18 @@ export default function FixturesList({
           .select('*')
           .eq('pool_id', poolId)
         const allPredMap: PredMap = {}
-        ;(allPreds || []).forEach((p: PredV2) => {
-          allPredMap[`${p.user_id}:${p.fixture_id}:${p.category_id}`] = p
+        const roundPredMap: Record<string, Record<string, Record<string, string>>> = {}
+        ;(allPreds || []).forEach((p: any) => {
+          if (p.fixture_id) {
+            allPredMap[`${p.user_id}:${p.fixture_id}:${p.category_id}`] = p
+          } else if (p.matchday) {
+            if (!roundPredMap[p.matchday]) roundPredMap[p.matchday] = {}
+            if (!roundPredMap[p.matchday][p.user_id]) roundPredMap[p.matchday][p.user_id] = {}
+            roundPredMap[p.matchday][p.user_id][p.category_id] = p.value_text || ''
+          }
         })
         setMemberPreds(allPredMap)
+        setMemberRoundPreds(roundPredMap)
       } else {
         // Legacy: load from predictions table
         const { data: legacyPreds } = await supabase
@@ -530,6 +539,45 @@ export default function FixturesList({
                 {roundSpecialSaving === matchday ? 'saving...' : 'save round picks'}
               </button>
               {roundSpecialSaved[matchday] && <span style={{ fontSize: '11px', color: '#2d7a2d' }}>✓ saved</span>}
+            </div>
+          )}
+
+          {/* Member picks when locked */}
+          {locked && Object.keys(members).length > 0 && (
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+              <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 8 }}>everyone's picks</div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                  <thead>
+                    <tr>
+                      <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600 }}></td>
+                      {roundRules.map(rule => (
+                        <td key={rule.category_id} style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>{rule.name}</td>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(members).map(([memberId, displayName]) => {
+                      const isMe = memberId === userId
+                      const memberMatchdayPicks = memberRoundPreds[matchday]?.[memberId] || {}
+                      return (
+                        <tr key={memberId} style={{ background: isMe ? '#fff5f5' : 'transparent' }}>
+                          <td style={{ padding: '4px 6px', fontWeight: isMe ? 700 : 400, color: isMe ? '#C8102E' : '#555', whiteSpace: 'nowrap' as const, borderTop: '1px solid #f5f5f5' }}>
+                            {displayName}{isMe ? ' (you)' : ''}
+                          </td>
+                          {roundRules.map(rule => (
+                            <td key={rule.category_id} style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', color: '#555' }}>
+                              {memberMatchdayPicks[rule.category_id] ? (
+                                <span>{FLAGS[memberMatchdayPicks[rule.category_id]] || ''} {memberMatchdayPicks[rule.category_id]}</span>
+                              ) : '—'}
+                            </td>
+                          ))}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
@@ -1162,7 +1210,11 @@ export default function FixturesList({
             })
             return (
               <>
-                {isCustom && <RoundSpecialsCard matchday={page.roundId} locked={false} />}
+                {isCustom && (() => {
+                  const roundDef = MATCHDAY_ROUNDS.find(r => r.id === page.roundId)
+                  const roundLocked = roundDef ? new Date() >= new Date(roundDef.start + 'T00:00:00-07:00') : false
+                  return <RoundSpecialsCard matchday={page.roundId} locked={roundLocked} />
+                })()}
                 {Object.entries(dayMap).map(([day, fx]) => (
                   <div key={day}>
                     <div style={{ fontSize: '10px', fontWeight: 600, color: '#bbb', padding: '8px 0 4px', borderBottom: '1px solid #eee', marginBottom: 4, textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
