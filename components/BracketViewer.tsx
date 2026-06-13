@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { WC_2026_GROUPS } from '@/lib/bracketEngine'
-import { FLAGS } from '@/components/BracketPicker'
+import { WC_2026_GROUPS, generateR32FromGroupPicks, DEFAULT_BRACKET_SCORING } from '@/lib/bracketEngine'
+import { FLAGS, BracketView } from '@/components/BracketPicker'
 
 interface MemberPick {
   user_id: string
@@ -11,6 +11,9 @@ interface MemberPick {
   group_picks: Record<string, string[]>
   bracket_picks: Record<string, string>
   bracket_scores: { total: number; breakdown: Record<string, number> } | null
+  best_third_groups: string[]
+  final_home_score: number | null
+  final_away_score: number | null
 }
 
 const GROUPS = Object.keys(WC_2026_GROUPS).sort()
@@ -27,7 +30,7 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
       const supabase = createClient()
       const { data: bracketData } = await supabase
         .from('bracket_picks')
-        .select('user_id, group_picks, bracket_picks, bracket_scores')
+        .select('user_id, group_picks, bracket_picks, bracket_scores, best_third_groups, final_home_score, final_away_score')
         .eq('pool_id', poolId)
 
       const { data: members } = await supabase
@@ -44,6 +47,9 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
         group_picks: b.group_picks || {},
         bracket_picks: b.bracket_picks || {},
         bracket_scores: b.bracket_scores || null,
+        best_third_groups: b.best_third_groups || [],
+        final_home_score: b.final_home_score ?? null,
+        final_away_score: b.final_away_score ?? null,
       }))
 
       combined.sort((a, b) => (b.bracket_scores?.total ?? 0) - (a.bracket_scores?.total ?? 0))
@@ -124,7 +130,20 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
 
               {/* Knockout picks */}
               <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 12 }}>knockout bracket</div>
-              <BracketTree picks={selectedPick.bracket_picks} finalHomeScore={selectedPick.final_home_score} finalAwayScore={selectedPick.final_away_score} />
+              <BracketView
+                r32Bracket={generateR32FromGroupPicks(selectedPick.group_picks, selectedPick.best_third_groups)}
+                bracketPicks={selectedPick.bracket_picks}
+                bracketScores={{}}
+                scoringRules={DEFAULT_BRACKET_SCORING}
+                locked={true}
+                onPick={() => {}}
+                onScore={() => {}}
+              />
+              {selectedPick.final_home_score != null && selectedPick.final_away_score != null && (
+                <div style={{ fontSize: '12px', color: '#888', marginTop: 8 }}>
+                  predicted final score: {selectedPick.final_home_score}–{selectedPick.final_away_score}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -249,18 +268,31 @@ function BracketTree({ picks, finalHomeScore, finalAwayScore }: {
   finalHomeScore: number | null
   finalAwayScore: number | null
 }) {
-  const r32 = Array.from({ length: 16 }, (_, i) => picks[`R32_M${73 + i}`])
+  // R32 pairs ordered correctly so adjacent pairs feed the right R16 slot
+  // R16_1: M74+M77, R16_2: M73+M75, R16_3: M84+M88, R16_4: M83+M81
+  // R16_5: M76+M78, R16_6: M79+M80, R16_7: M86+M82, R16_8: M85+M87
+  const r32Ordered = [
+    'R32_M74', 'R32_M77', // → R16_1
+    'R32_M73', 'R32_M75', // → R16_2
+    'R32_M84', 'R32_M88', // → R16_3
+    'R32_M83', 'R32_M81', // → R16_4
+    'R32_M76', 'R32_M78', // → R16_5
+    'R32_M79', 'R32_M80', // → R16_6
+    'R32_M86', 'R32_M82', // → R16_7
+    'R32_M85', 'R32_M87', // → R16_8
+  ].map(slot => picks[slot])
+
   const r16 = Array.from({ length: 8 }, (_, i) => picks[`R16_${i + 1}`])
   const qf = Array.from({ length: 4 }, (_, i) => picks[`QF_${i + 1}`])
   const sf = Array.from({ length: 2 }, (_, i) => picks[`SF_${i + 1}`])
   const final = picks['FINAL']
 
-  const BASE = 36 // height per slot in R32
+  const BASE = 36
 
   return (
     <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
       <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start', minWidth: 820 }}>
-        <BracketRound label="Round of 32" teams={r32} slotHeight={BASE} />
+        <BracketRound label="Round of 32" teams={r32Ordered} slotHeight={BASE} />
         <BracketConnector count={16} slotHeight={BASE} />
         <BracketRound label="Round of 16" teams={r16} slotHeight={BASE * 2} />
         <BracketConnector count={8} slotHeight={BASE * 2} />
