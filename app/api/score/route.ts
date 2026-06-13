@@ -328,6 +328,148 @@ interface MatchFacts {
   cardPtsLine: number | null
 }
 
+// ── Round specials scoring ────────────────────────────────────────────────
+// Matchday round definitions
+const MATCHDAY_ROUNDS = [
+  { id: 'round_1', start: '2026-06-11', end: '2026-06-17' },
+  { id: 'round_2', start: '2026-06-18', end: '2026-06-23' },
+  { id: 'round_3', start: '2026-06-24', end: '2026-06-27' },
+  { id: 'round_of_32', start: '2026-06-28', end: '2026-07-03' },
+  { id: 'round_of_16', start: '2026-07-04', end: '2026-07-07' },
+  { id: 'quarter_final', start: '2026-07-09', end: '2026-07-11' },
+  { id: 'semi_final', start: '2026-07-14', end: '2026-07-15' },
+  { id: 'bronze_final', start: '2026-07-18', end: '2026-07-18' },
+  { id: 'final', start: '2026-07-19', end: '2026-07-19' },
+]
+
+async function scoreRoundSpecials(allFixtures: any[]) {
+  // Get all custom pools
+  const { data: pools } = await supabase
+    .from('pools')
+    .select('id')
+    .eq('tournament_id', 'wc_2026')
+    .eq('package_id', 'CUSTOM')
+
+  if (!pools?.length) return
+
+  for (const round of MATCHDAY_ROUNDS) {
+    // Get all fixtures in this round
+    const roundFixtures = allFixtures.filter(f => {
+      const iso = f.date?.slice(0, 10) ?? ''
+      return iso >= round.start && iso <= round.end
+    })
+
+    if (!roundFixtures.length) continue
+
+    // Only score if ALL fixtures in round are finished
+    const allFinished = roundFixtures.every(f => f.status === 'FT' || f.scored)
+    if (!allFinished) continue
+
+    // Build round facts from all fixtures
+    // Teams with clean sheets (conceded 0 goals)
+    const cleanSheetTeams = new Set<string>()
+    // Teams that scored a penalty
+    const penaltyTeams = new Set<string>()
+    // Teams that got a red card
+    const redCardTeams = new Set<string>()
+    // Players who scored a brace (2+ goals)
+    const bracePlayers = new Set<string>()
+
+    for (const f of roundFixtures) {
+      if (f.home_score === 0) cleanSheetTeams.add(f.away_team)
+      if (f.away_score === 0) cleanSheetTeams.add(f.home_team)
+
+      // Get events for this fixture to find penalties, red cards, braces
+      if (!f.api_fixture_id) continue
+      
+      const evRes = await fetch(
+        `https://v3.football.api-sports.io/fixtures/events?fixture=${f.api_fixture_id}`,
+        { headers: { 'x-apisports-key': process.env.API_FOOTBALL_KEY! } }
+      )
+      const evData = await evRes.json()
+      const events = evData.response || []
+
+      // Penalty goals
+      const penGoals = events.filter((e: any) => e.type === 'Goal' && e.detail === 'Penalty')
+      penGoals.forEach((e: any) => {
+        penaltyTeams.add(e.team.name)
+      })
+
+      // Red cards
+      const reds = events.filter((e: any) => e.type === 'Card' && (e.detail === 'Red Card' || e.detail === 'Second Yellow Card'))
+      reds.forEach((e: any) => {
+        redCardTeams.add(e.team.name)
+      })
+
+      // Brace scorers (count goals per player)
+      const goalsByPlayer: Record<string, number> = {}
+      events.filter((e: any) => e.type === 'Goal' && e.detail !== 'Missed Penalty' && e.player?.name)
+        .forEach((e: any) => {
+          const name = e.player.name
+          goalsByPlayer[name] = (goalsByPlayer[name] || 0) + 1
+        })
+      Object.entries(goalsByPlayer).forEach(([name, count]) => {
+        if (count >= 2) bracePlayers.add(name)
+      })
+
+      await new Promise(r => setTimeout(r, 200)) // rate limit
+    }
+
+    // Now score all round special predictions for this round across all pools
+    for (const pool of pools) {
+      const { data: roundPreds } = await supabase
+        .from('predictions_v2')
+        .select('id, user_id, category_id, value_text, matchday')
+        .eq('pool_id', pool.id)
+        .is('fixture_id', null)
+        .eq('matchday', round.id)
+
+      for (const pred of roundPreds || []) {
+        let points = 0
+        let isCorrect = false
+
+        const { data: rule } = await supabase
+          .from('pool_rules')
+          .select('points')
+          .eq('pool_id', pool.id)
+          .eq('category_id', pred.category_id)
+          .maybeSingle()
+
+        if (!rule) continue
+        const pts = rule.points
+
+        switch (pred.category_id) {
+          case 'soccer_clean_sheet_round':
+            if (pred.value_text && cleanSheetTeams.has(pred.value_text)) {
+              points = pts; isCorrect = true
+            }
+            break
+          case 'soccer_penalty_round':
+            if (pred.value_text && penaltyTeams.has(pred.value_text)) {
+              points = pts; isCorrect = true
+            }
+            break
+          case 'soccer_red_card_round':
+            if (pred.value_text && redCardTeams.has(pred.value_text)) {
+              points = pts; isCorrect = true
+            }
+            break
+          case 'soccer_brace_round':
+            if (pred.value_text && bracePlayers.has(pred.value_text)) {
+              points = pts; isCorrect = true
+            }
+            break
+        }
+
+        await supabase
+          .from('predictions_v2')
+          .update({ points_earned: points, is_correct: isCorrect })
+          .eq('id', pred.id)
+      }
+    }
+  }
+}
+
 // ── Bracket scoring ────────────────────────────────────────────────────────
 // Groups: A-L, each team plays 3 games. Track wins/draws/losses/gd/gf.
 // After each game finishes we recalculate standings + bracket scores.
@@ -763,13 +905,15 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Score bracket pools ──────────────────────────────────────────────
-    // Fetch all WC fixtures (not just finished ones) for standings calculation
     const { data: allFixtures } = await supabase
       .from('fixtures')
       .select('*')
       .eq('tournament_id', 'wc_2026')
 
     await scoreBracketPools(allFixtures || [])
+
+    // ── Score round specials ─────────────────────────────────────────────
+    await scoreRoundSpecials(allFixtures || [])
 
     return NextResponse.json({ ok: true, fixtures_scored: fixturesScored })
   } catch (err) {
