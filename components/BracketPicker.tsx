@@ -90,7 +90,12 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
         setGroupPicks(loadedGroupPicks)
         setBestThirdGroups(loadedThirds)
         setBracketPicks(data.bracket_picks || {})
-        setBracketScores(data.bracket_scores || {})
+        // Restore final score from dedicated columns
+        if (data.final_home_score != null && data.final_away_score != null) {
+          setBracketScores({ FINAL: `${data.final_home_score}-${data.final_away_score}` })
+        } else {
+          setBracketScores(data.bracket_scores || {})
+        }
         // Regenerate r32Bracket immediately so summary view is correct
         if (Object.keys(loadedGroupPicks).length === 12) {
           setR32Bracket(generateR32FromGroupPicks(loadedGroupPicks, loadedThirds.slice(0, 8)))
@@ -141,6 +146,10 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
 
   async function persistPicks(): Promise<boolean> {
     const supabase = createClient()
+    const finalScore = bracketScores['FINAL']
+    const finalParts = finalScore?.split('-')
+    const finalHomeScore = finalParts?.[0] ? parseInt(finalParts[0]) : null
+    const finalAwayScore = finalParts?.[1] ? parseInt(finalParts[1]) : null
     const { error } = await supabase.from('bracket_picks').upsert({
       pool_id: poolId,
       user_id: userId,
@@ -148,7 +157,9 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       group_picks: groupPicks,
       best_third_groups: bestThirdGroups,
       bracket_picks: bracketPicks,
-      bracket_scores: bracketScores,
+      final_home_score: finalHomeScore,
+      final_away_score: finalAwayScore,
+      final_winner: bracketPicks['FINAL'] || null,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'pool_id,user_id' })
     if (error) {

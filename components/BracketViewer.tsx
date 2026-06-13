@@ -11,6 +11,9 @@ interface MemberPick {
   group_picks: Record<string, string[]>
   bracket_picks: Record<string, string>
   bracket_scores: { total: number; breakdown: Record<string, number> } | null
+  final_home_score: number | null
+  final_away_score: number | null
+  final_winner: string | null
 }
 
 const GROUPS = Object.keys(WC_2026_GROUPS).sort()
@@ -27,7 +30,7 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
       const supabase = createClient()
       const { data: bracketData } = await supabase
         .from('bracket_picks')
-        .select('user_id, group_picks, bracket_picks, bracket_scores')
+        .select('user_id, group_picks, bracket_picks, bracket_scores, final_home_score, final_away_score, final_winner')
         .eq('pool_id', poolId)
 
       const { data: members } = await supabase
@@ -44,6 +47,9 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
         group_picks: b.group_picks || {},
         bracket_picks: b.bracket_picks || {},
         bracket_scores: b.bracket_scores || null,
+        final_home_score: b.final_home_score ?? null,
+        final_away_score: b.final_away_score ?? null,
+        final_winner: b.final_winner ?? null,
       }))
 
       combined.sort((a, b) => (b.bracket_scores?.total ?? 0) - (a.bracket_scores?.total ?? 0))
@@ -123,20 +129,79 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
               </div>
 
               {/* Knockout picks */}
-              <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 10 }}>knockout picks</div>
-              {[
-                { label: 'Champion', key: 'FINAL' },
-              ].map(({ label, key }) => {
-                const team = selectedPick.bracket_picks[key]
-                if (!team) return null
-                return (
-                  <div key={key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', background: '#fff5f5', border: '1px solid #f0d0d0', marginBottom: 8 }}>
-                    <span style={{ fontSize: '10px', color: '#C8102E', fontWeight: 600 }}>🏆 {label}:</span>
-                    <span>{FLAGS[team] || ''}</span>
-                    <span style={{ fontWeight: 700 }}>{team}</span>
+              <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 10 }}>knockout bracket</div>
+
+              {/* Round of 32 */}
+              {Object.keys(selectedPick.bracket_picks).some(k => k.startsWith('R32_')) && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: '10px', color: '#aaa', fontWeight: 600, marginBottom: 6 }}>Round of 32</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 4 }}>
+                    {Object.entries(selectedPick.bracket_picks).filter(([k]) => k.startsWith('R32_')).sort().map(([slot, team]) => (
+                      <div key={slot} style={{ fontSize: '11px', padding: '3px 6px', background: '#f9f9f9', border: '1px solid #eee' }}>
+                        {FLAGS[team] || ''} {team}
+                      </div>
+                    ))}
                   </div>
-                )
-              })}
+                </div>
+              )}
+
+              {/* R16 */}
+              {Object.keys(selectedPick.bracket_picks).some(k => k.startsWith('R16_')) && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: '10px', color: '#aaa', fontWeight: 600, marginBottom: 6 }}>Round of 16</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 4 }}>
+                    {Object.entries(selectedPick.bracket_picks).filter(([k]) => k.startsWith('R16_')).sort().map(([slot, team]) => (
+                      <div key={slot} style={{ fontSize: '11px', padding: '3px 6px', background: '#f9f9f9', border: '1px solid #eee' }}>
+                        {FLAGS[team] || ''} {team}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* QF */}
+              {Object.keys(selectedPick.bracket_picks).some(k => k.startsWith('QF_')) && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: '10px', color: '#aaa', fontWeight: 600, marginBottom: 6 }}>Quarter-finals</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 4 }}>
+                    {Object.entries(selectedPick.bracket_picks).filter(([k]) => k.startsWith('QF_')).sort().map(([slot, team]) => (
+                      <div key={slot} style={{ fontSize: '11px', padding: '3px 6px', background: '#f9f9f9', border: '1px solid #eee' }}>
+                        {FLAGS[team] || ''} {team}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* SF */}
+              {Object.keys(selectedPick.bracket_picks).some(k => k.startsWith('SF_')) && (
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ fontSize: '10px', color: '#aaa', fontWeight: 600, marginBottom: 6 }}>Semi-finals</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 4 }}>
+                    {Object.entries(selectedPick.bracket_picks).filter(([k]) => k.startsWith('SF_')).sort().map(([slot, team]) => (
+                      <div key={slot} style={{ fontSize: '11px', padding: '3px 6px', background: '#f9f9f9', border: '1px solid #eee' }}>
+                        {FLAGS[team] || ''} {team}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Final */}
+              {selectedPick.bracket_picks['FINAL'] && (
+                <div style={{ padding: '12px', background: '#fff5f5', border: '1px solid #f0d0d0', marginBottom: 8 }}>
+                  <div style={{ fontSize: '10px', color: '#C8102E', fontWeight: 600, marginBottom: 6 }}>🏆 Final</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '14px', fontWeight: 700 }}>
+                    <span>{FLAGS[selectedPick.bracket_picks['FINAL']] || ''}</span>
+                    <span>{selectedPick.bracket_picks['FINAL']}</span>
+                  </div>
+                  {selectedPick.final_home_score != null && selectedPick.final_away_score != null && (
+                    <div style={{ fontSize: '12px', color: '#888', marginTop: 4 }}>
+                      predicted score: {selectedPick.final_home_score}–{selectedPick.final_away_score}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
