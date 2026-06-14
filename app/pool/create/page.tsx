@@ -201,7 +201,11 @@ export default function CreatePoolPage() {
             <label style={{display: 'block', fontWeight: 600, marginBottom: '12px'}}>pick a tournament</label>
             <div style={{display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px'}}>
               {TOURNAMENTS.map(t => (
-                <button key={t.id} onClick={() => { setTournamentId(t.id); setSport(t.sport) }}
+                <button key={t.id} onClick={() => { 
+                  setTournamentId(t.id)
+                  setSport(t.sport)
+                  if (t.sport === 'mma') setDeadlineType('before_each_game')
+                }}
                   style={{
                     textAlign: 'left', padding: '10px 12px', border: '1px solid',
                     borderColor: tournamentId === t.id ? '#C8102E' : '#e0e0db',
@@ -216,9 +220,9 @@ export default function CreatePoolPage() {
             <label style={{display: 'block', fontWeight: 600, marginBottom: '8px'}}>prediction deadline</label>
             <div style={{display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px'}}>
               {([
-                {id: 'before_each_game', label: tournamentId === 'ufc_freedom_250' ? 'before each fight' : 'before each game', desc: tournamentId === 'ufc_freedom_250' ? 'picks lock at fight time — predict fight by fight' : 'picks lock at kickoff — predict game by game'},
-                ...(tournamentId !== 'ufc_freedom_250' ? [{id: 'before_tournament', label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'}] : []),
-              ] as const).map(opt => (
+                {id: 'before_each_game' as const, label: tournamentId === 'ufc_freedom_250' ? 'before each fight' : 'before each game', desc: tournamentId === 'ufc_freedom_250' ? 'picks lock at fight time — predict fight by fight' : 'picks lock at kickoff — predict game by game'},
+                ...(tournamentId !== 'ufc_freedom_250' ? [{id: 'before_tournament' as const, label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'}] : []),
+              ]).map(opt => (
                 <button key={opt.id} onClick={() => setDeadlineType(opt.id)}
                   style={{
                     padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer', minHeight: 60,
