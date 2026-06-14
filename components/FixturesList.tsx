@@ -188,6 +188,7 @@ export default function FixturesList({
   const [currentPage, setCurrentPage] = useState(0)
 
   const isCustom = packageId?.toUpperCase() === 'CUSTOM'
+  const isMMA = tournamentId === 'ufc_freedom_250'
   const hasPerGame = poolRules.some(r => r.prediction_type === 'per_game')
   const hasPerRound = poolRules.some(r => r.prediction_type === 'per_round')
   const onlyRoundSpecials = isCustom && hasPerRound && !hasPerGame
@@ -650,8 +651,8 @@ export default function FixturesList({
     const finished = fixture.status === 'FT'
     const isExact = rule.input_type === 'exact'
 
-    const btnStyle = (val: string | boolean): React.CSSProperties => {
-      const active = pred?.value_wld === val || pred?.value_ou === val
+    const btnStyle = (val: string | boolean | number): React.CSSProperties => {
+      const active = pred?.value_wld === val || pred?.value_ou === val || pred?.value_text === val || pred?.value_yesno === val || pred?.value_number === val
       return {
         flex: 1, padding: '8px 4px', fontSize: '12px', border: '1px solid',
         cursor: locked || finished ? 'default' : 'pointer',
@@ -670,11 +671,98 @@ export default function FixturesList({
       </span>
     ) : null
 
-    return (
-      <div style={{ marginBottom: 8 }}>
-        <div style={{ fontSize: '10px', color: '#888', marginBottom: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontWeight: 600 }}>{rule.name}</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+    // ── MMA categories ──────────────────────────────────────────────────────
+    if (rule.category_id.startsWith('mma_')) {
+      return (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: '10px', color: '#888', marginBottom: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontWeight: 600 }}>{rule.name}</span>
+            {feedback}
+          </div>
+
+          {/* Fight result — home fighter vs away fighter, no draw */}
+          {rule.category_id === 'mma_result' && (
+            <div style={{ display: 'flex', gap: 0 }}>
+              <button style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
+                disabled={locked || finished}
+                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block', fontSize: '11px' }}>{fixture.home_team}</span>
+              </button>
+              <button style={{ ...btnStyle('away'), overflow: 'hidden' }}
+                disabled={locked || finished}
+                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block', fontSize: '11px' }}>{fixture.away_team}</span>
+              </button>
+            </div>
+          )}
+
+          {/* Method of victory */}
+          {rule.category_id === 'mma_method' && (
+            <div style={{ display: 'flex', gap: 0 }}>
+              {['KO/TKO', 'Submission', 'Decision'].map((method, i, arr) => (
+                <button key={method}
+                  style={{ ...btnStyle(method), ...(i < arr.length - 1 ? { borderRight: 'none' } : {}) }}
+                  disabled={locked || finished}
+                  onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: method })}>
+                  {method}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Yes/No categories */}
+          {(rule.category_id === 'mma_goes_distance' || rule.category_id === 'mma_finish_rd1') && (
+            <div style={{ display: 'flex', gap: 0 }}>
+              <button style={{ ...btnStyle('yes'), borderRight: 'none' }}
+                disabled={locked || finished}
+                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_yesno: 'yes' })}>
+                Yes
+              </button>
+              <button style={{ ...btnStyle('no') }}
+                disabled={locked || finished}
+                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_yesno: 'no' })}>
+                No
+              </button>
+            </div>
+          )}
+
+          {/* Total rounds O/U */}
+          {rule.category_id === 'mma_total_rounds_ou' && (
+            <div style={{ display: 'flex', gap: 0 }}>
+              <button style={{ ...btnStyle('over'), borderRight: 'none' }}
+                disabled={locked || finished}
+                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'over' })}>
+                over 2.5
+              </button>
+              <button style={{ ...btnStyle('under') }}
+                disabled={locked || finished}
+                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'under' })}>
+                under 2.5
+              </button>
+            </div>
+          )}
+
+          {/* Round finished */}
+          {rule.category_id === 'mma_round_finish' && (
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[1, 2, 3, 4, 5].map(round => {
+                const active = pred?.value_number === round
+                return (
+                  <button key={round}
+                    style={{ ...btnStyle(String(round)), flex: '0 0 44px' }}
+                    disabled={locked || finished}
+                    onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_number: round })}>
+                    R{round}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    // ── Soccer categories ────────────────────────────────────────────────────
             {rule.requires_line && !finished && (() => {
               let line: number | null = null
               if (rule.category_id === 'soccer_total_goals_ou') line = fixture.line_total_goals
@@ -981,14 +1069,14 @@ export default function FixturesList({
           </div>
         )}
 
-        {/* Team header */}
+        {/* Team/Fighter header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderBottom: perGameRules.length > 0 ? '1px solid #f5f5f5' : 'none', gap: 4 }}>
-          <span style={{ fontWeight: 700, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1 }}>{FLAGS[fixture.home_team]} {fixture.home_team}</span>
+          <span style={{ fontWeight: 700, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1 }}>{isMMA ? '' : FLAGS[fixture.home_team]} {fixture.home_team}</span>
           {(finished || isLive)
-            ? <span style={{ fontWeight: 700, fontSize: isLive ? '18px' : '14px', color: isLive ? '#2d7a2d' : '#111', flexShrink: 0, padding: '0 8px' }}>{fixture.home_score} – {fixture.away_score}</span>
+            ? <span style={{ fontWeight: 700, fontSize: isLive ? '18px' : '14px', color: isLive ? '#2d7a2d' : '#111', flexShrink: 0, padding: '0 8px' }}>{isMMA ? (fixture.home_score === 1 ? 'W' : fixture.away_score === 1 ? 'L' : '?') : `${fixture.home_score} – ${fixture.away_score}`}</span>
             : <span style={{ fontSize: '11px', color: '#ccc', flexShrink: 0, padding: '0 8px' }}>vs</span>
           }
-          <span style={{ fontWeight: 700, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1, textAlign: 'right' as const }}>{fixture.away_team} {FLAGS[fixture.away_team]}</span>
+          <span style={{ fontWeight: 700, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1, textAlign: 'right' as const }}>{fixture.away_team} {isMMA ? '' : FLAGS[fixture.away_team]}</span>
         </div>
 
         {/* Per-game predictions */}

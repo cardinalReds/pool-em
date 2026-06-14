@@ -56,6 +56,7 @@ export default function CreatePoolPage() {
 
   const TOURNAMENTS = [
     { id: 'wc_2026', name: 'FIFA World Cup 2026', sport: 'soccer', description: 'Group stage · Jun 12 – Jul 2' },
+    { id: 'ufc_freedom_250', name: 'UFC Freedom 250', sport: 'mma', description: 'White House · Jun 14, 5pm PT' },
   ]
 
   // Step 2 → step 3: bracket pools skip ruleset builder
@@ -215,8 +216,8 @@ export default function CreatePoolPage() {
             <label style={{display: 'block', fontWeight: 600, marginBottom: '8px'}}>prediction deadline</label>
             <div style={{display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px'}}>
               {([
-                {id: 'before_each_game', label: 'before each game', desc: 'picks lock at kickoff — predict game by game'},
-                {id: 'before_tournament', label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'},
+                {id: 'before_each_game', label: tournamentId === 'ufc_freedom_250' ? 'before each fight' : 'before each game', desc: tournamentId === 'ufc_freedom_250' ? 'picks lock at fight time — predict fight by fight' : 'picks lock at kickoff — predict game by game'},
+                ...(tournamentId !== 'ufc_freedom_250' ? [{id: 'before_tournament', label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'}] : []),
               ] as const).map(opt => (
                 <button key={opt.id} onClick={() => setDeadlineType(opt.id)}
                   style={{
