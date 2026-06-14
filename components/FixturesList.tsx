@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { WC_SQUADS } from '@/lib/wc_squads'
@@ -178,6 +178,7 @@ export default function FixturesList({
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<number | null>(null)
   const [saved, setSaved] = useState<Record<number, boolean>>({})
+  const autoSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
   const [roundSpecialPicks, setRoundSpecialPicks] = useState<Record<string, Record<string, string>>>({})
   const [roundSpecialSaving, setRoundSpecialSaving] = useState<string | null>(null)
   const [roundSpecialSaved, setRoundSpecialSaved] = useState<Record<string, boolean>>({})
@@ -398,7 +399,11 @@ export default function FixturesList({
       } catch {}
       return updated
     })
-    setSaved(prev => ({ ...prev, [fixtureId]: false }))
+    // Auto-save to DB after 800ms debounce
+    if (autoSaveTimers.current[fixtureId]) clearTimeout(autoSaveTimers.current[fixtureId])
+    autoSaveTimers.current[fixtureId] = setTimeout(() => {
+      saveFixture(fixtureId)
+    }, 800)
   }, [poolId, userId, LS_KEY])
 
   // Write all categories for a fixture to DB at once
@@ -542,6 +547,8 @@ export default function FixturesList({
 
     function updatePick(categoryId: string, value: string) {
       setRoundSpecialPicks(prev => ({ ...prev, [matchday]: { ...(prev[matchday] || {}), [categoryId]: value } }))
+      // Auto-save after short delay
+      setTimeout(() => saveRoundSpecials(matchday), 500)
     }
 
     return (
@@ -585,11 +592,10 @@ export default function FixturesList({
           })}
           {!locked && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, paddingTop: 8, borderTop: '1px solid #f0f0f0' }}>
-              <button onClick={() => saveRoundSpecials(matchday)} disabled={roundSpecialSaving === matchday}
-                style={{ padding: '8px 20px', fontSize: '12px', fontWeight: 600, background: '#111', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit', minHeight: 44 }}>
-                {roundSpecialSaving === matchday ? 'saving...' : 'save round picks'}
-              </button>
-              {roundSpecialSaved[matchday] && <span style={{ fontSize: '11px', color: '#2d7a2d' }}>✓ saved</span>}
+              {roundSpecialSaving === matchday
+                ? <span style={{ fontSize: '11px', color: '#aaa' }}>saving...</span>
+                : <span style={{ fontSize: '11px', color: '#2d7a2d' }}>✓ predictions are automatically saved</span>
+              }
             </div>
           )}
 
@@ -1015,21 +1021,11 @@ export default function FixturesList({
               <CategoryInput key={rule.category_id} fixture={fixture} rule={rule} />
             ))}
             {!locked && !finished && (
-              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <button
-                  onClick={() => saveFixture(fixture.id)}
-                  disabled={saving === fixture.id || !hasAnyPick}
-                  style={{
-                    padding: '10px 20px', fontSize: '13px', fontWeight: 600,
-                    background: saving === fixture.id ? '#ddd' : hasAnyPick ? '#111' : '#ddd',
-                    color: 'white', border: 'none', cursor: hasAnyPick && saving !== fixture.id ? 'pointer' : 'default',
-                    fontFamily: 'inherit', minHeight: 44, flex: 1,
-                  }}>
-                  {saving === fixture.id ? 'saving...' : 'save picks'}
-                </button>
-                {saved[fixture.id] && (
-                  <span style={{ fontSize: '11px', color: '#2d7a2d' }}>✓ picks saved</span>
-                )}
+              <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {saving === fixture.id 
+                  ? <span style={{ fontSize: '11px', color: '#aaa' }}>saving...</span>
+                  : <span style={{ fontSize: '11px', color: '#2d7a2d' }}>✓ predictions are automatically saved</span>
+                }
               </div>
             )}
 
