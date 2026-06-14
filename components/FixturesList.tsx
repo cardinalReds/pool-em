@@ -257,6 +257,42 @@ export default function FixturesList({
         setPreds(predMap)
         setScoreInputs(scoreMap)
 
+        // Merge localStorage backup — push any missing predictions to DB
+        try {
+          const lsKey = `pool_preds_${poolId}_${userId}`
+          const lsRaw = localStorage.getItem(lsKey)
+          if (lsRaw) {
+            const lsPreds: PredMap = JSON.parse(lsRaw)
+            const rowsToUpsert: any[] = []
+            Object.entries(lsPreds).forEach(([key, lsPred]) => {
+              const dbPred = predMap[key]
+              // If not in DB or DB has no value, use localStorage value
+              const dbHasValue = dbPred && (dbPred.value_wld || dbPred.value_text || dbPred.value_ou || dbPred.value_yesno !== null)
+              if (!dbHasValue && lsPred) {
+                predMap[key] = lsPred
+                rowsToUpsert.push({
+                  pool_id: poolId,
+                  user_id: userId,
+                  fixture_id: lsPred.fixture_id,
+                  category_id: lsPred.category_id,
+                  value_wld: lsPred.value_wld ?? null,
+                  value_text: lsPred.value_text ?? null,
+                  value_ou: lsPred.value_ou ?? null,
+                  value_yesno: lsPred.value_yesno ?? null,
+                  value_number: lsPred.value_number ?? null,
+                  submitted_at: new Date().toISOString(),
+                })
+              }
+            })
+            if (rowsToUpsert.length > 0) {
+              await supabase.from('predictions_v2').upsert(rowsToUpsert, {
+                onConflict: 'pool_id,user_id,fixture_id,category_id',
+              })
+            }
+            setPreds({ ...predMap })
+          }
+        } catch {}
+
         // Load round special picks (no fixture_id)
         const roundPicks: Record<string, Record<string, string>> = {}
         const braceTeams: Record<string, string> = {}
@@ -333,23 +369,37 @@ export default function FixturesList({
     load()
   }, [poolId, userId, isCustom])
 
-  // Update local state only — no DB write until save button pressed
+  // Update local state and localStorage backup, DB write on save
+  const LS_KEY = `pool_preds_${poolId}_${userId}`
+
   const updateLocal = useCallback((
     fixtureId: number,
     categoryId: string,
     fields: Partial<PredV2>,
   ) => {
     const key = `${fixtureId}:${categoryId}`
-    setPreds(prev => ({
-      ...prev,
-      [key]: {
-        ...(prev[key] || { pool_id: poolId, user_id: userId, fixture_id: fixtureId, category_id: categoryId, points_earned: null, is_correct: null }),
-        ...fields,
-      } as PredV2,
-    }))
-    // Clear saved confirmation when picks change
+    setPreds(prev => {
+      const updated = {
+        ...prev,
+        [key]: {
+          ...(prev[key] || { pool_id: poolId, user_id: userId, fixture_id: fixtureId, category_id: categoryId, points_earned: null, is_correct: null }),
+          ...fields,
+        } as PredV2,
+      }
+      // Persist to localStorage as backup
+      try {
+        const toStore: Record<string, any> = {}
+        Object.entries(updated).forEach(([k, v]) => {
+          if (v.value_wld || v.value_text || v.value_ou || v.value_yesno !== null || v.value_number !== null) {
+            toStore[k] = v
+          }
+        })
+        localStorage.setItem(LS_KEY, JSON.stringify(toStore))
+      } catch {}
+      return updated
+    })
     setSaved(prev => ({ ...prev, [fixtureId]: false }))
-  }, [poolId, userId])
+  }, [poolId, userId, LS_KEY])
 
   // Write all categories for a fixture to DB at once
   const saveFixture = useCallback(async (fixtureId: number) => {
