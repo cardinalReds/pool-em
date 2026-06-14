@@ -29,11 +29,23 @@ const EXAMPLE_FIXTURE = {
   away_flag: '🇿🇦',
   date: 'Jun 12 · 12:00 PM PT',
   round: 'Group A · Matchday 1',
-  // Real lines for Mex vs South Africa (example)
   goals_line: 2.5,
   corners_line: 9.5,
   card_pts_line: 30,
-  handicap_line: -0.5, // Mexico favored
+  handicap_line: -0.5,
+}
+
+const EXAMPLE_FIXTURE_MMA = {
+  home_team: 'Ilia Topuria',
+  away_team: 'Justin Gaethje',
+  home_flag: '',
+  away_flag: '',
+  date: 'Jun 14 · 5:00 PM PT',
+  round: 'Lightweight · Main Event',
+  goals_line: null,
+  corners_line: null,
+  card_pts_line: null,
+  handicap_line: null,
 }
 
 
@@ -142,6 +154,8 @@ const CATEGORY_GROUPS = [
   { label: 'Goals', ids: ['soccer_exact_score', 'soccer_ht_exact_score', 'soccer_btts', 'soccer_total_goals_ou', 'soccer_first_team_score', 'soccer_first_goalscorer', 'soccer_anytime_goalscorer'] },
   { label: 'Corners', ids: ['soccer_corners_winner', 'soccer_ht_corners_winner', 'soccer_total_corners_ou'] },
   { label: 'Cards', ids: ['soccer_card_points_ou', 'soccer_cards_home_away', 'soccer_cards_ht', 'soccer_first_yellow_team'] },
+  { label: 'Fight Result', ids: ['mma_result', 'mma_method'] },
+  { label: 'Fight Duration', ids: ['mma_goes_distance', 'mma_finish_rd1', 'mma_round_finish', 'mma_total_rounds_ou'] },
 ]
 
 const ROUND_SPECIALS = ['soccer_clean_sheet_round', 'soccer_brace_round', 'soccer_red_card_round', 'soccer_penalty_round']
@@ -206,6 +220,7 @@ export default function RulesetBuilder({ sport, onComplete }: {
   sport: string
   onComplete: (rules: SelectedRule[]) => void
 }) {
+  const fixture = sport === 'mma' ? EXAMPLE_FIXTURE_MMA : EXAMPLE_FIXTURE
   const [categories, setCategories] = useState<Category[]>([])
   const [rules, setRules] = useState<Record<string, SelectedRule>>({})
   const [loading, setLoading] = useState(true)
@@ -269,8 +284,8 @@ export default function RulesetBuilder({ sport, onComplete }: {
         const homeCorrect = ph === actualHome
         const awayCorrect = pa === actualAway
         const parts: string[] = []
-        if (homeCorrect) { pts += rule.points; parts.push(`${EXAMPLE_FIXTURE.home_team} ✓ +${rule.points}`) }
-        if (awayCorrect) { pts += rule.points; parts.push(`${EXAMPLE_FIXTURE.away_team} ✓ +${rule.points}`) }
+        if (homeCorrect) { pts += rule.points; parts.push(`${fixture.home_team} ✓ +${rule.points}`) }
+        if (awayCorrect) { pts += rule.points; parts.push(`${fixture.away_team} ✓ +${rule.points}`) }
         if (homeCorrect && awayCorrect && rule.bonus_points > 0) { pts += rule.bonus_points; parts.push(`exact bonus +${rule.bonus_points}`) }
         breakdown[rule.category_id] = { pts, detail: parts.length ? parts.join(' · ') : '✗ no points' }
         total += pts
@@ -416,7 +431,7 @@ export default function RulesetBuilder({ sport, onComplete }: {
           <div style={{ display: 'flex', gap: 0 }}>
             <button style={{ ...btnStyle('home'), borderRight: 'none' }}
               onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'home' }))}>
-              {EXAMPLE_FIXTURE.home_flag} {EXAMPLE_FIXTURE.home_team}
+              {fixture.home_flag} {fixture.home_team}
             </button>
             {cat.id !== 'soccer_asian_handicap' && (
               <button style={{ ...btnStyle('draw'), borderRight: 'none' }}
@@ -426,7 +441,7 @@ export default function RulesetBuilder({ sport, onComplete }: {
             )}
             <button style={btnStyle('away')}
               onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'away' }))}>
-              {EXAMPLE_FIXTURE.away_team} {EXAMPLE_FIXTURE.away_flag}
+              {fixture.away_team} {fixture.away_flag}
             </button>
           </div>
         )}
@@ -436,7 +451,7 @@ export default function RulesetBuilder({ sport, onComplete }: {
           <div style={{ display: 'flex', gap: 0 }}>
             <button style={{ ...btnStyle('home'), borderRight: 'none' }}
               onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'home' }))}>
-              {EXAMPLE_FIXTURE.home_flag} {EXAMPLE_FIXTURE.home_team}
+              {fixture.home_flag} {fixture.home_team}
             </button>
             <button style={{ ...btnStyle('none'), borderRight: 'none' }}
               onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'none' }))}>
@@ -444,7 +459,7 @@ export default function RulesetBuilder({ sport, onComplete }: {
             </button>
             <button style={btnStyle('away')}
               onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'away' }))}>
-              {EXAMPLE_FIXTURE.away_team} {EXAMPLE_FIXTURE.away_flag}
+              {fixture.away_team} {fixture.away_flag}
             </button>
           </div>
         )}
@@ -454,7 +469,7 @@ export default function RulesetBuilder({ sport, onComplete }: {
           <div style={{ display: 'flex', gap: 0 }}>
             <button style={{ ...btnStyle('home'), borderRight: 'none' }}
               onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'home' }))}>
-              {EXAMPLE_FIXTURE.home_flag} {EXAMPLE_FIXTURE.home_team}
+              {fixture.home_flag} {fixture.home_team}
             </button>
             <button style={{ ...btnStyle('none'), borderRight: 'none' }}
               onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'none' }))}>
@@ -462,7 +477,7 @@ export default function RulesetBuilder({ sport, onComplete }: {
             </button>
             <button style={btnStyle('away')}
               onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'away' }))}>
-              {EXAMPLE_FIXTURE.away_team} {EXAMPLE_FIXTURE.away_flag}
+              {fixture.away_team} {fixture.away_flag}
             </button>
           </div>
         )}
@@ -473,16 +488,16 @@ export default function RulesetBuilder({ sport, onComplete }: {
             <div style={{ display: 'flex', gap: 0 }}>
               <button style={{ ...btnStyle('over'), borderRight: 'none' }}
                 onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'over' }))}>
-                over {cat.id === 'soccer_total_goals_ou' ? EXAMPLE_FIXTURE.goals_line
-                    : cat.id === 'soccer_total_corners_ou' ? EXAMPLE_FIXTURE.corners_line
-                    : cat.id === 'soccer_card_points_ou' ? EXAMPLE_FIXTURE.card_pts_line
+                over {cat.id === 'soccer_total_goals_ou' ? fixture.goals_line
+                    : cat.id === 'soccer_total_corners_ou' ? fixture.corners_line
+                    : cat.id === 'soccer_card_points_ou' ? fixture.card_pts_line
                     : cat.requires_line ? '(line TBD)' : '2.5'}
               </button>
               <button style={btnStyle('under')}
                 onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'under' }))}>
-                under {cat.id === 'soccer_total_goals_ou' ? EXAMPLE_FIXTURE.goals_line
-                     : cat.id === 'soccer_total_corners_ou' ? EXAMPLE_FIXTURE.corners_line
-                     : cat.id === 'soccer_card_points_ou' ? EXAMPLE_FIXTURE.card_pts_line
+                under {cat.id === 'soccer_total_goals_ou' ? fixture.goals_line
+                     : cat.id === 'soccer_total_corners_ou' ? fixture.corners_line
+                     : cat.id === 'soccer_card_points_ou' ? fixture.card_pts_line
                      : cat.requires_line ? '(line TBD)' : '2.5'}
               </button>
             </div>
@@ -576,11 +591,11 @@ export default function RulesetBuilder({ sport, onComplete }: {
     <div style={{ background: 'white', border: '1px solid #e0e0db', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* Fixed header */}
       <div style={{ background: '#111', color: 'white', padding: '10px 12px', flexShrink: 0 }}>
-        <div style={{ fontSize: '10px', color: '#888', marginBottom: '4px' }}>{EXAMPLE_FIXTURE.round} · {EXAMPLE_FIXTURE.date}</div>
+        <div style={{ fontSize: '10px', color: '#888', marginBottom: '4px' }}>{fixture.round} · {fixture.date}</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontWeight: 700, fontSize: '13px' }}>{EXAMPLE_FIXTURE.home_flag} {EXAMPLE_FIXTURE.home_team}</span>
+          <span style={{ fontWeight: 700, fontSize: '13px' }}>{fixture.home_flag} {fixture.home_team}</span>
           <span style={{ color: '#555', fontSize: '11px' }}>vs</span>
-          <span style={{ fontWeight: 700, fontSize: '13px' }}>{EXAMPLE_FIXTURE.away_team} {EXAMPLE_FIXTURE.away_flag}</span>
+          <span style={{ fontWeight: 700, fontSize: '13px' }}>{fixture.away_team} {fixture.away_flag}</span>
         </div>
         {result && (
           <div style={{ marginTop: '8px', lineHeight: 1.6 }}>
@@ -592,7 +607,7 @@ export default function RulesetBuilder({ sport, onComplete }: {
               <div style={{ textAlign: 'center', fontSize: '10px', color: '#aaa' }}>first scorer: {result.first_scorer}</div>
             )}
             <div style={{ textAlign: 'center', fontSize: '10px', color: '#777' }}>
-              handicap: {EXAMPLE_FIXTURE.home_team} {EXAMPLE_FIXTURE.handicap_line > 0 ? '+' : ''}{EXAMPLE_FIXTURE.handicap_line} · goals O/U: {EXAMPLE_FIXTURE.goals_line} · corners O/U: {EXAMPLE_FIXTURE.corners_line}
+              handicap: {fixture.home_team} {fixture.handicap_line > 0 ? '+' : ''}{fixture.handicap_line} · goals O/U: {fixture.goals_line} · corners O/U: {fixture.corners_line}
             </div>
           </div>
         )}
