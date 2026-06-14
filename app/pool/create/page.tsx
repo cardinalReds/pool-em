@@ -158,7 +158,7 @@ export default function CreatePoolPage() {
         <a href="/dashboard" style={{fontWeight: 700, fontSize: '13px', color: 'white', textDecoration: 'none'}}>pool'em</a>
       </div>
 
-      <div style={{maxWidth: step === 3 && !isBracket ? 1100 : 520, margin: '0 auto', padding: '24px 16px'}}>
+      <div style={{maxWidth: step === 3 && (!isBracket || sport === 'mma') ? 1100 : 520, margin: '0 auto', padding: '24px 16px'}}>
         <div style={{marginBottom: '16px'}}>
           <h1 style={{fontWeight: 700, fontSize: '15px', marginBottom: '2px'}}>new pool</h1>
         </div>
@@ -204,7 +204,6 @@ export default function CreatePoolPage() {
                 <button key={t.id} onClick={() => { 
                   setTournamentId(t.id)
                   setSport(t.sport)
-                  if (t.sport === 'mma') setDeadlineType('before_each_game')
                 }}
                   style={{
                     textAlign: 'left', padding: '10px 12px', border: '1px solid',
@@ -221,7 +220,7 @@ export default function CreatePoolPage() {
             <div style={{display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px'}}>
               {([
                 {id: 'before_each_game' as const, label: tournamentId === 'ufc_freedom_250' ? 'before each fight' : 'before each game', desc: tournamentId === 'ufc_freedom_250' ? 'picks lock at fight time — predict fight by fight' : 'picks lock at kickoff — predict game by game'},
-                ...(tournamentId !== 'ufc_freedom_250' ? [{id: 'before_tournament' as const, label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'}] : []),
+                ...(tournamentId === 'ufc_freedom_250' ? [{id: 'before_tournament' as const, label: 'before the card', desc: 'predict all fights before the card starts — picks lock at 5pm PT'}] : [{id: 'before_tournament' as const, label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'}]),
               ]).map(opt => (
                 <button key={opt.id} onClick={() => setDeadlineType(opt.id)}
                   style={{
@@ -242,8 +241,8 @@ export default function CreatePoolPage() {
           </div>
         )}
 
-        {/* ── Step 3a: Bracket scoring (before_tournament) ─────────────── */}
-        {step === 3 && isBracket && (
+        {/* ── Step 3a: Bracket scoring (before_tournament, soccer only) ─── */}
+        {step === 3 && isBracket && sport !== 'mma' && (
           <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
             <h2 style={{fontWeight: 700, fontSize: '14px', marginBottom: '4px'}}>group stage format</h2>
             <p style={{fontSize: '11px', color: '#aaa', marginBottom: '16px'}}>how do participants predict the group stage?</p>
@@ -322,8 +321,8 @@ export default function CreatePoolPage() {
           </div>
         )}
 
-        {/* ── Step 3b: Ruleset builder (before_each_game) ──────────────── */}
-        {step === 3 && !isBracket && (
+        {/* ── Step 3b: Ruleset builder (before_each_game or UFC before_card) */}
+        {step === 3 && (!isBracket || sport === 'mma') && (
           <div>
             <RulesetBuilder
               sport={sport}
