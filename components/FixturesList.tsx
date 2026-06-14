@@ -34,6 +34,7 @@ interface Fixture {
   ht_home_corners: number | null
   ht_away_corners: number | null
   first_yellow_team: string | null
+  first_team_score: string | null
   ht_home_card_pts: number | null
   ht_away_card_pts: number | null
 }
@@ -1105,7 +1106,12 @@ export default function FixturesList({
                               case 'soccer_ht_exact_score': actual = htH != null && htA != null ? `${htH}–${htA} HT` : '—'; break
                               case 'soccer_first_goalscorer':
                               case 'soccer_anytime_goalscorer': actual = fixture.first_scorer_name || 'no goal'; break
-                              case 'soccer_first_team_score': actual = h > 0 ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : a > 0 ? `${FLAGS[fixture.away_team]} ${fixture.away_team}` : 'no goal'; break
+                              case 'soccer_first_team_score': {
+                                const fts = fixture.first_team_score
+                                if (!fts) { actual = h > 0 ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : a > 0 ? `${FLAGS[fixture.away_team]} ${fixture.away_team}` : '—'; break }
+                                actual = fts === 'home' ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : `${FLAGS[fixture.away_team]} ${fixture.away_team}`
+                                break
+                              }
                               case 'soccer_btts': actual = (h > 0 && a > 0) ? 'Yes' : 'No'; break
                               case 'soccer_total_goals_ou': actual = `${h + a} goals`; break
                               case 'soccer_total_corners_ou': actual = `${homeCorn + awayCorn} corners`; break

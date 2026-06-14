@@ -215,6 +215,7 @@ function scoreCustomPrediction(
     }
 
     case 'soccer_first_team_score':
+      if (!pred.value_wld || facts.firstTeamScore === 'none') return 0
       return pred.value_wld === facts.firstTeamScore ? rule.points : 0
 
     case 'soccer_corners_winner': {
@@ -811,6 +812,7 @@ export async function POST(request: NextRequest) {
         ht_home_card_pts: htHomeCardPts,
         ht_away_card_pts: htAwayCardPts,
         first_yellow_team: firstYellow === 'none' ? null : firstYellow,
+        first_team_score: firstTeamScore === 'none' ? null : firstTeamScore,
       }).eq('id', internalFixtureId)
 
       // Get all pools using this tournament
