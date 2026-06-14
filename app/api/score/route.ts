@@ -286,13 +286,13 @@ function scoreCustomPrediction(
     // ── Player/text ───────────────────────────────────────────────────────
     case 'soccer_first_goalscorer':
       if (!firstScorerName || !pred.value_text) return 0
-      return pred.value_text.toLowerCase().trim() === firstScorerName.toLowerCase().trim()
+      return pred.value_text.replace(/\s+/g, ' ').trim().toLowerCase() === firstScorerName.replace(/\s+/g, ' ').trim().toLowerCase()
         ? rule.points : 0
 
     case 'soccer_anytime_goalscorer':
       if (!pred.value_text || facts.allScorerNames.length === 0) return 0
       return facts.allScorerNames.some(
-        name => name.toLowerCase().trim() === pred.value_text.toLowerCase().trim()
+        name => name.replace(/\s+/g, ' ').trim().toLowerCase() === pred.value_text.replace(/\s+/g, ' ').trim().toLowerCase()
       ) ? rule.points : 0
 
     default:
