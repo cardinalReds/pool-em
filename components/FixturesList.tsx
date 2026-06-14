@@ -763,6 +763,11 @@ export default function FixturesList({
     }
 
     // ── Soccer categories ────────────────────────────────────────────────────
+    return (
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: '10px', color: '#888', marginBottom: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontWeight: 600 }}>{rule.name}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             {rule.requires_line && !finished && (() => {
               let line: number | null = null
               if (rule.category_id === 'soccer_total_goals_ou') line = fixture.line_total_goals
