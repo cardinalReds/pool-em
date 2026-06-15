@@ -181,8 +181,8 @@ export default function FixturesList({
   const [saved, setSaved] = useState<Record<number, boolean>>({})
   const autoSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
   const [roundSpecialPicks, setRoundSpecialPicks] = useState<Record<string, Record<string, string>>>({})
-  const [roundSpecialSaving, setRoundSpecialSaving] = useState<string | null>(null)
-  const [roundSpecialSaved, setRoundSpecialSaved] = useState<Record<string, boolean>>({})
+  const [showMemberPicksMap, setShowMemberPicksMap] = useState<Record<number, boolean>>({})
+  const [roundSpecialSaving, setRoundSpecialSaving] = useState<string | null>(null)  const [roundSpecialSaved, setRoundSpecialSaved] = useState<Record<string, boolean>>({})
   const [braceTeamByMatchday, setBraceTeamByMatchday] = useState<Record<string, string>>({})
   const [sortMode, setSortMode] = useState<'date' | 'group' | 'round'>('date')
   const [viewMode, setViewMode] = useState<'pages' | 'list'>('pages')
@@ -409,13 +409,18 @@ export default function FixturesList({
   }, [poolId, userId, LS_KEY])
 
   // Write all categories for a fixture to DB at once
+  // Use a ref to always have fresh preds in saveFixture
+  const predsRef = useRef(preds)
+  useEffect(() => { predsRef.current = preds }, [preds])
+
   const saveFixture = useCallback(async (fixtureId: number) => {
     setSaving(fixtureId)
     const supabase = createClient()
+    const currentPreds = predsRef.current
     const perGameRules = poolRules.filter(r => r.prediction_type === 'per_game')
     const rows = perGameRules.map(rule => {
       const key = `${fixtureId}:${rule.category_id}`
-      const pred = preds[key]
+      const pred = currentPreds[key]
       return {
         pool_id: poolId,
         user_id: userId,
@@ -429,7 +434,7 @@ export default function FixturesList({
         submitted_at: new Date().toISOString(),
       }
     }).filter(r =>
-      r.value_wld || r.value_text || r.value_ou || r.value_yesno !== null
+      r.value_wld || r.value_text || r.value_ou || r.value_yesno !== null || r.value_number !== null
     )
 
     if (rows.length > 0) {
@@ -440,9 +445,8 @@ export default function FixturesList({
 
     setSaving(null)
     setSaved(prev => ({ ...prev, [fixtureId]: true }))
-    // Clear confirmation after 3 seconds
     setTimeout(() => setSaved(prev => ({ ...prev, [fixtureId]: false })), 3000)
-  }, [poolId, userId, poolRules, preds])
+  }, [poolId, userId, poolRules])
 
   function isLocked(f: Fixture) {
     if (deadlineType === 'before_tournament') return false
@@ -451,9 +455,10 @@ export default function FixturesList({
 
   function totalPointsForFixture(fixtureId: number): number | null {
     const keys = Object.keys(preds).filter(k => k.startsWith(`${fixtureId}:`))
-    const pts = keys.map(k => preds[k]?.points_earned ?? 0)
-    if (pts.length === 0 || pts.every(p => p === 0 && preds[keys[0]]?.points_earned === null)) return null
-    return pts.reduce((a, b) => a + b, 0)
+    if (keys.length === 0) return null
+    // Return null if no predictions have been scored yet
+    if (keys.every(k => preds[k]?.points_earned === null)) return null
+    return keys.reduce((sum, k) => sum + (preds[k]?.points_earned ?? 0), 0)
   }
 
   // Subscribe to realtime fixture updates
@@ -516,20 +521,21 @@ export default function FixturesList({
     setRoundSpecialSaving(matchday)
     const supabase = createClient()
     const picks = roundSpecialPicks[matchday] || {}
-    for (const [categoryId, value] of Object.entries(picks)) {
-      if (!value) continue
-      const { data: existing } = await supabase
-        .from('predictions_v2')
-        .select('id')
-        .eq('pool_id', poolId)
-        .eq('user_id', userId)
-        .eq('category_id', categoryId)
-        .eq('matchday', matchday)
-        .is('fixture_id', null)
-        .maybeSingle()
-      const row: any = { pool_id: poolId, user_id: userId, fixture_id: null, category_id: categoryId, matchday, value_text: value, submitted_at: new Date().toISOString() }
-      if (existing?.id) await supabase.from('predictions_v2').update(row).eq('id', existing.id)
-      else await supabase.from('predictions_v2').insert(row)
+    const rows = Object.entries(picks)
+      .filter(([, value]) => value)
+      .map(([categoryId, value]) => ({
+        pool_id: poolId,
+        user_id: userId,
+        fixture_id: null,
+        category_id: categoryId,
+        matchday,
+        value_text: value,
+        submitted_at: new Date().toISOString(),
+      }))
+    if (rows.length > 0) {
+      await supabase.from('predictions_v2').upsert(rows, {
+        onConflict: 'pool_id,user_id,fixture_id,category_id,matchday',
+      })
     }
     setRoundSpecialSaving(null)
     setRoundSpecialSaved(prev => ({ ...prev, [matchday]: true }))
@@ -541,7 +547,6 @@ export default function FixturesList({
     const roundRules = poolRules.filter(r => r.prediction_type === 'per_round')
     if (roundRules.length === 0) return null
     const picks = roundSpecialPicks[matchday] || {}
-    const [braceTeam, setBraceTeam] = useState('')
     // Use lifted state to persist across re-renders
     const braceTeam2 = braceTeamByMatchday[matchday] || ''
     const setBraceTeam2 = (v: string) => setBraceTeamByMatchday(prev => ({ ...prev, [matchday]: v }))
@@ -714,14 +719,14 @@ export default function FixturesList({
           {/* Yes/No categories */}
           {(rule.category_id === 'mma_goes_distance' || rule.category_id === 'mma_finish_rd1') && (
             <div style={{ display: 'flex', gap: 0 }}>
-              <button style={{ ...btnStyle('yes'), borderRight: 'none' }}
+              <button style={{ ...btnStyle(true), borderRight: 'none' }}
                 disabled={locked || finished}
-                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_yesno: 'yes' })}>
+                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_yesno: true })}>
                 Yes
               </button>
-              <button style={{ ...btnStyle('no') }}
+              <button style={{ ...btnStyle(false) }}
                 disabled={locked || finished}
-                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_yesno: 'no' })}>
+                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_yesno: false })}>
                 No
               </button>
             </div>
@@ -918,9 +923,8 @@ export default function FixturesList({
                     const newInputs = { ...prev, [homeKey]: v }
                     if (v !== '' && away !== '') {
                       updateLocal(fixture.id, rule.category_id, { value_text: `${v}-${away}` })
-                    } else {
-                      updateLocal(fixture.id, rule.category_id, { value_text: null })
                     }
+                    // Don't overwrite existing DB value with null if only one side entered
                     return newInputs
                   })
                 }}
@@ -938,9 +942,8 @@ export default function FixturesList({
                     const newInputs = { ...prev, [awayKey]: v }
                     if (home !== '' && v !== '') {
                       updateLocal(fixture.id, rule.category_id, { value_text: `${home}-${v}` })
-                    } else {
-                      updateLocal(fixture.id, rule.category_id, { value_text: null })
                     }
+                    // Don't overwrite existing DB value with null if only one side entered
                     return newInputs
                   })
                 }}
@@ -1033,11 +1036,10 @@ export default function FixturesList({
       return p?.value_wld || p?.value_ou || p?.value_text || p?.value_yesno !== null
     })
     const totalPts = totalPointsForFixture(fixture.id)
-    const [showMemberPicks, setShowMemberPicks] = useState(false)
-
-    useEffect(() => {
-      const hasPlayerRule = perGameRules.some(r => r.input_type === 'player')
-    }, [fixture.id])
+    const showMemberPicks = showMemberPicksMap[fixture.id] ?? false
+    const setShowMemberPicks = (v: boolean | ((prev: boolean) => boolean)) => {
+      setShowMemberPicksMap(prev => ({ ...prev, [fixture.id]: typeof v === 'function' ? v(prev[fixture.id] ?? false) : v }))
+    }
 
     return (
       <div style={{
@@ -1268,10 +1270,8 @@ export default function FixturesList({
                                 actual = htHC > htAC ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : htAC > htHC ? `${FLAGS[fixture.away_team]} ${fixture.away_team}` : 'draw'
                                 break
                               }
-                              case 'soccer_ht_corners_winner': actual = '— (unavailable)'; break
                               case 'soccer_first_yellow_team': actual = fixture.first_yellow_team ? (fixture.first_yellow_team === 'home' ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : `${FLAGS[fixture.away_team]} ${fixture.away_team}`) : '—'; break
                               case 'soccer_asian_handicap': actual = result === 'home' ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : result === 'away' ? `${FLAGS[fixture.away_team]} ${fixture.away_team}` : 'draw'; break
-                              case 'soccer_btts': actual = (h > 0 && a > 0) ? 'Yes' : 'No'; break
                             }
                             return (
                               <td key={rule.category_id} style={{ padding: '6px 6px 2px', textAlign: 'center' as const, fontSize: '11px', color: '#2d7a2d', fontWeight: 600, borderTop: '2px solid #eee' }}>
