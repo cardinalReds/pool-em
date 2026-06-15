@@ -37,6 +37,7 @@ interface Fixture {
   first_team_score: string | null
   ht_home_card_pts: number | null
   ht_away_card_pts: number | null
+  line_total_rounds: number | null
 }
 
 // One row per category per fixture in predictions_v2
@@ -698,10 +699,10 @@ export default function FixturesList({
 
           {/* Method of victory */}
           {rule.category_id === 'mma_method' && (
-            <div style={{ display: 'flex', gap: 0 }}>
-              {['KO/TKO', 'Submission', 'Decision'].map((method, i, arr) => (
+            <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap' as const }}>
+              {['KO/TKO', 'Submission', 'Decision', 'DQ'].map((method, i, arr) => (
                 <button key={method}
-                  style={{ ...btnStyle(method), ...(i < arr.length - 1 ? { borderRight: 'none' } : {}) }}
+                  style={{ ...btnStyle(method), ...(i < arr.length - 1 ? { borderRight: 'none' } : {}), flex: '1 1 auto', minWidth: 60 }}
                   disabled={locked || finished}
                   onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: method })}>
                   {method}
@@ -732,30 +733,33 @@ export default function FixturesList({
               <button style={{ ...btnStyle('over'), borderRight: 'none' }}
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'over' })}>
-                over 2.5
+                over {fixture.line_total_rounds ?? '2.5'}
               </button>
               <button style={{ ...btnStyle('under') }}
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'under' })}>
-                under 2.5
+                under {fixture.line_total_rounds ?? '2.5'}
               </button>
             </div>
           )}
 
           {/* Round finished */}
           {rule.category_id === 'mma_round_finish' && (
-            <div style={{ display: 'flex', gap: 4 }}>
-              {[1, 2, 3, 4, 5].map(round => {
-                const active = pred?.value_number === round
-                return (
-                  <button key={round}
-                    style={{ ...btnStyle(String(round)), flex: '0 0 44px' }}
-                    disabled={locked || finished}
-                    onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_number: round })}>
-                    R{round}
-                  </button>
-                )
-              })}
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
+              {[1, 2, 3, 4, 5].map(round => (
+                <button key={round}
+                  style={{ ...btnStyle(round), flex: '0 0 44px' }}
+                  disabled={locked || finished}
+                  onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_number: round })}>
+                  R{round}
+                </button>
+              ))}
+              <button
+                style={{ ...btnStyle('Decision'), flex: '1 1 auto' }}
+                disabled={locked || finished}
+                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: 'Decision', value_number: null })}>
+                Decision
+              </button>
             </div>
           )}
         </div>
