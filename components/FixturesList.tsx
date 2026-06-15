@@ -690,12 +690,12 @@ export default function FixturesList({
           {/* Fight result — home fighter vs away fighter, no draw */}
           {rule.category_id === 'mma_result' && (
             <div style={{ display: 'flex', gap: 0 }}>
-              <button style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
+              <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block', fontSize: '11px' }}>{fixture.home_team}</span>
               </button>
-              <button style={{ ...btnStyle('away'), overflow: 'hidden' }}
+              <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block', fontSize: '11px' }}>{fixture.away_team}</span>
@@ -707,7 +707,7 @@ export default function FixturesList({
           {rule.category_id === 'mma_method' && (
             <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap' as const }}>
               {['KO/TKO', 'Submission', 'Decision', 'DQ'].map((method, i, arr) => (
-                <button key={method}
+                <button type="button" key={method}
                   style={{ ...btnStyle(method), ...(i < arr.length - 1 ? { borderRight: 'none' } : {}), flex: '1 1 auto', minWidth: 60 }}
                   disabled={locked || finished}
                   onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: method })}>
@@ -720,12 +720,12 @@ export default function FixturesList({
           {/* Yes/No categories */}
           {(rule.category_id === 'mma_goes_distance' || rule.category_id === 'mma_finish_rd1') && (
             <div style={{ display: 'flex', gap: 0 }}>
-              <button style={{ ...btnStyle(true), borderRight: 'none' }}
+              <button type="button" style={{ ...btnStyle(true), borderRight: 'none' }}
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_yesno: true })}>
                 Yes
               </button>
-              <button style={{ ...btnStyle(false) }}
+              <button type="button" style={{ ...btnStyle(false) }}
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_yesno: false })}>
                 No
@@ -736,12 +736,12 @@ export default function FixturesList({
           {/* Total rounds O/U */}
           {rule.category_id === 'mma_total_rounds_ou' && (
             <div style={{ display: 'flex', gap: 0 }}>
-              <button style={{ ...btnStyle('over'), borderRight: 'none' }}
+              <button type="button" style={{ ...btnStyle('over'), borderRight: 'none' }}
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'over' })}>
                 over {fixture.line_total_rounds ?? '2.5'}
               </button>
-              <button style={{ ...btnStyle('under') }}
+              <button type="button" style={{ ...btnStyle('under') }}
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'under' })}>
                 under {fixture.line_total_rounds ?? '2.5'}
@@ -753,14 +753,14 @@ export default function FixturesList({
           {rule.category_id === 'mma_round_finish' && (
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
               {[1, 2, 3, 4, 5].map(round => (
-                <button key={round}
+                <button type="button" key={round}
                   style={{ ...btnStyle(round), flex: '0 0 44px' }}
                   disabled={locked || finished}
                   onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_number: round })}>
                   R{round}
                 </button>
               ))}
-              <button
+              <button type="button"
                 style={{ ...btnStyle('Decision'), flex: '1 1 auto' }}
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: 'Decision', value_number: null })}>
@@ -796,7 +796,7 @@ export default function FixturesList({
           rule.category_id !== 'soccer_first_team_score' &&
           rule.category_id !== 'soccer_first_yellow_team' && (
           <div style={{ display: 'flex', gap: 0 }}>
-            <button style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
+            <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
               disabled={locked || finished}
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
@@ -809,13 +809,13 @@ export default function FixturesList({
               </span>
             </button>
             {rule.category_id !== 'soccer_asian_handicap' && (
-              <button style={{ ...btnStyle('draw'), borderRight: 'none', flexShrink: 0, flex: '0 0 60px' }}
+              <button type="button" style={{ ...btnStyle('draw'), borderRight: 'none', flexShrink: 0, flex: '0 0 60px' }}
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'draw' })}>
                 draw
               </button>
             )}
-            <button style={{ ...btnStyle('away'), overflow: 'hidden' }}
+            <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
               disabled={locked || finished}
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
@@ -833,19 +833,19 @@ export default function FixturesList({
         {/* First team to score */}
         {rule.category_id === 'soccer_first_team_score' && (
           <div style={{ display: 'flex', gap: 0 }}>
-            <button style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
+            <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
               disabled={locked || finished}
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
                 {FLAGS[fixture.home_team]} {fixture.home_team}
               </span>
             </button>
-            <button style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
+            <button type="button" style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
               disabled={locked || finished}
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'none' })}>
               no goal
             </button>
-            <button style={{ ...btnStyle('away'), overflow: 'hidden' }}
+            <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
               disabled={locked || finished}
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
@@ -858,19 +858,19 @@ export default function FixturesList({
         {/* First yellow card */}
         {rule.category_id === 'soccer_first_yellow_team' && (
           <div style={{ display: 'flex', gap: 0 }}>
-            <button style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
+            <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
               disabled={locked || finished}
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
                 {FLAGS[fixture.home_team]} {fixture.home_team}
               </span>
             </button>
-            <button style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
+            <button type="button" style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
               disabled={locked || finished}
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'none' })}>
               no card
             </button>
-            <button style={{ ...btnStyle('away'), overflow: 'hidden' }}
+            <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
               disabled={locked || finished}
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
@@ -890,12 +890,12 @@ export default function FixturesList({
           const lineLabel = line != null ? line.toString() : '—'
           return (
             <div style={{ display: 'flex', gap: 0 }}>
-              <button style={{ ...btnStyle('over'), borderRight: 'none' }}
+              <button type="button" style={{ ...btnStyle('over'), borderRight: 'none' }}
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'over' })}>
                 over {lineLabel}
               </button>
-              <button style={btnStyle('under')}
+              <button type="button" style={btnStyle('under')}
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'under' })}>
                 under {lineLabel}
@@ -961,7 +961,7 @@ export default function FixturesList({
         {/* Yes / No */}
         {rule.input_type === 'yesno' && (
           <div style={{ display: 'flex', gap: 0 }}>
-            <button
+            <button type="button"
               style={{ ...btnStyle(true), borderRight: 'none',
                 borderColor: pred?.value_yesno === true ? '#C8102E' : '#ddd',
                 background: pred?.value_yesno === true ? '#C8102E' : locked || finished ? '#fafafa' : 'white',
@@ -971,7 +971,7 @@ export default function FixturesList({
               onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_yesno: true })}>
               yes
             </button>
-            <button
+            <button type="button"
               style={{ ...btnStyle(false),
                 borderColor: pred?.value_yesno === false ? '#C8102E' : '#ddd',
                 background: pred?.value_yesno === false ? '#C8102E' : locked || finished ? '#fafafa' : 'white',
@@ -1137,7 +1137,7 @@ export default function FixturesList({
                     everyone's picks
                   </div>
                   {isLive && (
-                    <button onClick={() => setShowMemberPicks(p => !p)}
+                    <button type="button" onClick={() => setShowMemberPicks(p => !p)}
                       style={{ fontSize: '10px', color: '#888', background: 'none', border: '1px solid #ddd', padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>
                       {showMemberPicks ? 'hide' : 'show'}
                     </button>
@@ -1303,7 +1303,7 @@ export default function FixturesList({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 8, flexWrap: 'wrap' as const }}>
         <div style={{ display: 'flex', border: '1px solid #ddd', overflow: 'hidden', borderRadius: 3 }}>
           {(onlyRoundSpecials ? ['round'] : ['date', 'group', 'round'] as const).map((mode, i) => (
-            <button key={mode} onClick={() => { setSortMode(mode as any); setCurrentPage(0) }}
+            <button type="button" key={mode} onClick={() => { setSortMode(mode as any); setCurrentPage(0) }}
               style={{ padding: '8px 16px', fontSize: '12px', cursor: 'pointer', border: 'none', borderLeft: i > 0 ? '1px solid #ddd' : 'none', fontFamily: 'inherit', background: sortMode === mode ? '#111' : 'white', color: sortMode === mode ? 'white' : '#888', minHeight: 44 }}>
               by {mode}
             </button>
@@ -1311,7 +1311,7 @@ export default function FixturesList({
         </div>
         <div style={{ display: 'flex', border: '1px solid #ddd', overflow: 'hidden', borderRadius: 3 }}>
           {(['pages', 'list'] as const).map((mode, i) => (
-            <button key={mode} onClick={() => setViewMode(mode)}
+            <button type="button" key={mode} onClick={() => setViewMode(mode)}
               style={{ padding: '8px 16px', fontSize: '12px', cursor: 'pointer', border: 'none', borderLeft: i > 0 ? '1px solid #ddd' : 'none', fontFamily: 'inherit', background: viewMode === mode ? '#111' : 'white', color: viewMode === mode ? 'white' : '#888', minHeight: 44 }}>
               {mode}
             </button>
@@ -1333,13 +1333,13 @@ export default function FixturesList({
       {/* Pager */}
       {viewMode === 'pages' && pages.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', border: '1px solid #e0e0db', padding: '8px 14px', width: '100%' }}>
-          <button onClick={() => setCurrentPage(p => Math.max(0, p - 1))} disabled={safePage === 0}
+          <button type="button" onClick={() => setCurrentPage(p => Math.max(0, p - 1))} disabled={safePage === 0}
             style={{ background: 'none', border: '1px solid #ddd', padding: '8px 16px', cursor: safePage === 0 ? 'default' : 'pointer', fontSize: '18px', color: safePage === 0 ? '#ddd' : '#555', minHeight: 44 }}>‹</button>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontWeight: 600, fontSize: '14px' }}>{pages[safePage]?.label}</div>
             <div style={{ fontSize: '11px', color: '#aaa', marginTop: 2 }}>{safePage + 1} of {totalPages} · {pages[safePage]?.sub}</div>
           </div>
-          <button onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))} disabled={safePage === totalPages - 1}
+          <button type="button" onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))} disabled={safePage === totalPages - 1}
             style={{ background: 'none', border: '1px solid #ddd', padding: '8px 16px', cursor: safePage === totalPages - 1 ? 'default' : 'pointer', fontSize: '18px', color: safePage === totalPages - 1 ? '#ddd' : '#555', minHeight: 44 }}>›</button>
         </div>
       )}
@@ -1353,7 +1353,7 @@ export default function FixturesList({
             // Group fixtures by day within the round
             const dayMap: Record<string, Fixture[]> = {}
             const dayIsoMap: Record<string, string> = {}
-            page.fixtures.forEach(f => {
+            page.fixtures.filter(f => f.status !== 'live').forEach(f => {
               const day = formatDatePT(f.date)
               if (!dayMap[day]) { dayMap[day] = []; dayIsoMap[day] = f.date.slice(0, 10) }
               dayMap[day].push(f)
@@ -1376,14 +1376,14 @@ export default function FixturesList({
               </>
             )
           }
-          return <>{page.fixtures.map(f => <FixtureCard key={f.id} fixture={f} />)}</>
+          return <>{page.fixtures.filter(f => f.status !== 'live').map(f => <FixtureCard key={f.id} fixture={f} />)}</>
         })()
         : pages.map(page => (
           <div key={page.label}>
             <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', padding: '8px 0 4px', borderBottom: '1px solid #e8e8e4', marginBottom: 4, width: '100%' }}>
               {page.label} <span style={{ fontWeight: 400, textTransform: 'none' as const, color: '#ccc' }}>{page.sub}</span>
             </div>
-            {page.fixtures.map(f => <FixtureCard key={f.id} fixture={f} />)}
+            {page.fixtures.filter(f => f.status !== 'live').map(f => <FixtureCard key={f.id} fixture={f} />)}
             <div style={{ marginBottom: 10 }} />
           </div>
         ))
