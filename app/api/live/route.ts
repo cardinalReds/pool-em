@@ -89,6 +89,78 @@ async function fetchFixtureStats(apiFixtureId: number): Promise<{ homeCorners: n
   }
 }
 
+async function fetchLiveMMAFights(): Promise<any[]> {
+  const res = await fetch(
+    `https://v1.mma.api-sports.io/fights?date=${new Date().toISOString().slice(0, 10)}`,
+    { headers: { 'x-apisports-key': process.env.API_FOOTBALL_KEY! } }
+  )
+  if (!res.ok) return []
+  const data = await res.json()
+  return (data.response ?? []).filter((f: any) => ['IN', 'PF', 'LIVE', 'EOR', 'FT'].includes(f.status?.short))
+}
+
+async function fetchMMAResult(apiId: number): Promise<any> {
+  const res = await fetch(
+    `https://v1.mma.api-sports.io/fights/results?id=${apiId}`,
+    { headers: { 'x-apisports-key': process.env.API_FOOTBALL_KEY! } }
+  )
+  if (!res.ok) return null
+  const data = await res.json()
+  return data.response?.[0] ?? null
+}
+
+async function handleMMATournament() {
+  const liveFights = await fetchLiveMMAFights()
+  if (!liveFights.length) return { live: 0, updated: 0 }
+
+  let updated = 0
+
+  for (const fight of liveFights) {
+    const apiId = fight.id
+    const apiStatus = fight.status?.short
+    const isFinished = apiStatus === 'FT'
+    const isLive = ['IN', 'PF', 'LIVE', 'EOR'].includes(apiStatus)
+
+    const { data: ourFixture } = await supabase
+      .from('fixtures')
+      .select('id, status, fight_order, tournament_id')
+      .eq('api_fixture_id', apiId)
+      .maybeSingle()
+
+    if (!ourFixture) continue
+
+    const newStatus = isFinished ? 'FT' : isLive ? 'live' : 'NS'
+
+    // Update fixture status
+    const { error } = await supabase
+      .from('fixtures')
+      .update({ status: newStatus })
+      .eq('id', ourFixture.id)
+
+    if (error) continue
+
+    // If fight just finished, unlock the next fight
+    if (isFinished && ourFixture.status !== 'FT') {
+      // Trigger scoring
+      await triggerScoring(String(ourFixture.id))
+
+      // Find next fight by fight_order and update its date to now + 10 min
+      if (ourFixture.fight_order) {
+        const nextLockTime = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+        await supabase
+          .from('fixtures')
+          .update({ date: nextLockTime })
+          .eq('tournament_id', ourFixture.tournament_id)
+          .eq('fight_order', ourFixture.fight_order + 1)
+          .eq('status', 'NS')
+      }
+      updated++
+    }
+  }
+
+  return { live: liveFights.length, updated }
+}
+
 async function triggerScoring(fixtureId: string) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL
   await fetch(`${appUrl}/api/score`, {
@@ -123,6 +195,13 @@ export async function GET(request: Request) {
     const results: Record<string, any> = {}
 
     for (const tournament of activeTournaments) {
+      // ── MMA tournaments ──────────────────────────────────────────────
+      if (tournament.id === 'ufc_freedom_250') {
+        results[tournament.id] = await handleMMATournament()
+        continue
+      }
+
+      // ── Soccer tournaments ───────────────────────────────────────────
       const liveApiFixtures = await fetchLiveFixtures(tournament.id)
 
       if (!liveApiFixtures.length) {
