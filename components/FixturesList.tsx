@@ -209,17 +209,35 @@ export default function FixturesList({
       const data = await res.json()
       setFixtures(data.fixtures || [])
 
-      // Set initial page to today or next available date
+      // Set initial page to next upcoming or live fixture (in PT timezone)
       if (data.fixtures?.length > 0) {
-        const todayStr = new Date().toISOString().slice(0, 10)
-        const sorted = [...(data.fixtures)].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
-        const dateMap: Record<string, boolean> = {}
-        sorted.forEach((f: any) => { dateMap[f.date.slice(0, 10)] = true })
-        const dates = Object.keys(dateMap).sort()
-        // Find today or next future date
-        const targetDate = dates.find(d => d >= todayStr) ?? dates[dates.length - 1]
-        const pageIndex = dates.indexOf(targetDate)
-        if (pageIndex >= 0) setCurrentPage(pageIndex)
+        const now = new Date()
+        // Find the next fixture that is live or upcoming
+        const upcoming = (data.fixtures as any[])
+          .filter((f: any) => f.status === 'live' || f.status === 'NS' || !f.status)
+          .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        const nextFixture = upcoming[0]
+        if (nextFixture) {
+          // Get the PT date of the next fixture
+          const ptDateStr = new Date(nextFixture.date).toLocaleDateString('en-US', {
+            timeZone: 'America/Los_Angeles',
+            year: 'numeric', month: '2-digit', day: '2-digit'
+          })
+          // Convert MM/DD/YYYY → YYYY-MM-DD
+          const [m, d, y] = ptDateStr.split('/')
+          const targetIso = `${y}-${m}-${d}`
+          // Find which page has this date
+          const sorted = [...(data.fixtures as any[])].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+          const dateMap: Record<string, boolean> = {}
+          sorted.forEach((f: any) => {
+            const ptD = new Date(f.date).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' })
+            const [fm, fd, fy] = ptD.split('/')
+            dateMap[`${fy}-${fm}-${fd}`] = true
+          })
+          const dates = Object.keys(dateMap).sort()
+          const pageIndex = dates.indexOf(targetIso)
+          if (pageIndex >= 0) setCurrentPage(pageIndex)
+        }
       }
 
       if (isCustom) {
