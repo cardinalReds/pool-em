@@ -285,16 +285,36 @@ function scoreCustomPrediction(
     }
 
     // ── Player/text ───────────────────────────────────────────────────────
-    case 'soccer_first_goalscorer':
+    case 'soccer_first_goalscorer': {
       if (!firstScorerName || !pred.value_text) return 0
-      return pred.value_text.replace(/\s+/g, ' ').trim().toLowerCase() === firstScorerName.replace(/\s+/g, ' ').trim().toLowerCase()
-        ? rule.points : 0
+      const normalizeScorer = (name: string) => {
+        name = name.replace(/\s+/g, ' ').trim()
+        // Strip accents
+        name = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        const parts = name.split(' ')
+        if (parts.length >= 2 && !name.includes('.')) {
+          return `${parts[0][0]}. ${parts.slice(1).join(' ')}`.toLowerCase()
+        }
+        return name.toLowerCase()
+      }
+      return normalizeScorer(pred.value_text) === normalizeScorer(firstScorerName) ? rule.points : 0
+    }
 
-    case 'soccer_anytime_goalscorer':
+    case 'soccer_anytime_goalscorer': {
       if (!pred.value_text || facts.allScorerNames.length === 0) return 0
-      return facts.allScorerNames.some(
-        name => name.replace(/\s+/g, ' ').trim().toLowerCase() === pred.value_text.replace(/\s+/g, ' ').trim().toLowerCase()
+      const normalizeA = (name: string) => {
+        name = name.replace(/\s+/g, ' ').trim()
+        name = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        const parts = name.split(' ')
+        if (parts.length >= 2 && !name.includes('.')) {
+          return `${parts[0][0]}. ${parts.slice(1).join(' ')}`.toLowerCase()
+        }
+        return name.toLowerCase()
+      }
+      return facts.allScorerNames.some(name =>
+        normalizeA(name) === normalizeA(pred.value_text)
       ) ? rule.points : 0
+    }
 
     default:
       return 0
