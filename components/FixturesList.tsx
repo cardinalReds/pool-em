@@ -1371,7 +1371,11 @@ export default function FixturesList({
             // Group fixtures by day within the round
             const dayMap: Record<string, Fixture[]> = {}
             const dayIsoMap: Record<string, string> = {}
-            page.fixtures.filter(f => f.status !== 'live').forEach(f => {
+            page.fixtures.filter(f => f.status !== 'live').sort((a, b) => {
+              const statusOrder = (f: Fixture) => f.status === 'NS' ? 0 : f.status === 'FT' ? 1 : 2
+              if (statusOrder(a) !== statusOrder(b)) return statusOrder(a) - statusOrder(b)
+              return new Date(a.date).getTime() - new Date(b.date).getTime()
+            }).forEach(f => {
               const day = formatDatePT(f.date)
               if (!dayMap[day]) { dayMap[day] = []; dayIsoMap[day] = f.date.slice(0, 10) }
               dayMap[day].push(f)
@@ -1394,7 +1398,14 @@ export default function FixturesList({
               </>
             )
           }
-          return <>{page.fixtures.filter(f => f.status !== 'live').map(f => <FixtureCard key={f.id} fixture={f} />)}</>
+          return <>{page.fixtures
+            .filter(f => f.status !== 'live')
+            .sort((a, b) => {
+              const statusOrder = (f: Fixture) => f.status === 'NS' ? 0 : f.status === 'FT' ? 1 : 2
+              if (statusOrder(a) !== statusOrder(b)) return statusOrder(a) - statusOrder(b)
+              return new Date(a.date).getTime() - new Date(b.date).getTime()
+            })
+            .map(f => <FixtureCard key={f.id} fixture={f} />)}</>
         })()
         : pages.map(page => (
           <div key={page.label}>
