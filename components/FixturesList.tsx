@@ -394,6 +394,13 @@ export default function FixturesList({
   // Update local state and localStorage backup, DB write on save
   const LS_KEY = `pool_preds_${poolId}_${userId}`
 
+  // Use a ref to always have fresh preds in saveFixture
+  const predsRef = useRef(preds)
+  useEffect(() => { predsRef.current = preds }, [preds])
+
+  // Use a ref for saveFixture so updateLocal always calls the latest version
+  const saveFixtureRef = useRef<(fixtureId: number) => Promise<void>>(async () => {})
+
   const updateLocal = useCallback((
     fixtureId: number,
     categoryId: string,
@@ -423,14 +430,9 @@ export default function FixturesList({
     // Auto-save to DB after 800ms debounce
     if (autoSaveTimers.current[fixtureId]) clearTimeout(autoSaveTimers.current[fixtureId])
     autoSaveTimers.current[fixtureId] = setTimeout(() => {
-      saveFixture(fixtureId)
+      saveFixtureRef.current(fixtureId)
     }, 800)
   }, [poolId, userId, LS_KEY])
-
-  // Write all categories for a fixture to DB at once
-  // Use a ref to always have fresh preds in saveFixture
-  const predsRef = useRef(preds)
-  useEffect(() => { predsRef.current = preds }, [preds])
 
   const saveFixture = useCallback(async (fixtureId: number) => {
     setSaving(fixtureId)
@@ -466,6 +468,9 @@ export default function FixturesList({
     setSaved(prev => ({ ...prev, [fixtureId]: true }))
     setTimeout(() => setSaved(prev => ({ ...prev, [fixtureId]: false })), 3000)
   }, [poolId, userId, poolRules])
+
+  // Keep saveFixtureRef in sync
+  useEffect(() => { saveFixtureRef.current = saveFixture }, [saveFixture])
 
   function isLocked(f: Fixture) {
     if (deadlineType === 'before_tournament') return false
