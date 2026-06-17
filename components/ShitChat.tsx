@@ -146,7 +146,7 @@ export default function ShitChat({ poolId, userId, displayName }: ShitChatProps)
       </div>
 
       {/* Input */}
-      <div style={{ padding: '12px 16px', borderTop: '1px solid #eee', display: 'flex', gap: 8, flexShrink: 0 }}>
+      <div style={{ padding: '12px', borderTop: '1px solid #eee', display: 'flex', gap: 6, flexShrink: 0 }}>
         <input
           ref={inputRef}
           type="text"
@@ -155,17 +155,19 @@ export default function ShitChat({ poolId, userId, displayName }: ShitChatProps)
           onKeyDown={e => { if (e.key === 'Enter') sendMessage() }}
           placeholder="say something..."
           style={{
-            flex: 1, padding: '8px 12px', border: '1px solid #ddd',
+            flex: '1 1 auto', minWidth: 0, padding: '8px 10px', border: '1px solid #ddd',
             fontSize: '13px', fontFamily: 'inherit', outline: 'none',
           }}
         />
         <button type="button" onClick={sendMessage} disabled={!input.trim() || sending}
           style={{
-            padding: '8px 16px',
+            flexShrink: 0,
+            padding: '8px 12px',
             background: input.trim() ? '#C8102E' : '#ddd',
             color: 'white', border: 'none',
             cursor: input.trim() ? 'pointer' : 'default',
             fontSize: '13px', fontFamily: 'inherit', fontWeight: 600,
+            whiteSpace: 'nowrap' as const,
           }}>
           {sending ? '...' : 'send'}
         </button>
