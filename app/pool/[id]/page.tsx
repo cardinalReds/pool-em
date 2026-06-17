@@ -95,6 +95,25 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const [inviteUrl, setInviteUrl] = useState('')
   const [isMobile, setIsMobile] = useState(false)
   const [mobilePanel, setMobilePanel] = useState<'sidebar' | 'predictions' | 'chat'>('predictions')
+  const [chatWidth, setChatWidth] = useState(260)
+  const [isResizingChat, setIsResizingChat] = useState(false)
+
+  useEffect(() => {
+    if (!isResizingChat) return
+    document.body.style.userSelect = 'none'
+    function onMove(e: MouseEvent) {
+      const newWidth = window.innerWidth - e.clientX
+      setChatWidth(Math.min(600, Math.max(220, newWidth)))
+    }
+    function onUp() { setIsResizingChat(false) }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      document.body.style.userSelect = ''
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [isResizingChat])
   const [recentChanges, setRecentChanges] = useState<any[]>([])
   const [changesDismissed, setChangesDismissed] = useState(false)
   const [isLive, setIsLive] = useState(false)
@@ -535,7 +554,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         </div>
       ) : (
         // ── Desktop layout — 3 columns ───────────────────────────────────
-        <div style={{display: 'grid', gridTemplateColumns: '280px 1fr 260px', minHeight: 'calc(100vh - 41px)'}}>
+        <div style={{display: 'grid', gridTemplateColumns: `280px 1fr ${chatWidth}px`, minHeight: 'calc(100vh - 41px)'}}>
           {/* Sidebar */}
           <div style={{background: 'white', borderRight: '1px solid #e0e0db', overflowY: 'auto'}}>
             {sidebarContent}
@@ -561,6 +580,14 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           {/* Chat */}
           {user && (
             <div style={{borderLeft: '1px solid #e0e0db', background: 'white', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 41px)', position: 'sticky', top: 41}}>
+              <div
+                onMouseDown={() => setIsResizingChat(true)}
+                style={{
+                  position: 'absolute', left: -3, top: 0, bottom: 0, width: 6,
+                  cursor: 'col-resize', zIndex: 10,
+                  background: isResizingChat ? 'rgba(200,16,46,0.3)' : 'transparent',
+                }}
+              />
               <ShitChat poolId={pool.id} userId={user.id} displayName={user.user_metadata?.display_name || user.email?.split('@')[0] || 'anon'} />
             </div>
           )}
