@@ -435,7 +435,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             Based only on the games you predicted.
           </div>
           <div style={{fontSize: '11px', color: '#aaa', marginBottom: '10px'}}>
-            You've predicted {yourLeaderboardFixtureCount} games.
+            You've predicted {yourLeaderboardFixtureCount} out of {finishedFixtureCount} games.
           </div>
           {yourLeaderboard.map((member, i) => (
             <div key={member.id} style={{
