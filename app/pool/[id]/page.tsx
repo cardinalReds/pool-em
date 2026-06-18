@@ -91,6 +91,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const [yourLeaderboard, setYourLeaderboard] = useState<any[]>([])
   const [yourLeaderboardFixtureCount, setYourLeaderboardFixtureCount] = useState(0)
   const [totalFixtureCount, setTotalFixtureCount] = useState(0)
+  const [finishedFixtureCount, setFinishedFixtureCount] = useState(0)
   const [poolRules, setPoolRules] = useState<any[]>([])
   const [bracketScoringRules, setBracketScoringRules] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -197,18 +198,27 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           .select('user_id, fixture_id, points_earned, value_wld, value_text, value_ou, value_yesno, value_number')
           .eq('pool_id', pool.id)
 
-        // Total scored fixtures in this tournament
+        // Total fixtures in this tournament
         const { count: fixtureCount } = await supabase
           .from('fixtures')
           .select('id', { count: 'exact', head: true })
           .eq('tournament_id', pool.tournament_id)
-          .eq('status', 'FT')
         setTotalFixtureCount(fixtureCount || 0)
+        setFinishedFixtureCount(finishedFixtures?.length || 0)
 
-        // Step 1: find the fixtures THIS user predicted on
+        // Only count finished fixtures for the "predicted X out of Y" display
+        const { data: finishedFixtures } = await supabase
+          .from('fixtures')
+          .select('id')
+          .eq('tournament_id', pool.tournament_id)
+          .eq('status', 'FT')
+        const finishedIds = new Set((finishedFixtures || []).map(f => f.id))
+
+        // Step 1: find the finished fixtures THIS user predicted on
         const myFixtureIds = new Set<number>()
         allPreds?.forEach(p => {
           if (p.user_id !== currentUser.id || p.fixture_id === null) return
+          if (!finishedIds.has(p.fixture_id)) return
           const hasValue = p.value_wld || p.value_text || p.value_ou || p.value_yesno !== null || p.value_number !== null
           if (hasValue) myFixtureIds.add(p.fixture_id)
         })
@@ -425,7 +435,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             Based only on the games you predicted.
           </div>
           <div style={{fontSize: '11px', color: '#aaa', marginBottom: '10px'}}>
-            You've predicted {yourLeaderboardFixtureCount} out of {totalFixtureCount} games.
+            You've predicted {yourLeaderboardFixtureCount} games.
           </div>
           {yourLeaderboard.map((member, i) => (
             <div key={member.id} style={{
