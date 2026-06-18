@@ -90,6 +90,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const [leaderboard, setLeaderboard] = useState<any[]>([])
   const [yourLeaderboard, setYourLeaderboard] = useState<any[]>([])
   const [yourLeaderboardFixtureCount, setYourLeaderboardFixtureCount] = useState(0)
+  const [totalFixtureCount, setTotalFixtureCount] = useState(0)
   const [poolRules, setPoolRules] = useState<any[]>([])
   const [bracketScoringRules, setBracketScoringRules] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -195,6 +196,14 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           .from('predictions_v2')
           .select('user_id, fixture_id, points_earned, value_wld, value_text, value_ou, value_yesno, value_number')
           .eq('pool_id', pool.id)
+
+        // Total scored fixtures in this tournament
+        const { count: fixtureCount } = await supabase
+          .from('fixtures')
+          .select('id', { count: 'exact', head: true })
+          .eq('tournament_id', pool.tournament_id)
+          .eq('status', 'FT')
+        setTotalFixtureCount(fixtureCount || 0)
 
         // Step 1: find the fixtures THIS user predicted on
         const myFixtureIds = new Set<number>()
@@ -412,11 +421,11 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
       {yourLeaderboard.length > 0 && (
         <Section title="your leaderboard" defaultOpen={false}>
-          <div style={{fontSize: '11px', color: '#aaa', marginBottom: '4px', fontStyle: 'italic'}}>
-            Your Leaderboard - Only counts the games you've predicted
+          <div style={{fontSize: '11px', color: '#aaa', marginBottom: '4px'}}>
+            Based only on the games you predicted.
           </div>
-          <div style={{fontSize: '10px', color: '#ccc', marginBottom: '10px'}}>
-            based on {yourLeaderboardFixtureCount} game{yourLeaderboardFixtureCount === 1 ? '' : 's'} you predicted
+          <div style={{fontSize: '11px', color: '#aaa', marginBottom: '10px'}}>
+            You've predicted {yourLeaderboardFixtureCount} out of {totalFixtureCount} games.
           </div>
           {yourLeaderboard.map((member, i) => (
             <div key={member.id} style={{
