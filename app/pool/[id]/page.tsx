@@ -204,15 +204,15 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           .select('id', { count: 'exact', head: true })
           .eq('tournament_id', pool.tournament_id)
         setTotalFixtureCount(fixtureCount || 0)
-        setFinishedFixtureCount(finishedFixtures?.length || 0)
 
-        // Only count finished fixtures for the "predicted X out of Y" display
+        // Only count finished fixtures for the predicted count display
         const { data: finishedFixtures } = await supabase
           .from('fixtures')
           .select('id')
           .eq('tournament_id', pool.tournament_id)
           .eq('status', 'FT')
-        const finishedIds = new Set((finishedFixtures || []).map(f => f.id))
+        const finishedIds = new Set((finishedFixtures || []).map((f: any) => f.id))
+        setFinishedFixtureCount(finishedFixtures?.length || 0)
 
         // Step 1: find the finished fixtures THIS user predicted on
         const myFixtureIds = new Set<number>()
