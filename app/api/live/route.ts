@@ -202,14 +202,15 @@ export async function GET(request: Request) {
       }
 
       // ── Soccer tournaments ───────────────────────────────────────────
-      // Only call API if there are live fixtures or fixtures starting within 2 hours
+      // Only call API if there are live fixtures OR fixtures that started in the last 3 hours
       const now = new Date()
+      const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000)
       const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000)
       const { data: activeFixtures } = await supabase
         .from('fixtures')
         .select('id')
         .eq('tournament_id', tournament.id)
-        .or(`status.eq.live,and(status.eq.NS,date.gte.${now.toISOString()},date.lte.${twoHoursFromNow.toISOString()})`)
+        .or(`status.eq.live,and(status.eq.NS,date.gte.${threeHoursAgo.toISOString()},date.lte.${twoHoursFromNow.toISOString()})`)
         .limit(1)
 
       if (!activeFixtures?.length) {
