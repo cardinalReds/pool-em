@@ -1231,7 +1231,7 @@ export default function FixturesList({
                                 displayContent = (
                                   <>
                                     {formatPickValue(p, rule, fixture)}
-                                    {finished && isCorrect && <span style={{ marginLeft: 3 }}>✓</span>}
+                                    {(finished || isLive) && isCorrect && <span style={{ marginLeft: 3 }}>✓</span>}
                                   </>
                                 )
                               }
@@ -1255,10 +1255,10 @@ export default function FixturesList({
                         )
                       })}
                     </tbody>
-                    {finished && (
+                    {(finished || isLive) && (
                       <tfoot>
                         <tr>
-                          <td style={{ padding: '6px 6px 2px', fontSize: '10px', fontWeight: 700, color: '#2d7a2d', borderTop: '2px solid #eee', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>actual</td>
+                          <td style={{ padding: '6px 6px 2px', fontSize: '10px', fontWeight: 700, color: isLive ? '#e67e00' : '#2d7a2d', borderTop: '2px solid #eee', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>{isLive ? '🔴 live' : 'actual'}</td>
                           {perGameRules.map(rule => {
                             let actual = '—'
                             const h = fixture.home_score ?? 0
@@ -1309,7 +1309,7 @@ export default function FixturesList({
                               </td>
                             )
                           })}
-                          {finished && <td style={{ borderTop: '2px solid #eee' }} />}
+                          {(finished || isLive) && <td style={{ borderTop: '2px solid #eee' }} />}
                         </tr>
                       </tfoot>
                     )}
