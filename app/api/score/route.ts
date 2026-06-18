@@ -742,6 +742,18 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Early exit: only call the API if there are live fixtures or unscored finished fixtures
+    const { data: pendingFixtures } = await supabase
+      .from('fixtures')
+      .select('id')
+      .eq('tournament_id', 'wc_2026')
+      .or('status.eq.live,and(status.eq.FT,scored.eq.false)')
+      .limit(1)
+
+    if (!pendingFixtures?.length) {
+      return NextResponse.json({ ok: true, fixtures_scored: 0, skipped: true })
+    }
+
     const finishedMatches = await fetchFinished()
     const liveMatches = await fetchLive()
     // Combine: finished first, then live. Use a flag to track which are live-only
@@ -765,8 +777,6 @@ export async function POST(request: NextRequest) {
         .select('id, scored, line_total_goals, line_total_corners, line_card_points, line_asian_handicap_home, line_asian_handicap_away')
         .eq('api_fixture_id', apiFixtureId)
         .maybeSingle()
-
-      console.log(`API fixture ${apiFixtureId}: ourFixture=${ourFixture?.id}, scored=${ourFixture?.scored}, live=${isLiveMatch}`)
 
       if (!ourFixture) continue
       if (ourFixture.scored && !isLiveMatch) continue // skip already-scored finished games; always re-score live games

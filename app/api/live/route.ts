@@ -202,6 +202,21 @@ export async function GET(request: Request) {
       }
 
       // ── Soccer tournaments ───────────────────────────────────────────
+      // Only call API if there are live fixtures or fixtures starting within 2 hours
+      const now = new Date()
+      const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000)
+      const { data: activeFixtures } = await supabase
+        .from('fixtures')
+        .select('id')
+        .eq('tournament_id', tournament.id)
+        .or(`status.eq.live,and(status.eq.NS,date.gte.${now.toISOString()},date.lte.${twoHoursFromNow.toISOString()})`)
+        .limit(1)
+
+      if (!activeFixtures?.length) {
+        results[tournament.id] = { live: 0, skipped: true }
+        continue
+      }
+
       const liveApiFixtures = await fetchLiveFixtures(tournament.id)
 
       if (!liveApiFixtures.length) {
@@ -238,8 +253,17 @@ export async function GET(request: Request) {
           firstScorer = extractFirstScorer(events)
         }
 
-        // Fetch live stats (corners, cards)
-        const stats = await fetchFixtureStats(apiId)
+        // Fetch live stats only when score changes (saves API calls)
+        let statsUpdate: Record<string, any> = {}
+        if (scoreChanged) {
+          const stats = await fetchFixtureStats(apiId)
+          statsUpdate = {
+            live_home_corners: stats.homeCorners,
+            live_away_corners: stats.awayCorners,
+            live_home_cards: stats.homeCards,
+            live_away_cards: stats.awayCards,
+          }
+        }
 
         // Update fixture
         const { error } = await supabase
@@ -249,10 +273,7 @@ export async function GET(request: Request) {
             away_score: awayScore,
             first_scorer_name: firstScorer,
             status,
-            live_home_corners: stats.homeCorners,
-            live_away_corners: stats.awayCorners,
-            live_home_cards: stats.homeCards,
-            live_away_cards: stats.awayCards,
+            ...statsUpdate,
           })
           .eq('id', ourFixture.id)
 
