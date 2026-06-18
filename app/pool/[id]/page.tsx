@@ -88,6 +88,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const [pool, setPool] = useState<any>(null)
   const [user, setUser] = useState<any>(null)
   const [leaderboard, setLeaderboard] = useState<any[]>([])
+  const [yourLeaderboard, setYourLeaderboard] = useState<any[]>([])
   const [poolRules, setPoolRules] = useState<any[]>([])
   const [bracketScoringRules, setBracketScoringRules] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -186,6 +187,36 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         scores?.forEach(s => { if (s.points_earned) pointsMap[s.user_id] = (pointsMap[s.user_id] || 0) + s.points_earned })
       }
       setLeaderboard((members || []).map(m => ({ ...m, points: pointsMap[m.user_id] || 0 })).sort((a, b) => b.points - a.points))
+
+      // ── "Your Leaderboard" — only counts fixtures each member actually predicted on ──
+      if (pool.package_id === 'CUSTOM' && pool.deadline_type !== 'before_tournament') {
+        const { data: allPreds } = await supabase
+          .from('predictions_v2')
+          .select('user_id, fixture_id, category_id, points_earned, value_wld, value_text, value_ou, value_yesno, value_number')
+          .eq('pool_id', pool.id)
+
+        // Group by user_id + fixture_id to determine which fixtures each user predicted on
+        const userFixturePreds: Record<string, Set<number>> = {}
+        const userFixturePoints: Record<string, Record<number, number>> = {}
+        allPreds?.forEach(p => {
+          const hasValue = p.value_wld || p.value_text || p.value_ou || p.value_yesno !== null || p.value_number !== null
+          if (!hasValue || p.fixture_id === null) return
+          if (!userFixturePreds[p.user_id]) userFixturePreds[p.user_id] = new Set()
+          userFixturePreds[p.user_id].add(p.fixture_id)
+          if (!userFixturePoints[p.user_id]) userFixturePoints[p.user_id] = {}
+          userFixturePoints[p.user_id][p.fixture_id] = (userFixturePoints[p.user_id][p.fixture_id] || 0) + (p.points_earned ?? 0)
+        })
+
+        const perPickLeaderboard = (members || []).map(m => {
+          const fixturesPredicted = userFixturePreds[m.user_id]?.size || 0
+          const totalPts = Object.values(userFixturePoints[m.user_id] || {}).reduce((a, b) => a + b, 0)
+          const avgPerPick = fixturesPredicted > 0 ? totalPts / fixturesPredicted : 0
+          return { ...m, fixturesPredicted, totalPts, avgPerPick }
+        }).filter(m => m.fixturesPredicted > 0)
+          .sort((a, b) => b.avgPerPick - a.avgPerPick)
+
+        setYourLeaderboard(perPickLeaderboard)
+      }
 
       if (pool.package_id === 'CUSTOM') {
         const { data: rules } = await supabase
@@ -377,6 +408,41 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           </div>
         ))}
       </Section>
+
+      {yourLeaderboard.length > 0 && (
+        <Section title="your leaderboard" defaultOpen={false}>
+          <div style={{fontSize: '11px', color: '#aaa', marginBottom: '10px', fontStyle: 'italic'}}>
+            Your Leaderboard - Only counts the games you've predicted
+          </div>
+          <div style={{fontSize: '10px', color: '#aaa', marginBottom: '8px', display: 'flex', justifyContent: 'space-between'}}>
+            <span>player</span>
+            <div style={{display: 'flex', gap: 20}}>
+              <span>picks</span>
+              <span>avg/pick</span>
+            </div>
+          </div>
+          {yourLeaderboard.map((member, i) => (
+            <div key={member.id} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '7px 8px', marginBottom: '1px',
+              background: member.user_id === user?.id ? '#fff5f5' : 'transparent',
+              borderLeft: `3px solid ${member.user_id === user?.id ? '#C8102E' : 'transparent'}`,
+            }}>
+              <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555', flex: 1}}>
+                {i + 1}. {member.display_name}
+              </span>
+              <div style={{display: 'flex', alignItems: 'center', gap: 16}}>
+                <span style={{fontSize: '12px', color: '#bbb', minWidth: 20, textAlign: 'right' as const}}>
+                  {member.fixturesPredicted}
+                </span>
+                <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', minWidth: 32, textAlign: 'right' as const}}>
+                  {member.avgPerPick.toFixed(1)}
+                </span>
+              </div>
+            </div>
+          ))}
+        </Section>
+      )}
 
       {/* Scoring */}
       <Section title="scoring" defaultOpen={!isMobile}>
