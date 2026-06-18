@@ -1177,7 +1177,7 @@ export default function FixturesList({
                             {rule.name}
                           </td>
                         ))}
-                        {finished && <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>pts</td>}
+                        {(finished || isLive) && <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>pts</td>}
                       </tr>
                     </thead>
                     <tbody>
@@ -1210,7 +1210,7 @@ export default function FixturesList({
                               
                               // For exact score — show per-team checkmarks
                               let displayContent: ReactNode
-                              if (isExact && finished && p?.value_text && fixture.home_score !== null && fixture.away_score !== null) {
+                              if (isExact && (finished || isLive) && p?.value_text && fixture.home_score !== null && fixture.away_score !== null) {
                                 const parts = p.value_text.split('-')
                                 const predHome = parseInt(parts[0])
                                 const predAway = parseInt(parts[1])
@@ -1240,13 +1240,13 @@ export default function FixturesList({
                                 <td key={rule.category_id} style={{
                                   padding: '4px 6px', textAlign: 'center' as const, whiteSpace: 'nowrap' as const,
                                   borderTop: '1px solid #f5f5f5',
-                                  color: finished && !isExact ? (isCorrect ? '#2d7a2d' : isCorrect === false ? '#aaa' : '#555') : '#555',
+                                  color: (finished || isLive) && !isExact ? (isCorrect ? '#2d7a2d' : isCorrect === false ? '#aaa' : '#555') : '#555',
                                 }}>
                                   {displayContent}
                                 </td>
                               )
                             })}
-                            {finished && (
+                            {(finished || isLive) && (
                               <td style={{ padding: '4px 6px', textAlign: 'center' as const, fontWeight: 700, color: memberTotalPts > 0 ? '#C8102E' : '#aaa', borderTop: '1px solid #f5f5f5' }}>
                                 {memberTotalPts > 0 ? `+${memberTotalPts}` : '0'}
                               </td>
