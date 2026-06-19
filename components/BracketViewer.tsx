@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { WC_2026_GROUPS, generateR32FromGroupPicks, DEFAULT_BRACKET_SCORING } from '@/lib/bracketEngine'
-import { FLAGS, BracketView } from '@/components/BracketPicker'
+import { WC_2026_GROUPS } from '@/lib/bracketEngine'
+import { FLAGS } from '@/components/BracketPicker'
 
 interface MemberPick {
   user_id: string
@@ -24,24 +24,77 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
   const [view, setView] = useState<'member' | 'group'>('member')
   const [selectedMember, setSelectedMember] = useState<string>('')
   const [selectedGroup, setSelectedGroup] = useState<string>('A')
+  const [actualStandings, setActualStandings] = useState<Record<string, Record<number, string>>>({})
+  const [advancedToRound, setAdvancedToRound] = useState<Record<string, Set<string>>>({
+    R32: new Set(), R16: new Set(), QF: new Set(), SF: new Set(), FINAL: new Set(), CHAMPION: new Set()
+  })
 
   useEffect(() => {
     async function load() {
       const supabase = createClient()
-      const { data: bracketData } = await supabase
-        .from('bracket_picks')
-        .select('user_id, group_picks, bracket_picks, bracket_scores, best_third_groups, final_home_score, final_away_score')
-        .eq('pool_id', poolId)
 
-      const { data: members } = await supabase
-        .from('pool_members')
-        .select('user_id, display_name')
-        .eq('pool_id', poolId)
+      const [bracketRes, membersRes, standingsRes, fixturesRes] = await Promise.all([
+        supabase.from('bracket_picks')
+          .select('user_id, group_picks, bracket_picks, bracket_scores, best_third_groups, final_home_score, final_away_score')
+          .eq('pool_id', poolId),
+        supabase.from('pool_members')
+          .select('user_id, display_name')
+          .eq('pool_id', poolId),
+        supabase.from('actual_standings')
+          .select('group_name, position, team')
+          .eq('tournament_id', 'wc_2026'),
+        supabase.from('fixtures')
+          .select('round, home_team, away_team, home_score, away_score, status')
+          .eq('tournament_id', 'wc_2026'),
+      ])
+
+      // Build actual standings map
+      const standings: Record<string, Record<number, string>> = {}
+      for (const row of standingsRes.data || []) {
+        if (!standings[row.group_name]) standings[row.group_name] = {}
+        standings[row.group_name][row.position] = row.team
+      }
+      setActualStandings(standings)
+
+      // Build which teams have advanced to each knockout round
+      const advanced: Record<string, Set<string>> = {
+        R32: new Set(), R16: new Set(), QF: new Set(), SF: new Set(), FINAL: new Set(), CHAMPION: new Set()
+      }
+      for (const f of fixturesRes.data || []) {
+        if (f.status !== 'FT' || f.home_score === null || f.away_score === null) continue
+        const r = f.round || ''
+        if (r.includes('Round of 32')) {
+          advanced.R32.add(f.home_team); advanced.R32.add(f.away_team)
+          const w = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
+          if (w) advanced.R16.add(w)
+        }
+        if (r.includes('Round of 16')) {
+          advanced.R16.add(f.home_team); advanced.R16.add(f.away_team)
+          const w = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
+          if (w) advanced.QF.add(w)
+        }
+        if (r.includes('Quarter-finals')) {
+          advanced.QF.add(f.home_team); advanced.QF.add(f.away_team)
+          const w = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
+          if (w) advanced.SF.add(w)
+        }
+        if (r.includes('Semi-finals')) {
+          advanced.SF.add(f.home_team); advanced.SF.add(f.away_team)
+          const w = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
+          if (w) advanced.FINAL.add(w)
+        }
+        if (r === 'Final') {
+          advanced.FINAL.add(f.home_team); advanced.FINAL.add(f.away_team)
+          const w = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
+          if (w) advanced.CHAMPION.add(w)
+        }
+      }
+      setAdvancedToRound(advanced)
 
       const memberMap: Record<string, string> = {}
-      members?.forEach(m => { memberMap[m.user_id] = m.display_name })
+      membersRes.data?.forEach(m => { memberMap[m.user_id] = m.display_name })
 
-      const combined = (bracketData || []).map(b => ({
+      const combined = (bracketRes.data || []).map(b => ({
         user_id: b.user_id,
         display_name: memberMap[b.user_id] || 'unknown',
         group_picks: b.group_picks || {},
@@ -113,16 +166,28 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 150px), 1fr))', gap: 8, marginBottom: 24 }}>
                 {GROUPS.map(group => {
                   const teams = selectedPick.group_picks[group] || []
+                  const locked = actualStandings[group]
                   return (
                     <div key={group} style={{ background: 'white', border: '1px solid #e0e0db', padding: '8px 10px' }}>
                       <div style={{ fontSize: '10px', fontWeight: 700, color: '#bbb', textTransform: 'uppercase' as const, marginBottom: 6 }}>Group {group}</div>
-                      {teams.slice(0, 3).map((team, i) => (
-                        <div key={team} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 0', fontSize: '11px' }}>
-                          <span style={{ fontSize: '9px', color: i < 2 ? '#C8102E' : '#aaa', minWidth: 14, fontWeight: 600 }}>{i + 1}</span>
-                          <span>{FLAGS[team] || ''}</span>
-                          <span style={{ fontWeight: i < 2 ? 600 : 400, color: i < 2 ? '#111' : '#888' }}>{team}</span>
-                        </div>
-                      ))}
+                      {teams.slice(0, 3).map((team, i) => {
+                        const lockedTeam = locked?.[i + 1]
+                        const isScored = !!lockedTeam
+                        const isCorrect = isScored && team === lockedTeam
+                        const pts = selectedPick.bracket_scores?.breakdown?.[`group_${group}_${i === 0 ? '1st' : i === 1 ? '2nd' : '3rd'}`]
+                        return (
+                          <div key={team} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 0', fontSize: '11px' }}>
+                            <span style={{ fontSize: '9px', color: i < 2 ? '#C8102E' : '#aaa', minWidth: 14, fontWeight: 600 }}>{i + 1}</span>
+                            <span>{FLAGS[team] || ''}</span>
+                            <span style={{ fontWeight: i < 2 ? 600 : 400, color: i < 2 ? '#111' : '#888', flex: 1 }}>{team}</span>
+                            {isScored && (
+                              <span style={{ fontSize: '10px', fontWeight: 700, color: isCorrect ? '#2d7a2d' : '#C8102E' }}>
+                                {isCorrect ? `✓${pts ? ` +${pts}` : ''}` : '✗'}
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })}
                     </div>
                   )
                 })}
@@ -130,14 +195,12 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
 
               {/* Knockout picks */}
               <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 12 }}>knockout bracket</div>
-              <BracketView
-                r32Bracket={generateR32FromGroupPicks(selectedPick.group_picks, selectedPick.best_third_groups)}
-                bracketPicks={selectedPick.bracket_picks}
-                bracketScores={{}}
-                scoringRules={DEFAULT_BRACKET_SCORING}
-                locked={true}
-                onPick={() => {}}
-                onScore={() => {}}
+              <BracketTree
+                picks={selectedPick.bracket_picks}
+                finalHomeScore={selectedPick.final_home_score}
+                finalAwayScore={selectedPick.final_away_score}
+                advancedToRound={advancedToRound}
+                breakdown={selectedPick.bracket_scores?.breakdown || {}}
               />
               {selectedPick.final_home_score != null && selectedPick.final_away_score != null && (
                 <div style={{ fontSize: '12px', color: '#888', marginTop: 8 }}>
@@ -171,6 +234,7 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
               <thead>
                 <tr>
                   <th style={{ textAlign: 'left' as const, padding: '6px 8px', borderBottom: '2px solid #eee', color: '#bbb', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase' as const }}>pos</th>
+                  <th style={{ textAlign: 'left' as const, padding: '6px 8px', borderBottom: '2px solid #eee', color: '#bbb', fontWeight: 600, fontSize: '10px', textTransform: 'uppercase' as const }}>actual</th>
                   {picks.map(p => (
                     <th key={p.user_id} style={{ textAlign: 'center' as const, padding: '6px 8px', borderBottom: '2px solid #eee', fontWeight: 600, fontSize: '11px', whiteSpace: 'nowrap' as const }}>
                       {p.display_name}
@@ -179,25 +243,40 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
                 </tr>
               </thead>
               <tbody>
-                {[0, 1, 2, 3].map(pos => (
-                  <tr key={pos} style={{ background: pos % 2 === 0 ? '#fafafa' : 'white' }}>
-                    <td style={{ padding: '6px 8px', color: pos < 2 ? '#C8102E' : '#aaa', fontWeight: 700, fontSize: '11px' }}>
-                      {pos + 1}{pos === 0 ? 'st' : pos === 1 ? 'nd' : pos === 2 ? 'rd' : 'th'}
-                    </td>
-                    {picks.map(p => {
-                      const team = p.group_picks[selectedGroup]?.[pos]
-                      return (
-                        <td key={p.user_id} style={{ padding: '6px 8px', textAlign: 'center' as const, whiteSpace: 'nowrap' as const }}>
-                          {team ? (
-                            <span>{FLAGS[team] || ''} {team}</span>
-                          ) : (
-                            <span style={{ color: '#ddd' }}>—</span>
-                          )}
-                        </td>
-                      )
-                    })}
-                  </tr>
-                ))}
+                {[0, 1, 2, 3].map(pos => {
+                  const lockedTeam = actualStandings[selectedGroup]?.[pos + 1]
+                  return (
+                    <tr key={pos} style={{ background: pos % 2 === 0 ? '#fafafa' : 'white' }}>
+                      <td style={{ padding: '6px 8px', color: pos < 2 ? '#C8102E' : '#aaa', fontWeight: 700, fontSize: '11px' }}>
+                        {pos + 1}{pos === 0 ? 'st' : pos === 1 ? 'nd' : pos === 2 ? 'rd' : 'th'}
+                      </td>
+                      <td style={{ padding: '6px 8px', fontSize: '11px', fontWeight: 600, whiteSpace: 'nowrap' as const }}>
+                        {lockedTeam ? (
+                          <span style={{ color: '#2d7a2d' }}>{FLAGS[lockedTeam] || ''} {lockedTeam} 🔒</span>
+                        ) : (
+                          <span style={{ color: '#ddd' }}>—</span>
+                        )}
+                      </td>
+                      {picks.map(p => {
+                        const team = p.group_picks[selectedGroup]?.[pos]
+                        const isScored = !!lockedTeam
+                        const isCorrect = isScored && team === lockedTeam
+                        return (
+                          <td key={p.user_id} style={{ padding: '6px 8px', textAlign: 'center' as const, whiteSpace: 'nowrap' as const,
+                            background: isScored ? (isCorrect ? '#f3fbf3' : pos < 2 ? '#fff5f5' : 'inherit') : 'inherit' }}>
+                            {team ? (
+                              <span style={{ color: isScored ? (isCorrect ? '#2d7a2d' : '#C8102E') : '#111' }}>
+                                {FLAGS[team] || ''} {team} {isScored ? (isCorrect ? '✓' : '✗') : ''}
+                              </span>
+                            ) : (
+                              <span style={{ color: '#ddd' }}>—</span>
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -223,27 +302,28 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
   )
 }
 
-function Team({ team }: { team: string | undefined }) {
+function Team({ team, correct }: { team: string | undefined; correct?: boolean | null }) {
+  const bg = correct === true ? '#f3fbf3' : correct === false ? '#fff5f5' : 'white'
+  const border = correct === true ? '1px solid #2d7a2d' : correct === false ? '1px solid #f0d0d0' : '1px solid #e0e0db'
+  const color = correct === true ? '#2d7a2d' : correct === false ? '#C8102E' : '#111'
   if (!team) return <div style={{ padding: '4px 8px', fontSize: '11px', color: '#ccc', background: '#fafafa', border: '1px solid #f0f0f0', minWidth: 120 }}>—</div>
   return (
-    <div style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, background: 'white', border: '1px solid #e0e0db', minWidth: 120, display: 'flex', alignItems: 'center', gap: 4 }}>
+    <div style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, background: bg, border, minWidth: 120, display: 'flex', alignItems: 'center', gap: 4, color }}>
       <span>{FLAGS[team] || ''}</span>
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{team}</span>
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1 }}>{team}</span>
+      {correct === true && <span style={{ fontSize: '9px' }}>✓</span>}
+      {correct === false && <span style={{ fontSize: '9px' }}>✗</span>}
     </div>
   )
 }
 
-function BracketRound({ label, teams, slotHeight }: { label: string; teams: (string | undefined)[]; slotHeight: number }) {
+function BracketRound({ label, teams, slotHeight, correctness }: { label: string; teams: (string | undefined)[]; slotHeight: number; correctness?: (boolean | null)[] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column' as const, minWidth: 140 }}>
       <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, color: '#bbb', letterSpacing: '0.06em', marginBottom: 6, height: 16 }}>{label}</div>
       {teams.map((team, i) => (
-        <div key={i} style={{
-          height: slotHeight,
-          display: 'flex',
-          alignItems: 'center',
-        }}>
-          <Team team={team} />
+        <div key={i} style={{ height: slotHeight, display: 'flex', alignItems: 'center' }}>
+          <Team team={team} correct={correctness?.[i]} />
         </div>
       ))}
     </div>
@@ -263,47 +343,66 @@ function BracketConnector({ count, slotHeight }: { count: number; slotHeight: nu
   )
 }
 
-function BracketTree({ picks, finalHomeScore, finalAwayScore }: {
+function BracketTree({ picks, finalHomeScore, finalAwayScore, advancedToRound, breakdown }: {
   picks: Record<string, string>
   finalHomeScore: number | null
   finalAwayScore: number | null
+  advancedToRound: Record<string, Set<string>>
+  breakdown: Record<string, number>
 }) {
-  // R32 pairs ordered correctly so adjacent pairs feed the right R16 slot
-  // R16_1: M74+M77, R16_2: M73+M75, R16_3: M84+M88, R16_4: M83+M81
-  // R16_5: M76+M78, R16_6: M79+M80, R16_7: M86+M82, R16_8: M85+M87
   const r32Ordered = [
-    'R32_M74', 'R32_M77', // → R16_1
-    'R32_M73', 'R32_M75', // → R16_2
-    'R32_M84', 'R32_M88', // → R16_3
-    'R32_M83', 'R32_M81', // → R16_4
-    'R32_M76', 'R32_M78', // → R16_5
-    'R32_M79', 'R32_M80', // → R16_6
-    'R32_M86', 'R32_M82', // → R16_7
-    'R32_M85', 'R32_M87', // → R16_8
+    'R32_M74', 'R32_M77',
+    'R32_M73', 'R32_M75',
+    'R32_M84', 'R32_M88',
+    'R32_M83', 'R32_M81',
+    'R32_M76', 'R32_M78',
+    'R32_M79', 'R32_M80',
+    'R32_M86', 'R32_M82',
+    'R32_M85', 'R32_M87',
   ].map(slot => picks[slot])
 
+  const r32Slots = [
+    'R32_M74', 'R32_M77', 'R32_M73', 'R32_M75',
+    'R32_M84', 'R32_M88', 'R32_M83', 'R32_M81',
+    'R32_M76', 'R32_M78', 'R32_M79', 'R32_M80',
+    'R32_M86', 'R32_M82', 'R32_M85', 'R32_M87',
+  ]
+
+  // Correctness: true = correct, false = wrong (round has started), null = not yet played
+  function slotCorrect(team: string | undefined, round: string): boolean | null {
+    if (!team) return null
+    const set = advancedToRound[round]
+    if (!set || set.size === 0) return null
+    return set.has(team)
+  }
+
+  const r32Correctness = r32Slots.map(slot => slotCorrect(picks[slot], 'R32'))
   const r16 = Array.from({ length: 8 }, (_, i) => picks[`R16_${i + 1}`])
+  const r16Correctness = r16.map(t => slotCorrect(t, 'R16'))
   const qf = Array.from({ length: 4 }, (_, i) => picks[`QF_${i + 1}`])
+  const qfCorrectness = qf.map(t => slotCorrect(t, 'QF'))
   const sf = Array.from({ length: 2 }, (_, i) => picks[`SF_${i + 1}`])
+  const sfCorrectness = sf.map(t => slotCorrect(t, 'SF'))
   const final = picks['FINAL']
+  const finalCorrect = slotCorrect(final, 'CHAMPION') // champion = winner
 
   const BASE = 36
 
   return (
     <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
       <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start', minWidth: 820 }}>
-        <BracketRound label="Round of 32" teams={r32Ordered} slotHeight={BASE} />
+        <BracketRound label="Round of 32" teams={r32Ordered} slotHeight={BASE} correctness={r32Correctness} />
         <BracketConnector count={16} slotHeight={BASE} />
-        <BracketRound label="Round of 16" teams={r16} slotHeight={BASE * 2} />
+        <BracketRound label="Round of 16" teams={r16} slotHeight={BASE * 2} correctness={r16Correctness} />
         <BracketConnector count={8} slotHeight={BASE * 2} />
-        <BracketRound label="Quarter-finals" teams={qf} slotHeight={BASE * 4} />
+        <BracketRound label="Quarter-finals" teams={qf} slotHeight={BASE * 4} correctness={qfCorrectness} />
         <BracketConnector count={4} slotHeight={BASE * 4} />
-        <BracketRound label="Semi-finals" teams={sf} slotHeight={BASE * 8} />
+        <BracketRound label="Semi-finals" teams={sf} slotHeight={BASE * 8} correctness={sfCorrectness} />
         <BracketConnector count={2} slotHeight={BASE * 8} />
         <div style={{ display: 'flex', flexDirection: 'column' as const, minWidth: 140 }}>
           <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, color: '#C8102E', letterSpacing: '0.06em', marginBottom: 6, height: 16 }}>🏆 Champion</div>
           <div style={{ height: BASE * 16, display: 'flex', flexDirection: 'column' as const, justifyContent: 'center', gap: 4 }}>
-            <Team team={final} />
+            <Team team={final} correct={finalCorrect} />
             {finalHomeScore != null && finalAwayScore != null && (
               <div style={{ fontSize: '10px', color: '#888' }}>{finalHomeScore}–{finalAwayScore}</div>
             )}
