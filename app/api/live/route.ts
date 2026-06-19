@@ -220,7 +220,39 @@ export async function GET(request: Request) {
 
       const liveApiFixtures = await fetchLiveFixtures(tournament.id)
 
+      // Even if the live feed is empty, check for fixtures stuck in 'live' status
+      // — they may have finished and dropped off the live feed without being updated
       if (!liveApiFixtures.length) {
+        const { data: stuckFixtures } = await supabase
+          .from('fixtures')
+          .select('id, api_fixture_id')
+          .eq('tournament_id', tournament.id)
+          .eq('status', 'live')
+
+        if (stuckFixtures?.length) {
+          for (const stuck of stuckFixtures) {
+            if (!stuck.api_fixture_id) continue
+            const res = await fetch(
+              `${API_FOOTBALL_BASE}/fixtures?id=${stuck.api_fixture_id}`,
+              { headers: { 'x-apisports-key': process.env.API_FOOTBALL_KEY! } }
+            )
+            if (!res.ok) continue
+            const data = await res.json()
+            const apiFixture = data.response?.[0]
+            if (!apiFixture) continue
+            const apiStatus = apiFixture.fixture.status.short
+            const status = normalizeStatus(apiStatus)
+            if (status === 'finished') {
+              await supabase.from('fixtures').update({
+                status,
+                home_score: apiFixture.goals.home ?? 0,
+                away_score: apiFixture.goals.away ?? 0,
+              }).eq('id', stuck.id)
+              await triggerScoring(stuck.id)
+            }
+          }
+        }
+
         results[tournament.id] = { live: 0 }
         continue
       }
