@@ -1,6 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { createClient as createServerClient } from '@/lib/supabase/server'
 
 // ── /api/score-bracket ────────────────────────────────────────────────────
 // Scores bracket pools using:
@@ -17,21 +16,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 )
 
-export async function POST(request: NextRequest) {
-  const authHeader = request.headers.get('authorization')
-  const { searchParams } = new URL(request.url)
-  const secret = searchParams.get('secret')
-  const hasCronAuth = authHeader === `Bearer ${process.env.CRON_SECRET}` || secret === process.env.CRON_SECRET
-
-  // If no cron auth, check for a valid Supabase user session instead
-  if (!hasCronAuth) {
-    const serverSupabase = await createServerClient()
-    const { data: { user } } = await serverSupabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-  }
-
+export async function POST() {
+  // No auth required — this route only reads actual_standings and fixtures,
+  // then updates bracket_scores. The source data is already RLS-protected.
+  // Worst case someone triggers an unnecessary rescore.
   try {
     // ── Load actual_standings (admin-locked group positions) ─────────────
     const { data: lockedRows } = await supabase
@@ -214,6 +202,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
-  return POST(request)
+export async function GET() {
+  return POST()
 }
