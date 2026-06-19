@@ -1283,7 +1283,11 @@ export default function FixturesList({
                               case 'soccer_anytime_goalscorer': actual = fixture.first_scorer_name || 'no goal'; break
                               case 'soccer_first_team_score': {
                                 const fts = fixture.first_team_score
-                                if (!fts) { actual = h > 0 ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : a > 0 ? `${FLAGS[fixture.away_team]} ${fixture.away_team}` : '—'; break }
+                                if (!fts) {
+                                  if (isLive && h === 0 && a === 0) { actual = 'no goal'; break }
+                                  actual = h > 0 ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : a > 0 ? `${FLAGS[fixture.away_team]} ${fixture.away_team}` : '—'
+                                  break
+                                }
                                 actual = fts === 'home' ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : `${FLAGS[fixture.away_team]} ${fixture.away_team}`
                                 break
                               }
