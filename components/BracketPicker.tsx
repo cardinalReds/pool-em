@@ -72,7 +72,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
 
   async function lockStanding(groupName: string, position: number, team: string) {
     const supabase = createClient()
-    await supabase.from('actual_standings').upsert({
+    const { error } = await supabase.from('actual_standings').upsert({
       tournament_id: tournamentId,
       group_name: groupName,
       position,
@@ -80,6 +80,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       locked_in: true,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'tournament_id,group_name,position' })
+    if (error) console.error('lockStanding error:', error)
     setActualStandings(prev => ({
       ...prev,
       [groupName]: { ...(prev[groupName] || {}), [position]: team }
