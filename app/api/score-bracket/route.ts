@@ -16,6 +16,45 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 )
 
+export async function GET() {
+  // Debug endpoint — returns runtime values to diagnose scoring mismatch
+  const { data: lockedRows } = await supabase
+    .from('actual_standings')
+    .select('group_name, position, team')
+    .eq('tournament_id', 'wc_2026')
+
+  const actualStandings: Record<string, Record<string, string>> = {}
+  for (const row of lockedRows || []) {
+    if (!actualStandings[row.group_name]) actualStandings[row.group_name] = {}
+    actualStandings[row.group_name][String(row.position)] = row.team
+  }
+
+  const { data: onePick } = await supabase
+    .from('bracket_picks')
+    .select('user_id, group_picks')
+    .eq('pool_id', 'd1889767-0c71-4af0-885d-b134ef1d7633')
+    .limit(1)
+    .maybeSingle()
+
+  const groupPicks = onePick?.group_picks || {}
+  const predicted = groupPicks['A'] || []
+  const locked = actualStandings['A']
+
+  return NextResponse.json({
+    lockedRows,
+    actualStandings,
+    predicted_A: predicted,
+    locked_A: locked,
+    predicted_0: predicted[0],
+    locked_1: locked?.['1'],
+    types: {
+      predicted_0: typeof predicted[0],
+      locked_1: typeof locked?.['1'],
+    },
+    match: predicted[0] === locked?.['1'],
+  })
+}
+
 export async function POST() {
   // No auth required — this route only reads actual_standings and fixtures,
   // then updates bracket_scores. The source data is already RLS-protected.
