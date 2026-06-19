@@ -798,7 +798,7 @@ function GroupPicker({ group, teams, picks, locked, onChange }: {
 }
 
 // ── Bracket View — mirrored left/right meeting at Final in center ─────────
-export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRules, locked, onPick, onScore, correctSlots, scoredSlots, r32Teams }: {
+export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRules, locked, onPick, onScore, correctSlots, scoredSlots, r32Teams, actualR32Teams }: {
   r32Bracket: Record<string, { home: string; away: string }>
   bracketPicks: BracketPicks
   bracketScores: Record<string, string>
@@ -808,7 +808,8 @@ export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRu
   onScore: (slot: string, score: string) => void
   correctSlots?: Set<string>
   scoredSlots?: Set<string>
-  r32Teams?: Set<string>  // teams confirmed in R32 — used for checkmarks on R32 match cards
+  r32Teams?: Set<string>       // teams that SCORED in R32 (correct picks)
+  actualR32Teams?: Set<string> // ALL teams confirmed in R32 (for hasResult)
 }) {
   // Visual order matches fotmob official bracket exactly
   // Left: M74+M77→R16_1, M73+M75→R16_2, M84+M88→R16_3, M83+M81→R16_4
@@ -887,6 +888,7 @@ export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRu
                         hasResult={slot.startsWith('R32_') ? (r32Teams && r32Teams.size > 0) : scoredSlots?.has(slot)}
                         isCorrect={slot.startsWith('R32_') ? (r32Teams?.has(bracketPicks[slot] ?? '') ?? false) : correctSlots?.has(slot)}
                         r32Teams={r32Teams}
+                        actualR32Teams={actualR32Teams}
                       />
                     </div>
                   )
@@ -1005,7 +1007,7 @@ export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRu
 }
 
 // ── Single match card ─────────────────────────────────────────────────────
-function MatchCard({ slot, home, away, picked, score, showExactScore, locked, onPick, onScore, hasResult, isCorrect, r32Teams }: {
+function MatchCard({ slot, home, away, picked, score, showExactScore, locked, onPick, onScore, hasResult, isCorrect, r32Teams, actualR32Teams }: {
   slot: string
   home: string
   away: string
@@ -1018,6 +1020,7 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
   hasResult?: boolean
   isCorrect?: boolean
   r32Teams?: Set<string>
+  actualR32Teams?: Set<string>
 }) {
   if (!home && !away) return <div style={{ height: showExactScore ? 80 : 54, border: '1px solid transparent' }} />
   const isPlaceholder = (t: string) => !t || t.startsWith('winner of')
@@ -1028,12 +1031,10 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
       {[home, away].map((team, i) => {
         const active = picked === team
         const placeholder = isPlaceholder(team)
-        // For R32: checkmark if this specific team is confirmed in R32
-        // For other rounds: checkmark based on hasResult/isCorrect (winner pick only)
-        const teamInR32 = isR32 && r32Teams && team && !placeholder ? r32Teams.has(team) : null
-        const teamScored = isR32 ? (r32Teams && r32Teams.size > 0 && team && !placeholder) : (active && hasResult)
-        const teamCorrect = isR32 ? teamInR32 : (active ? isCorrect : null)
-        const showCheck = teamScored && teamCorrect
+        const teamKnown = isR32 && actualR32Teams && team && !placeholder ? actualR32Teams.has(team) : false
+        const teamScored = isR32 ? teamKnown : (active && hasResult)
+        const teamCorrect = isR32 ? (teamKnown ? true : null) : (active ? isCorrect : null)
+        const showCheck = teamScored && teamCorrect === true
         const showCross = teamScored && teamCorrect === false
         return (
           <button key={i}

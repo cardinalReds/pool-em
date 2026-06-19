@@ -25,6 +25,7 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
   const [selectedMember, setSelectedMember] = useState<string>('')
   const [selectedGroup, setSelectedGroup] = useState<string>('A')
   const [actualStandings, setActualStandings] = useState<Record<string, Record<string, string>>>({})
+  const [actualR32Teams, setActualR32Teams] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     async function load() {
@@ -49,6 +50,14 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
         standings[row.group_name][String(row.position)] = row.team
       }
       setActualStandings(standings)
+
+      // Build set of all teams confirmed in R32 (1st and 2nd from each locked group + advancing 3rd place)
+      const r32 = new Set<string>()
+      for (const row of standingsRes.data || []) {
+        if (row.position === 1 || row.position === 2) r32.add(row.team)
+        if (row.position === 3 && row.advances) r32.add(row.team)
+      }
+      setActualR32Teams(r32)
 
       const memberMap: Record<string, string> = {}
       membersRes.data?.forEach(m => { memberMap[m.user_id] = m.display_name })
@@ -191,6 +200,7 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
                     .filter(k => k.startsWith('R32_'))
                     .map(k => k.replace('R32_', ''))
                 )}
+                actualR32Teams={actualR32Teams}
               />
               {selectedPick.final_home_score != null && selectedPick.final_away_score != null && (
                 <div style={{ fontSize: '12px', color: '#888', marginTop: 8 }}>
