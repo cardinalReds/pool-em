@@ -166,7 +166,9 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
               <BracketView
                 r32Bracket={generateR32FromGroupPicks(selectedPick.group_picks, selectedPick.best_third_groups)}
                 bracketPicks={selectedPick.bracket_picks}
-                bracketScores={{}}
+                bracketScores={selectedPick.final_home_score != null && selectedPick.final_away_score != null
+                  ? { FINAL: `${selectedPick.final_home_score}-${selectedPick.final_away_score}` }
+                  : {}}
                 scoringRules={DEFAULT_BRACKET_SCORING}
                 locked={true}
                 onPick={() => {}}
