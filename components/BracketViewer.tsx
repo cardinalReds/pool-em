@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { WC_2026_GROUPS } from '@/lib/bracketEngine'
+import { WC_2026_GROUPS, generateR32FromGroupPicks } from '@/lib/bracketEngine'
 import { FLAGS } from '@/components/BracketPicker'
 
 interface MemberPick {
@@ -25,6 +25,7 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
   const [selectedMember, setSelectedMember] = useState<string>('')
   const [selectedGroup, setSelectedGroup] = useState<string>('A')
   const [actualStandings, setActualStandings] = useState<Record<string, Record<string, string>>>({})
+  const [actualR32Bracket, setActualR32Bracket] = useState<Record<string, { home: string; away: string }>>({})
   const [advancedToRound, setAdvancedToRound] = useState<Record<string, Set<string>>>({
     R32: new Set(), R16: new Set(), QF: new Set(), SF: new Set(), FINAL: new Set(), CHAMPION: new Set()
   })
@@ -41,7 +42,7 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
           .select('user_id, display_name')
           .eq('pool_id', poolId),
         supabase.from('actual_standings')
-          .select('group_name, position, team')
+          .select('group_name, position, team, advances')
           .eq('tournament_id', 'wc_2026'),
         supabase.from('fixtures')
           .select('round, home_team, away_team, home_score, away_score, status')
@@ -55,6 +56,18 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
         standings[row.group_name][String(row.position)] = row.team
       }
       setActualStandings(standings)
+
+      // Build actual R32 bracket from locked standings
+      const actualGroupPicks: Record<string, string[]> = {}
+      const actualBestThird: string[] = []
+      for (const row of standingsRes.data || []) {
+        if (!actualGroupPicks[row.group_name]) actualGroupPicks[row.group_name] = ['', '', '', '']
+        actualGroupPicks[row.group_name][row.position - 1] = row.team
+        if (row.position === 3 && row.advances) actualBestThird.push(row.group_name)
+      }
+      if (Object.keys(actualGroupPicks).length > 0) {
+        setActualR32Bracket(generateR32FromGroupPicks(actualGroupPicks as any, actualBestThird))
+      }
 
       // Build which teams have advanced to each knockout round
       const advanced: Record<string, Set<string>> = {
@@ -197,9 +210,12 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
               <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 12 }}>knockout bracket</div>
               <BracketTree
                 picks={selectedPick.bracket_picks}
+                groupPicks={selectedPick.group_picks}
+                bestThirdGroups={selectedPick.best_third_groups}
                 finalHomeScore={selectedPick.final_home_score}
                 finalAwayScore={selectedPick.final_away_score}
                 advancedToRound={advancedToRound}
+                actualR32Bracket={actualR32Bracket}
                 breakdown={selectedPick.bracket_scores?.breakdown || {}}
               />
               {selectedPick.final_home_score != null && selectedPick.final_away_score != null && (
@@ -343,32 +359,51 @@ function BracketConnector({ count, slotHeight }: { count: number; slotHeight: nu
   )
 }
 
-function BracketTree({ picks, finalHomeScore, finalAwayScore, advancedToRound, breakdown }: {
+function Match({ home, away, homeCorrect, awayCorrect, winnerPick, winnerCorrect, slotHeight }: {
+  home: string | undefined
+  away: string | undefined
+  homeCorrect?: boolean | null
+  awayCorrect?: boolean | null
+  winnerPick?: string
+  winnerCorrect?: boolean | null
+  slotHeight: number
+}) {
+  return (
+    <div style={{ height: slotHeight * 2, display: 'flex', flexDirection: 'column' as const, justifyContent: 'center', gap: 2 }}>
+      <Team team={home} correct={homeCorrect} />
+      <div style={{ fontSize: '9px', color: '#ccc', textAlign: 'center' as const, lineHeight: '8px' }}>vs</div>
+      <Team team={away} correct={awayCorrect} />
+      {winnerPick && (
+        <div style={{ fontSize: '9px', color: winnerCorrect === true ? '#2d7a2d' : winnerCorrect === false ? '#C8102E' : '#aaa', paddingLeft: 4, marginTop: 2 }}>
+          → {winnerPick} {winnerCorrect === true ? '✓' : winnerCorrect === false ? '✗' : ''}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BracketTree({ picks, groupPicks, bestThirdGroups, finalHomeScore, finalAwayScore, advancedToRound, actualR32Bracket, breakdown }: {
   picks: Record<string, string>
+  groupPicks: Record<string, string[]>
+  bestThirdGroups: string[]
   finalHomeScore: number | null
   finalAwayScore: number | null
   advancedToRound: Record<string, Set<string>>
+  actualR32Bracket: Record<string, { home: string; away: string }>
   breakdown: Record<string, number>
 }) {
-  const r32Ordered = [
-    'R32_M74', 'R32_M77',
-    'R32_M73', 'R32_M75',
-    'R32_M84', 'R32_M88',
-    'R32_M83', 'R32_M81',
-    'R32_M76', 'R32_M78',
-    'R32_M79', 'R32_M80',
-    'R32_M86', 'R32_M82',
-    'R32_M85', 'R32_M87',
-  ].map(slot => picks[slot])
+  // Generate this user's full R32 bracket from their group picks
+  const userR32Bracket = Object.keys(groupPicks).length > 0
+    ? generateR32FromGroupPicks(groupPicks as any, bestThirdGroups)
+    : {}
 
-  const r32Slots = [
+  const R32_ORDER = [
     'R32_M74', 'R32_M77', 'R32_M73', 'R32_M75',
     'R32_M84', 'R32_M88', 'R32_M83', 'R32_M81',
     'R32_M76', 'R32_M78', 'R32_M79', 'R32_M80',
     'R32_M86', 'R32_M82', 'R32_M85', 'R32_M87',
   ]
 
-  // Correctness: true = correct, false = wrong (round has started), null = not yet played
   function slotCorrect(team: string | undefined, round: string): boolean | null {
     if (!team) return null
     const set = advancedToRound[round]
@@ -376,7 +411,16 @@ function BracketTree({ picks, finalHomeScore, finalAwayScore, advancedToRound, b
     return set.has(team)
   }
 
-  const r32Correctness = r32Slots.map(slot => slotCorrect(picks[slot], 'R32'))
+  function r32TeamCorrect(slot: string, side: 'home' | 'away'): boolean | null {
+    const userMatch = userR32Bracket[slot]
+    const actualMatch = actualR32Bracket[slot]
+    if (!userMatch || !actualMatch) return null
+    const userTeam = userMatch[side]
+    const actualTeam = actualMatch[side]
+    if (!userTeam || !actualTeam) return null
+    return userTeam === actualTeam
+  }
+
   const r16 = Array.from({ length: 8 }, (_, i) => picks[`R16_${i + 1}`])
   const r16Correctness = r16.map(t => slotCorrect(t, 'R16'))
   const qf = Array.from({ length: 4 }, (_, i) => picks[`QF_${i + 1}`])
@@ -384,24 +428,46 @@ function BracketTree({ picks, finalHomeScore, finalAwayScore, advancedToRound, b
   const sf = Array.from({ length: 2 }, (_, i) => picks[`SF_${i + 1}`])
   const sfCorrectness = sf.map(t => slotCorrect(t, 'SF'))
   const final = picks['FINAL']
-  const finalCorrect = slotCorrect(final, 'CHAMPION') // champion = winner
+  const finalCorrect = slotCorrect(final, 'CHAMPION')
 
   const BASE = 36
 
   return (
     <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
-      <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start', minWidth: 820 }}>
-        <BracketRound label="Round of 32" teams={r32Ordered} slotHeight={BASE} correctness={r32Correctness} />
-        <BracketConnector count={16} slotHeight={BASE} />
-        <BracketRound label="Round of 16" teams={r16} slotHeight={BASE * 2} correctness={r16Correctness} />
-        <BracketConnector count={8} slotHeight={BASE * 2} />
-        <BracketRound label="Quarter-finals" teams={qf} slotHeight={BASE * 4} correctness={qfCorrectness} />
-        <BracketConnector count={4} slotHeight={BASE * 4} />
-        <BracketRound label="Semi-finals" teams={sf} slotHeight={BASE * 8} correctness={sfCorrectness} />
-        <BracketConnector count={2} slotHeight={BASE * 8} />
+      <div style={{ display: 'flex', gap: 0, alignItems: 'flex-start', minWidth: 960 }}>
+
+        {/* Round of 32 — 16 matches, 2 teams each = 32 teams */}
+        <div style={{ display: 'flex', flexDirection: 'column' as const, minWidth: 150 }}>
+          <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, color: '#bbb', letterSpacing: '0.06em', marginBottom: 6, height: 16 }}>Round of 32</div>
+          {R32_ORDER.map(slot => {
+            const userMatch = userR32Bracket[slot] || { home: undefined, away: undefined }
+            const winnerPick = picks[slot]
+            return (
+              <Match
+                key={slot}
+                home={userMatch.home}
+                away={userMatch.away}
+                homeCorrect={r32TeamCorrect(slot, 'home')}
+                awayCorrect={r32TeamCorrect(slot, 'away')}
+                winnerPick={winnerPick}
+                winnerCorrect={slotCorrect(winnerPick, 'R16')}
+                slotHeight={BASE}
+              />
+            )
+          })}
+        </div>
+
+        <BracketConnector count={16} slotHeight={BASE * 2} />
+
+        <BracketRound label="Round of 16" teams={r16} slotHeight={BASE * 4} correctness={r16Correctness} />
+        <BracketConnector count={8} slotHeight={BASE * 4} />
+        <BracketRound label="Quarter-finals" teams={qf} slotHeight={BASE * 8} correctness={qfCorrectness} />
+        <BracketConnector count={4} slotHeight={BASE * 8} />
+        <BracketRound label="Semi-finals" teams={sf} slotHeight={BASE * 16} correctness={sfCorrectness} />
+        <BracketConnector count={2} slotHeight={BASE * 16} />
         <div style={{ display: 'flex', flexDirection: 'column' as const, minWidth: 140 }}>
           <div style={{ fontSize: '9px', fontWeight: 700, textTransform: 'uppercase' as const, color: '#C8102E', letterSpacing: '0.06em', marginBottom: 6, height: 16 }}>🏆 Champion</div>
-          <div style={{ height: BASE * 16, display: 'flex', flexDirection: 'column' as const, justifyContent: 'center', gap: 4 }}>
+          <div style={{ height: BASE * 32, display: 'flex', flexDirection: 'column' as const, justifyContent: 'center', gap: 4 }}>
             <Team team={final} correct={finalCorrect} />
             {finalHomeScore != null && finalAwayScore != null && (
               <div style={{ fontSize: '10px', color: '#888' }}>{finalHomeScore}–{finalAwayScore}</div>
