@@ -24,7 +24,7 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
   const [view, setView] = useState<'member' | 'group'>('member')
   const [selectedMember, setSelectedMember] = useState<string>('')
   const [selectedGroup, setSelectedGroup] = useState<string>('A')
-  const [actualStandings, setActualStandings] = useState<Record<string, Record<number, string>>>({})
+  const [actualStandings, setActualStandings] = useState<Record<string, Record<string, string>>>({})
   const [advancedToRound, setAdvancedToRound] = useState<Record<string, Set<string>>>({
     R32: new Set(), R16: new Set(), QF: new Set(), SF: new Set(), FINAL: new Set(), CHAMPION: new Set()
   })
@@ -49,10 +49,10 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
       ])
 
       // Build actual standings map
-      const standings: Record<string, Record<number, string>> = {}
+      const standings: Record<string, Record<string, string>> = {}
       for (const row of standingsRes.data || []) {
         if (!standings[row.group_name]) standings[row.group_name] = {}
-        standings[row.group_name][row.position] = row.team
+        standings[row.group_name][String(row.position)] = row.team
       }
       setActualStandings(standings)
 
@@ -171,7 +171,7 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
                     <div key={group} style={{ background: 'white', border: '1px solid #e0e0db', padding: '8px 10px' }}>
                       <div style={{ fontSize: '10px', fontWeight: 700, color: '#bbb', textTransform: 'uppercase' as const, marginBottom: 6 }}>Group {group}</div>
                       {teams.slice(0, 3).map((team, i) => {
-                        const lockedTeam = locked?.[i + 1]
+                        const lockedTeam = locked?.[String(i + 1)]
                         const isScored = !!lockedTeam
                         const isCorrect = isScored && team === lockedTeam
                         const pts = selectedPick.bracket_scores?.breakdown?.[`group_${group}_${i === 0 ? '1st' : i === 1 ? '2nd' : '3rd'}`]
@@ -244,7 +244,7 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
               </thead>
               <tbody>
                 {[0, 1, 2, 3].map(pos => {
-                  const lockedTeam = actualStandings[selectedGroup]?.[pos + 1]
+                  const lockedTeam = actualStandings[selectedGroup]?.[String(pos + 1)]
                   return (
                     <tr key={pos} style={{ background: pos % 2 === 0 ? '#fafafa' : 'white' }}>
                       <td style={{ padding: '6px 8px', color: pos < 2 ? '#C8102E' : '#aaa', fontWeight: 700, fontSize: '11px' }}>

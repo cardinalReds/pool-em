@@ -27,11 +27,11 @@ export async function POST() {
       .select('group_name, position, team')
       .eq('tournament_id', 'wc_2026')
 
-    // Shape: { 'A': { 1: 'Mexico', 2: 'USA', ... }, ... }
-    const actualStandings: Record<string, Record<number, string>> = {}
+    // Shape: { 'A': { '1': 'Mexico', '2': 'USA', ... }, ... }
+    const actualStandings: Record<string, Record<string, string>> = {}
     for (const row of lockedRows || []) {
       if (!actualStandings[row.group_name]) actualStandings[row.group_name] = {}
-      actualStandings[row.group_name][row.position] = row.team
+      actualStandings[row.group_name][String(row.position)] = row.team
     }
 
     // ── Load all WC 2026 fixtures for knockout scoring ───────────────────
@@ -128,18 +128,18 @@ export async function POST() {
           const locked = actualStandings[group]
           if (!locked) continue
 
-          console.log(`Group ${group}: locked=`, JSON.stringify(locked), `predicted[0]=${predicted[0]}, locked[1]=${locked[1]}, match=${predicted[0] === locked[1]}`)
+          console.log(`Group ${group}: locked=`, JSON.stringify(locked), `predicted[0]=${predicted[0]}, locked['1']=${locked['1']}, match=${predicted[0] === locked['1']}`)
 
           if (rules.groupFormat === 'standings') {
-            if (locked[1] && predicted[0] === locked[1]) {
+            if (locked['1'] && predicted[0] === locked['1']) {
               totalPts += rules.standingsFirst
               breakdown[`group_${group}_1st`] = rules.standingsFirst
             }
-            if (locked[2] && predicted[1] === locked[2]) {
+            if (locked['2'] && predicted[1] === locked['2']) {
               totalPts += rules.standingsSecond
               breakdown[`group_${group}_2nd`] = rules.standingsSecond
             }
-            if (locked[3] && predicted[2] === locked[3]) {
+            if (locked['3'] && predicted[2] === locked['3']) {
               totalPts += rules.standingsThird
               breakdown[`group_${group}_3rd`] = rules.standingsThird
             }

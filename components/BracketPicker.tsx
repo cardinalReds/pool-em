@@ -50,7 +50,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
   const [step, setStepState] = useState<Step>('groups')
   const [showSummary, setShowSummary] = useState(false)
   const [showAdminStandings, setShowAdminStandings] = useState(false)
-  const [actualStandings, setActualStandings] = useState<Record<string, Record<number, string>>>({})
+  const [actualStandings, setActualStandings] = useState<Record<string, Record<string, string>>>({})
 
   // Load actual standings (admin-locked group results)
   useEffect(() => {
@@ -60,10 +60,10 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
         .from('actual_standings')
         .select('group_name, position, team')
         .eq('tournament_id', tournamentId)
-      const standings: Record<string, Record<number, string>> = {}
+      const standings: Record<string, Record<string, string>> = {}
       data?.forEach(row => {
         if (!standings[row.group_name]) standings[row.group_name] = {}
-        standings[row.group_name][row.position] = row.team
+        standings[row.group_name][String(row.position)] = row.team
       })
       setActualStandings(standings)
     }
@@ -83,7 +83,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
     if (error) console.error('lockStanding error:', error)
     setActualStandings(prev => ({
       ...prev,
-      [groupName]: { ...(prev[groupName] || {}), [position]: team }
+      [groupName]: { ...(prev[groupName] || {}), [String(position)]: team }
     }))
     // Rescore bracket pools immediately so points reflect the new locked standing
     fetch('/api/score-bracket', { method: 'POST' }).catch(() => {})
@@ -100,7 +100,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       const updated = { ...prev }
       if (updated[groupName]) {
         const g = { ...updated[groupName] }
-        delete g[position]
+        delete g[String(position)]
         updated[groupName] = g
       }
       return updated
@@ -343,7 +343,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
                     <div key={groupName} style={{ border: '1px solid #eee', padding: 8 }}>
                       <div style={{ fontSize: '11px', fontWeight: 700, marginBottom: 6 }}>group {groupName}</div>
                       {[1, 2, 3, 4].map(position => {
-                        const lockedTeam = actualStandings[groupName]?.[position]
+                        const lockedTeam = actualStandings[groupName]?.[String(position)]
                         return (
                           <div key={position} style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' }}>
                             <span style={{ fontSize: '10px', color: '#aaa', width: 14 }}>{position}.</span>
@@ -461,7 +461,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
                   <div key={groupName} style={{ border: '1px solid #eee', padding: 8 }}>
                     <div style={{ fontSize: '11px', fontWeight: 700, marginBottom: 6 }}>group {groupName}</div>
                     {[1, 2, 3, 4].map(position => {
-                      const locked = actualStandings[groupName]?.[position]
+                      const locked = actualStandings[groupName]?.[String(position)]
                       return (
                         <div key={position} style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' }}>
                           <span style={{ fontSize: '10px', color: '#aaa', width: 14 }}>{position}.</span>
