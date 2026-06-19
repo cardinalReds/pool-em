@@ -1,102 +1,122 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-
-// ── /api/score-bracket ────────────────────────────────────────────────────
-// Scores bracket pools using:
-//   1. actual_standings rows (admin-locked group positions) for group stage
-//   2. real fixture results for knockout rounds (R32 through Final)
-//
-// Auth: accepts either the CRON_SECRET (for cron/server calls) or a valid
-// authenticated Supabase session (for client-side admin panel calls).
-// This lets the admin panel trigger rescoring immediately after locking a
-// standing without needing CRON_SECRET exposed to the browser.
+import { generateR32FromGroupPicks, R32_MATCHUPS, R16_MATCHUPS, QF_MATCHUPS, SF_MATCHUPS } from '@/lib/bracketEngine'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_KEY!
 )
 
+// Build a GroupPicks object from actual_standings rows
+// so we can run generateR32FromGroupPicks on the real results
+function buildActualGroupPicks(
+  lockedRows: { group_name: string; position: number; team: string; advances: boolean }[]
+): Record<string, string[]> {
+  const picks: Record<string, string[]> = {}
+  for (const row of lockedRows) {
+    if (!picks[row.group_name]) picks[row.group_name] = ['', '', '', '']
+    picks[row.group_name][row.position - 1] = row.team
+  }
+  return picks
+}
+
+// The 8 groups whose 3rd place team advances (marked with advances=true)
+function buildBestThirdGroups(
+  lockedRows: { group_name: string; position: number; advances: boolean }[]
+): string[] {
+  return lockedRows
+    .filter(r => r.position === 3 && r.advances)
+    .map(r => r.group_name)
+}
+
+// Build a flat set of all teams appearing in each round of the actual bracket
+// R32: both teams in each match (all 32 participants)
+// R16: winners of R32 matches (16 teams)
+// etc.
+function buildActualRoundSets(
+  actualR32Bracket: Record<string, { home: string; away: string }>,
+  fixtures: any[]
+): Record<string, Set<string>> {
+  const sets: Record<string, Set<string>> = {
+    R32: new Set(), R16: new Set(), QF: new Set(), SF: new Set(), FINAL: new Set(), CHAMPION: new Set()
+  }
+
+  // R32 participants come from the actual bracket built from locked standings
+  for (const { home, away } of Object.values(actualR32Bracket)) {
+    if (home) sets.R32.add(home)
+    if (away) sets.R32.add(away)
+  }
+
+  // R16 onward come from actual fixture results
+  for (const f of fixtures) {
+    if (f.status !== 'FT' || f.home_score === null || f.away_score === null) continue
+    const r = f.round || ''
+    const w = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
+    if (r.includes('Round of 32') && w) sets.R16.add(w)
+    if (r.includes('Round of 16')) {
+      sets.R16.add(f.home_team); sets.R16.add(f.away_team)
+      if (w) sets.QF.add(w)
+    }
+    if (r.includes('Quarter-finals')) {
+      sets.QF.add(f.home_team); sets.QF.add(f.away_team)
+      if (w) sets.SF.add(w)
+    }
+    if (r.includes('Semi-finals')) {
+      sets.SF.add(f.home_team); sets.SF.add(f.away_team)
+      if (w) sets.FINAL.add(w)
+    }
+    if (r === 'Final') {
+      sets.FINAL.add(f.home_team); sets.FINAL.add(f.away_team)
+      if (w) sets.CHAMPION.add(w)
+    }
+  }
+
+  return sets
+}
+
 export async function POST() {
-  // No auth required — this route only reads actual_standings and fixtures,
-  // then updates bracket_scores. The source data is already RLS-protected.
-  // Worst case someone triggers an unnecessary rescore.
   try {
-    // ── Load actual_standings (admin-locked group positions) ─────────────
+    // ── Load actual_standings ────────────────────────────────────────────
     const { data: lockedRows } = await supabase
       .from('actual_standings')
-      .select('group_name, position, team')
+      .select('group_name, position, team, advances')
       .eq('tournament_id', 'wc_2026')
 
-    // Shape: { 'A': { '1': 'Mexico', '2': 'USA', ... }, ... }
+    const rows = (lockedRows || []) as { group_name: string; position: number; team: string; advances: boolean }[]
+
+    // Build actual group picks and best third groups from locked standings
+    const actualGroupPicks = buildActualGroupPicks(rows)
+    const actualBestThird = buildBestThirdGroups(rows)
+
+    // Build the actual R32 bracket from locked standings
+    // (only works once enough groups are locked — slots with missing data stay empty)
+    const actualR32Bracket = Object.keys(actualGroupPicks).length > 0
+      ? generateR32FromGroupPicks(actualGroupPicks as any, actualBestThird)
+      : {}
+
+    // Build flat standings map for group stage scoring
     const actualStandings: Record<string, Record<string, string>> = {}
-    for (const row of lockedRows || []) {
+    for (const row of rows) {
       if (!actualStandings[row.group_name]) actualStandings[row.group_name] = {}
       actualStandings[row.group_name][String(row.position)] = row.team
     }
 
-    // ── Load all WC 2026 fixtures for knockout scoring ───────────────────
+    // ── Load fixtures for knockout round results ─────────────────────────
     const { data: allFixtures } = await supabase
       .from('fixtures')
-      .select('*')
+      .select('round, home_team, away_team, home_score, away_score, status')
       .eq('tournament_id', 'wc_2026')
 
-    // Build which teams have actually advanced to each knockout round
-    const advancedToRound: Record<string, Set<string>> = {
-      R32: new Set(), R16: new Set(), QF: new Set(), SF: new Set(), FINAL: new Set(), CHAMPION: new Set()
-    }
-    for (const f of allFixtures || []) {
-      if (f.status !== 'FT' || f.home_score === null || f.away_score === null) continue
-      const r = f.round || ''
-      if (r.includes('Round of 32')) {
-        advancedToRound.R32.add(f.home_team)
-        advancedToRound.R32.add(f.away_team)
-        const w = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
-        if (w) advancedToRound.R16.add(w)
-      }
-      if (r.includes('Round of 16')) {
-        advancedToRound.R16.add(f.home_team)
-        advancedToRound.R16.add(f.away_team)
-        const w = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
-        if (w) advancedToRound.QF.add(w)
-      }
-      if (r.includes('Quarter-finals')) {
-        advancedToRound.QF.add(f.home_team)
-        advancedToRound.QF.add(f.away_team)
-        const w = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
-        if (w) advancedToRound.SF.add(w)
-      }
-      if (r.includes('Semi-finals')) {
-        advancedToRound.SF.add(f.home_team)
-        advancedToRound.SF.add(f.away_team)
-        const w = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
-        if (w) advancedToRound.FINAL.add(w)
-      }
-      if (r === 'Final') {
-        advancedToRound.FINAL.add(f.home_team)
-        advancedToRound.FINAL.add(f.away_team)
-        const w = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
-        if (w) advancedToRound.CHAMPION.add(w)
-      }
-    }
+    const actualRounds = buildActualRoundSets(actualR32Bracket, allFixtures || [])
 
-    // Teams finishing 1st or 2nd in their group advance to R32 —
-    // add them from actual_standings so R32 picks score immediately
-    // when group positions are locked, before R32 fixtures exist.
-    for (const [, positions] of Object.entries(actualStandings)) {
-      if (positions['1']) advancedToRound.R32.add(positions['1'])
-      if (positions['2']) advancedToRound.R32.add(positions['2'])
-    }
-
-    // ── Load all bracket pools ───────────────────────────────────────────
+    // ── Load bracket pools ───────────────────────────────────────────────
     const { data: bracketPools } = await supabase
       .from('pools')
       .select('id')
       .eq('deadline_type', 'before_tournament')
       .eq('tournament_id', 'wc_2026')
 
-    if (!bracketPools?.length) {
-      return NextResponse.json({ ok: true, pools_scored: 0 })
-    }
+    if (!bracketPools?.length) return NextResponse.json({ ok: true, pools_scored: 0 })
 
     let poolsScored = 0
 
@@ -130,7 +150,7 @@ export async function POST() {
         let totalPts = 0
         const breakdown: Record<string, number> = {}
 
-        // ── Group stage: score from actual_standings ─────────────────────
+        // ── Group stage ──────────────────────────────────────────────────
         const groupPicks: Record<string, string[]> = pick.group_picks || {}
         for (const [group, predicted] of Object.entries(groupPicks)) {
           const locked = actualStandings[group]
@@ -152,48 +172,70 @@ export async function POST() {
           }
         }
 
-        // ── Knockout stage: score from real fixture results ───────────────
-        const bracketPicksData: Record<string, string> = pick.bracket_picks || {}
+        // ── R32: build user's predicted bracket, compare both teams per slot ──
+        // Each user's bracket_picks stores the WINNER of each R32 match.
+        // But both teams in that slot also qualify for R32.
+        // We generate the user's full R32 bracket from their group picks,
+        // then check if each slot's participants appear in the actual R32.
+        const userBestThird = pick.best_third_groups || []
+        const userR32Bracket = Object.keys(groupPicks).length > 0
+          ? generateR32FromGroupPicks(groupPicks as any, userBestThird)
+          : {}
 
-        for (const slot of Object.keys(bracketPicksData).filter(k => k.startsWith('R32_'))) {
-          const team = bracketPicksData[slot]
-          if (team && advancedToRound.R32.has(team)) {
+        for (const matchup of R32_MATCHUPS) {
+          const slot = matchup.slot
+          const userMatch = userR32Bracket[slot]
+          const actualMatch = actualR32Bracket[slot]
+          if (!userMatch || !actualMatch) continue
+
+          // Award R32 points for each team the user correctly predicted in this slot
+          // (both home and away — there are 2 teams per slot, 32 total across all slots)
+          if (userMatch.home && actualMatch.home && userMatch.home === actualMatch.home) {
             totalPts += rules.r32Pts
-            breakdown[slot] = rules.r32Pts
+            breakdown[`${slot}_home`] = rules.r32Pts
+          }
+          if (userMatch.away && actualMatch.away && userMatch.away === actualMatch.away) {
+            totalPts += rules.r32Pts
+            breakdown[`${slot}_away`] = rules.r32Pts
           }
         }
+
+        // ── R16 onward: user picks the WINNER of each match ─────────────
+        // bracket_picks stores R16_1, R16_2 etc. as the predicted winner.
+        // actualRounds.R16 is the set of teams that actually made R16.
+        const bracketPicksData: Record<string, string> = pick.bracket_picks || {}
+
         for (const slot of Object.keys(bracketPicksData).filter(k => k.startsWith('R16_'))) {
           const team = bracketPicksData[slot]
-          if (team && advancedToRound.R16.has(team)) {
+          if (team && actualRounds.R16.has(team)) {
             totalPts += rules.r16Pts
             breakdown[slot] = rules.r16Pts
           }
         }
         for (const slot of Object.keys(bracketPicksData).filter(k => k.startsWith('QF_'))) {
           const team = bracketPicksData[slot]
-          if (team && advancedToRound.QF.has(team)) {
+          if (team && actualRounds.QF.has(team)) {
             totalPts += rules.qfPts
             breakdown[slot] = rules.qfPts
           }
         }
         for (const slot of Object.keys(bracketPicksData).filter(k => k.startsWith('SF_'))) {
           const team = bracketPicksData[slot]
-          if (team && advancedToRound.SF.has(team)) {
+          if (team && actualRounds.SF.has(team)) {
             totalPts += rules.sfPts
             breakdown[slot] = rules.sfPts
           }
         }
         const finalPick = bracketPicksData['FINAL']
-        if (finalPick && advancedToRound.FINAL.has(finalPick)) {
+        if (finalPick && actualRounds.FINAL.has(finalPick)) {
           totalPts += rules.finalPts
           breakdown['FINAL'] = rules.finalPts
         }
-        if (finalPick && advancedToRound.CHAMPION.has(finalPick)) {
+        if (finalPick && actualRounds.CHAMPION.has(finalPick)) {
           totalPts += rules.finalPts
           breakdown['CHAMPION'] = rules.finalPts
         }
 
-        // Only write if we have something meaningful — don't overwrite with zeros
         if (totalPts > 0 || Object.keys(breakdown).length > 0) {
           await supabase
             .from('bracket_picks')

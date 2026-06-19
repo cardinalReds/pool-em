@@ -51,6 +51,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
   const [showSummary, setShowSummary] = useState(false)
   const [showAdminStandings, setShowAdminStandings] = useState(false)
   const [actualStandings, setActualStandings] = useState<Record<string, Record<string, string>>>({})
+  const [advances, setAdvances] = useState<Record<string, boolean>>({}) // key: "A_3" → true if 3rd place advances
 
   // Load actual standings (admin-locked group results)
   useEffect(() => {
@@ -58,14 +59,17 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       const supabase = createClient()
       const { data } = await supabase
         .from('actual_standings')
-        .select('group_name, position, team')
+        .select('group_name, position, team, advances')
         .eq('tournament_id', tournamentId)
       const standings: Record<string, Record<string, string>> = {}
+      const adv: Record<string, boolean> = {}
       data?.forEach(row => {
         if (!standings[row.group_name]) standings[row.group_name] = {}
         standings[row.group_name][String(row.position)] = row.team
+        if (row.position === 3) adv[`${row.group_name}_3`] = !!row.advances
       })
       setActualStandings(standings)
+      setAdvances(adv)
     }
     loadStandings()
   }, [tournamentId])
@@ -106,6 +110,17 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       return updated
     })
     // Rescore to remove points for the unlocked position
+    fetch('/api/score-bracket', { method: 'POST' }).catch(() => {})
+  }
+
+  async function toggleAdvances(groupName: string, checked: boolean) {
+    const supabase = createClient()
+    await supabase.from('actual_standings')
+      .update({ advances: checked, updated_at: new Date().toISOString() })
+      .eq('tournament_id', tournamentId)
+      .eq('group_name', groupName)
+      .eq('position', 3)
+    setAdvances(prev => ({ ...prev, [`${groupName}_3`]: checked }))
     fetch('/api/score-bracket', { method: 'POST' }).catch(() => {})
   }
 
@@ -344,6 +359,8 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
                       <div style={{ fontSize: '11px', fontWeight: 700, marginBottom: 6 }}>group {groupName}</div>
                       {[1, 2, 3, 4].map(position => {
                         const lockedTeam = actualStandings[groupName]?.[String(position)]
+                        const isThird = position === 3
+                        const doesAdvance = advances[`${groupName}_3`]
                         return (
                           <div key={position} style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' }}>
                             <span style={{ fontSize: '10px', color: '#aaa', width: 14 }}>{position}.</span>
@@ -361,6 +378,12 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
                               ))}
                             </select>
                             {lockedTeam && <span style={{ color: '#2d7a2d', fontSize: '11px' }}>🔒</span>}
+                            {isThird && lockedTeam && (
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '10px', color: doesAdvance ? '#2d7a2d' : '#aaa', cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
+                                <input type="checkbox" checked={!!doesAdvance} onChange={e => toggleAdvances(groupName, e.target.checked)} style={{ cursor: 'pointer' }} />
+                                adv
+                              </label>
+                            )}
                           </div>
                         )
                       })}
@@ -462,6 +485,8 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
                     <div style={{ fontSize: '11px', fontWeight: 700, marginBottom: 6 }}>group {groupName}</div>
                     {[1, 2, 3, 4].map(position => {
                       const locked = actualStandings[groupName]?.[String(position)]
+                      const isThird = position === 3
+                      const doesAdvance = advances[`${groupName}_3`]
                       return (
                         <div key={position} style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' }}>
                           <span style={{ fontSize: '10px', color: '#aaa', width: 14 }}>{position}.</span>
@@ -479,6 +504,12 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
                             ))}
                           </select>
                           {locked && <span style={{ color: '#2d7a2d', fontSize: '11px' }}>🔒</span>}
+                          {isThird && locked && (
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: '10px', color: doesAdvance ? '#2d7a2d' : '#aaa', cursor: 'pointer', whiteSpace: 'nowrap' as const }}>
+                              <input type="checkbox" checked={!!doesAdvance} onChange={e => toggleAdvances(groupName, e.target.checked)} style={{ cursor: 'pointer' }} />
+                              adv
+                            </label>
+                          )}
                         </div>
                       )
                     })}
