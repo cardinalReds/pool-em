@@ -157,13 +157,54 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
               <BracketView
                 r32Bracket={generateR32FromGroupPicks(selectedPick.group_picks, selectedPick.best_third_groups)}
                 bracketPicks={selectedPick.bracket_picks}
-                bracketScores={selectedPick.bracket_scores?.breakdown ? 
-                  Object.fromEntries(Object.entries(selectedPick.bracket_scores.breakdown).map(([k, v]) => [k, String(v)])) 
-                  : {}}
+                bracketScores={{}}
                 scoringRules={DEFAULT_BRACKET_SCORING}
                 locked={true}
                 onPick={() => {}}
                 onScore={() => {}}
+                correctSlots={(() => {
+                  const breakdown = selectedPick.bracket_scores?.breakdown || {}
+                  const slots = new Set<string>()
+                  // Generate user's R32 bracket to map teams back to slots
+                  const userR32Bracket = Object.keys(selectedPick.group_picks).length > 0
+                    ? generateR32FromGroupPicks(selectedPick.group_picks, selectedPick.best_third_groups)
+                    : {}
+                  // Build team→slot map for R32
+                  const teamToSlot: Record<string, string> = {}
+                  for (const [slot, { home, away }] of Object.entries(userR32Bracket)) {
+                    if (home) teamToSlot[home] = slot
+                    if (away) teamToSlot[away] = slot
+                  }
+                  for (const key of Object.keys(breakdown)) {
+                    if (key.startsWith('R32_') && !key.includes('_M')) {
+                      // Team-keyed R32 entry like "R32_Mexico" → find slot
+                      const team = key.replace('R32_', '')
+                      const slot = teamToSlot[team]
+                      if (slot) slots.add(slot)
+                    } else {
+                      // R16+: slot-keyed like "R16_1", "QF_1" etc.
+                      slots.add(key.replace(/_home$|_away$/, ''))
+                    }
+                  }
+                  return slots
+                })()}
+                scoredSlots={(() => {
+                  const breakdown = selectedPick.bracket_scores?.breakdown || {}
+                  const bracketPicksData = selectedPick.bracket_picks || {}
+                  const slots = new Set<string>()
+                  const hasAnyR32Result = Object.keys(breakdown).some(k => k.startsWith('R32_'))
+                  // If any R32 result exists, all R32 slots with picks are scored
+                  if (hasAnyR32Result) {
+                    for (const key of Object.keys(bracketPicksData)) {
+                      if (key.startsWith('R32_')) slots.add(key)
+                    }
+                  }
+                  // R16+ slots scored directly
+                  for (const key of Object.keys(breakdown)) {
+                    if (!key.startsWith('R32_')) slots.add(key)
+                  }
+                  return slots
+                })()}
               />
               {selectedPick.final_home_score != null && selectedPick.final_away_score != null && (
                 <div style={{ fontSize: '12px', color: '#888', marginTop: 8 }}>
