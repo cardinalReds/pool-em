@@ -798,7 +798,7 @@ function GroupPicker({ group, teams, picks, locked, onChange }: {
 }
 
 // ── Bracket View — mirrored left/right meeting at Final in center ─────────
-export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRules, locked, onPick, onScore }: {
+export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRules, locked, onPick, onScore, correctSlots, scoredSlots, r32Teams }: {
   r32Bracket: Record<string, { home: string; away: string }>
   bracketPicks: BracketPicks
   bracketScores: Record<string, string>
@@ -806,6 +806,9 @@ export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRu
   locked: boolean
   onPick: (slot: string, team: string) => void
   onScore: (slot: string, score: string) => void
+  correctSlots?: Set<string>
+  scoredSlots?: Set<string>
+  r32Teams?: Set<string>  // teams confirmed in R32 — used for checkmarks on R32 match cards
 }) {
   // Visual order matches fotmob official bracket exactly
   // Left: M74+M77→R16_1, M73+M75→R16_2, M84+M88→R16_3, M83+M81→R16_4
@@ -881,6 +884,9 @@ export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRu
                         locked={locked}
                         onPick={onPick}
                         onScore={onScore}
+                        hasResult={slot.startsWith('R32_') ? (r32Teams && r32Teams.size > 0) : scoredSlots?.has(slot)}
+                        isCorrect={slot.startsWith('R32_') ? (r32Teams?.has(bracketPicks[slot] ?? '') ?? false) : correctSlots?.has(slot)}
+                        r32Teams={r32Teams}
                       />
                     </div>
                   )
@@ -999,7 +1005,7 @@ export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRu
 }
 
 // ── Single match card ─────────────────────────────────────────────────────
-function MatchCard({ slot, home, away, picked, score, showExactScore, locked, onPick, onScore }: {
+function MatchCard({ slot, home, away, picked, score, showExactScore, locked, onPick, onScore, hasResult, isCorrect, r32Teams }: {
   slot: string
   home: string
   away: string
@@ -1009,15 +1015,26 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
   locked: boolean
   onPick: (slot: string, team: string) => void
   onScore: (slot: string, score: string) => void
+  hasResult?: boolean
+  isCorrect?: boolean
+  r32Teams?: Set<string>
 }) {
   if (!home && !away) return <div style={{ height: showExactScore ? 80 : 54, border: '1px solid transparent' }} />
   const isPlaceholder = (t: string) => !t || t.startsWith('winner of')
+  const isR32 = slot.startsWith('R32_')
 
   return (
     <div style={{ border: '1px solid #e0e0db', background: 'white', overflow: 'hidden' }}>
       {[home, away].map((team, i) => {
         const active = picked === team
         const placeholder = isPlaceholder(team)
+        // For R32: checkmark if this specific team is confirmed in R32
+        // For other rounds: checkmark based on hasResult/isCorrect (winner pick only)
+        const teamInR32 = isR32 && r32Teams && team && !placeholder ? r32Teams.has(team) : null
+        const teamScored = isR32 ? (r32Teams && r32Teams.size > 0 && team && !placeholder) : (active && hasResult)
+        const teamCorrect = isR32 ? teamInR32 : (active ? isCorrect : null)
+        const showCheck = teamScored && teamCorrect
+        const showCross = teamScored && teamCorrect === false
         return (
           <button key={i}
             onClick={() => !locked && !placeholder && team && onPick(slot, team)}
@@ -1026,8 +1043,8 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
               display: 'flex', alignItems: 'center', gap: 4, width: '100%',
               padding: '4px 6px', border: 'none',
               borderBottom: i === 0 ? '1px solid #f0f0f0' : 'none',
-              background: active ? '#C8102E' : placeholder || !team ? '#fafafa' : 'white',
-              color: active ? 'white' : placeholder || !team ? '#ccc' : '#333',
+              background: active ? (showCross ? '#C8102E' : showCheck ? '#2d7a2d' : '#C8102E') : showCheck ? '#f3fbf3' : showCross ? '#fff5f5' : placeholder || !team ? '#fafafa' : 'white',
+              color: active ? 'white' : showCheck ? '#2d7a2d' : showCross ? '#C8102E' : placeholder || !team ? '#ccc' : '#333',
               cursor: locked || placeholder || !team ? 'default' : 'pointer',
               fontFamily: 'inherit', fontSize: '10px', fontWeight: active ? 700 : 400,
               textAlign: 'left' as const,
@@ -1036,10 +1053,11 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 90 }}>
               {!team ? '—' : placeholder ? team.replace('winner of ', '→') : team}
             </span>
+            {showCheck && <span style={{ marginLeft: 'auto', fontSize: '9px' }}>✓</span>}
+            {showCross && <span style={{ marginLeft: 'auto', fontSize: '9px' }}>✗</span>}
           </button>
         )
       })}
-      {/* Exact score inputs — shown when both teams are known and exact mode is on */}
       {showExactScore && picked && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, padding: '4px', borderTop: '1px solid #f0f0f0' }}>
           <input type="number" min="0" max="15"
