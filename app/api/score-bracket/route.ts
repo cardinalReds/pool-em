@@ -126,10 +126,11 @@ export async function POST() {
         const groupPicks: Record<string, string[]> = pick.group_picks || {}
         for (const [group, predicted] of Object.entries(groupPicks)) {
           const locked = actualStandings[group]
-          if (!locked) continue // no admin-locked positions for this group yet
+          if (!locked) continue
+
+          console.log(`Group ${group}: locked=`, JSON.stringify(locked), `predicted[0]=${predicted[0]}, locked[1]=${locked[1]}, match=${predicted[0] === locked[1]}`)
 
           if (rules.groupFormat === 'standings') {
-            // Score each position that has been locked
             if (locked[1] && predicted[0] === locked[1]) {
               totalPts += rules.standingsFirst
               breakdown[`group_${group}_1st`] = rules.standingsFirst
@@ -186,10 +187,13 @@ export async function POST() {
           breakdown['CHAMPION'] = rules.finalPts
         }
 
-        await supabase
-          .from('bracket_picks')
-          .update({ bracket_scores: { total: totalPts, breakdown } })
-          .eq('id', pick.id)
+        // Only write if we have something meaningful — don't overwrite with zeros
+        if (totalPts > 0 || Object.keys(breakdown).length > 0) {
+          await supabase
+            .from('bracket_picks')
+            .update({ bracket_scores: { total: totalPts, breakdown } })
+            .eq('id', pick.id)
+        }
       }
 
       poolsScored++
