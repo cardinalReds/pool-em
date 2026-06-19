@@ -42,11 +42,67 @@ interface Props {
   userId: string
   scoringRules: BracketScoringRules
   locked?: boolean
+  isAdmin?: boolean
+  tournamentId?: string
 }
 
-export default function BracketPicker({ poolId, userId, scoringRules, locked = false }: Props) {
+export default function BracketPicker({ poolId, userId, scoringRules, locked = false, isAdmin = false, tournamentId = 'wc_2026' }: Props) {
   const [step, setStepState] = useState<Step>('groups')
   const [showSummary, setShowSummary] = useState(false)
+  const [showAdminStandings, setShowAdminStandings] = useState(false)
+  const [actualStandings, setActualStandings] = useState<Record<string, Record<number, string>>>({})
+
+  // Load actual standings (admin-locked group results)
+  useEffect(() => {
+    async function loadStandings() {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('actual_standings')
+        .select('group_name, position, team')
+        .eq('tournament_id', tournamentId)
+      const standings: Record<string, Record<number, string>> = {}
+      data?.forEach(row => {
+        if (!standings[row.group_name]) standings[row.group_name] = {}
+        standings[row.group_name][row.position] = row.team
+      })
+      setActualStandings(standings)
+    }
+    loadStandings()
+  }, [tournamentId])
+
+  async function lockStanding(groupName: string, position: number, team: string) {
+    const supabase = createClient()
+    await supabase.from('actual_standings').upsert({
+      tournament_id: tournamentId,
+      group_name: groupName,
+      position,
+      team,
+      locked_in: true,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'tournament_id,group_name,position' })
+    setActualStandings(prev => ({
+      ...prev,
+      [groupName]: { ...(prev[groupName] || {}), [position]: team }
+    }))
+  }
+
+  async function unlockStanding(groupName: string, position: number) {
+    const supabase = createClient()
+    await supabase.from('actual_standings')
+      .delete()
+      .eq('tournament_id', tournamentId)
+      .eq('group_name', groupName)
+      .eq('position', position)
+    setActualStandings(prev => {
+      const updated = { ...prev }
+      if (updated[groupName]) {
+        const g = { ...updated[groupName] }
+        delete g[position]
+        updated[groupName] = g
+      }
+      return updated
+    })
+  }
 
   function setStep(s: Step) {
     setStepState(s)
@@ -328,6 +384,57 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
 
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '13px' }}>
+      {/* Admin: lock in actual group standings */}
+      {isAdmin && (
+        <div style={{ marginBottom: '20px', border: '1px solid #f0d0d0', background: '#fffafa' }}>
+          <button type="button" onClick={() => setShowAdminStandings(p => !p)}
+            style={{
+              width: '100%', padding: '10px 14px', background: 'none', border: 'none',
+              cursor: 'pointer', fontFamily: 'inherit', display: 'flex', justifyContent: 'space-between',
+              alignItems: 'center', fontSize: '12px', fontWeight: 700, color: '#C8102E',
+            }}>
+            <span>⚙️ admin: lock in actual group standings</span>
+            <span>{showAdminStandings ? '▲' : '▼'}</span>
+          </button>
+          {showAdminStandings && (
+            <div style={{ padding: '0 14px 14px' }}>
+              <p style={{ fontSize: '11px', color: '#888', marginBottom: '12px' }}>
+                Lock in a team's final group position once it's mathematically certain. This immediately scores everyone's group-stage and R32 picks for that slot. Knockout-stage results are scored automatically via the live API once the bracket begins.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+                {Object.entries(WC_2026_GROUPS).map(([groupName, teams]) => (
+                  <div key={groupName} style={{ border: '1px solid #eee', padding: 8 }}>
+                    <div style={{ fontSize: '11px', fontWeight: 700, marginBottom: 6 }}>group {groupName}</div>
+                    {[1, 2, 3, 4].map(position => {
+                      const locked = actualStandings[groupName]?.[position]
+                      return (
+                        <div key={position} style={{ display: 'flex', gap: 4, marginBottom: 4, alignItems: 'center' }}>
+                          <span style={{ fontSize: '10px', color: '#aaa', width: 14 }}>{position}.</span>
+                          <select
+                            value={locked || ''}
+                            onChange={e => e.target.value ? lockStanding(groupName, position, e.target.value) : unlockStanding(groupName, position)}
+                            style={{
+                              flex: 1, fontSize: '11px', padding: '3px 4px', fontFamily: 'inherit',
+                              border: locked ? '1px solid #2d7a2d' : '1px solid #ddd',
+                              background: locked ? '#f3fbf3' : 'white',
+                            }}>
+                            <option value="">— not locked —</option>
+                            {(teams as string[]).map(team => (
+                              <option key={team} value={team}>{team}</option>
+                            ))}
+                          </select>
+                          {locked && <span style={{ color: '#2d7a2d', fontSize: '11px' }}>🔒</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Step tabs + auto-save indicator */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid #eee', marginBottom: '20px' }}>
         <div style={{ display: 'flex', gap: 0 }}>

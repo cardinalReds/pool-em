@@ -610,7 +610,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               )}
               {user && pool.deadline_type === 'before_tournament' ? (
                 <>
-                  <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} />
+                  <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} isAdmin={isAdmin} tournamentId={pool.tournament_id} />
                   {new Date() >= new Date('2026-06-11T19:00:00Z') && (
                     <div style={{ marginTop: 32 }}>
                       <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 16, paddingTop: 16, borderTop: '1px solid #eee' }}>everyone's picks</div>
@@ -641,7 +641,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             <div style={{width: '100%', maxWidth: 560}}>
               {user && pool.deadline_type === 'before_tournament' ? (
                 <>
-                  <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} />
+                  <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} isAdmin={isAdmin} tournamentId={pool.tournament_id} />
                   {new Date() >= new Date('2026-06-11T19:00:00Z') && (
                     <div style={{ marginTop: 32 }}>
                       <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 16, paddingTop: 16, borderTop: '1px solid #eee' }}>everyone's picks</div>
