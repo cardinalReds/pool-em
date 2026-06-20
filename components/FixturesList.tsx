@@ -1182,12 +1182,12 @@ export default function FixturesList({
                     </thead>
                     <tbody>
                       {Object.entries(members)
-                        .filter(([memberId]) => 
-                          perGameRules.some(rule => {
-                            const p = memberPreds[`${memberId}:${String(fixture.id)}:${rule.category_id}`]
-                            return p && (p.value_wld || p.value_text || p.value_ou || p.value_yesno !== null || p.value_number !== null)
-                          })
-                        )
+                        // .filter(([memberId]) => 
+                        //   perGameRules.some(rule => {
+                        //     const p = memberPreds[`${memberId}:${String(fixture.id)}:${rule.category_id}`]
+                        //     return p && (p.value_wld || p.value_text || p.value_ou || p.value_yesno !== null || p.value_number !== null)
+                        //   })
+                        // )
                         .map(([memberId, displayName]) => {
                           const memberTotalPts = perGameRules.reduce((sum, rule) => {
                             const p = memberPreds[`${memberId}:${String(fixture.id)}:${rule.category_id}`]
