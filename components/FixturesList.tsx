@@ -353,7 +353,7 @@ export default function FixturesList({
         const roundPredMap: Record<string, Record<string, Record<string, string>>> = {}
         ;(allPreds || []).forEach((p: any) => {
           if (p.fixture_id) {
-            allPredMap[`${p.user_id}:${p.fixture_id}:${p.category_id}`] = p
+            allPredMap[`${p.user_id}:${String(p.fixture_id)}:${p.category_id}`] = p
           } else if (p.matchday) {
             if (!roundPredMap[p.matchday]) roundPredMap[p.matchday] = {}
             if (!roundPredMap[p.matchday][p.user_id]) roundPredMap[p.matchday][p.user_id] = {}
@@ -1184,13 +1184,13 @@ export default function FixturesList({
                       {Object.entries(members)
                         .filter(([memberId]) => 
                           perGameRules.some(rule => {
-                            const p = memberPreds[`${memberId}:${fixture.id}:${rule.category_id}`]
+                            const p = memberPreds[`${memberId}:${String(fixture.id)}:${rule.category_id}`]
                             return p && (p.value_wld || p.value_text || p.value_ou || p.value_yesno !== null || p.value_number !== null)
                           })
                         )
                         .map(([memberId, displayName]) => {
                           const memberTotalPts = perGameRules.reduce((sum, rule) => {
-                            const p = memberPreds[`${memberId}:${fixture.id}:${rule.category_id}`]
+                            const p = memberPreds[`${memberId}:${String(fixture.id)}:${rule.category_id}`]
                             return sum + (p?.points_earned ?? 0)
                           }, 0)
                           return { memberId, displayName, memberTotalPts }
@@ -1204,7 +1204,7 @@ export default function FixturesList({
                               {displayName}{isMe ? ' (you)' : ''}
                             </td>
                             {perGameRules.map(rule => {
-                              const p = memberPreds[`${memberId}:${fixture.id}:${rule.category_id}`]
+                              const p = memberPreds[`${memberId}:${String(fixture.id)}:${rule.category_id}`]
                               const isCorrect = p?.is_correct
                               const isExact = rule.category_id === 'soccer_exact_score' || rule.category_id === 'soccer_ht_exact_score'
                               
