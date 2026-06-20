@@ -349,6 +349,7 @@ export default function FixturesList({
           .from('predictions_v2')
           .select('*')
           .eq('pool_id', poolId)
+          .limit(10000)
         const allPredMap: PredMap = {}
         const roundPredMap: Record<string, Record<string, Record<string, string>>> = {}
         ;(allPreds || []).forEach((p: any) => {
@@ -1182,12 +1183,12 @@ export default function FixturesList({
                     </thead>
                     <tbody>
                       {Object.entries(members)
-                        // .filter(([memberId]) => 
-                        //   perGameRules.some(rule => {
-                        //     const p = memberPreds[`${memberId}:${String(fixture.id)}:${rule.category_id}`]
-                        //     return p && (p.value_wld || p.value_text || p.value_ou || p.value_yesno !== null || p.value_number !== null)
-                        //   })
-                        // )
+                        .filter(([memberId]) => 
+                          perGameRules.some(rule => {
+                            const p = memberPreds[`${memberId}:${String(fixture.id)}:${rule.category_id}`]
+                            return p && (p.value_wld || p.value_text || p.value_ou || p.value_yesno !== null || p.value_number !== null)
+                          })
+                        )
                         .map(([memberId, displayName]) => {
                           const memberTotalPts = perGameRules.reduce((sum, rule) => {
                             const p = memberPreds[`${memberId}:${String(fixture.id)}:${rule.category_id}`]
