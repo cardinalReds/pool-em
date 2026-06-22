@@ -13,7 +13,7 @@ function normalizeStatus(apiStatus: string): string {
   const live = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'INT', 'LIVE']
   const finished = ['FT', 'AET', 'PEN']
   if (live.includes(apiStatus)) return 'live'
-  if (finished.includes(apiStatus)) return 'finished'
+  if (finished.includes(apiStatus)) return 'FT'
   return 'scheduled'
 }
 
@@ -242,7 +242,7 @@ export async function GET(request: Request) {
             if (!apiFixture) continue
             const apiStatus = apiFixture.fixture.status.short
             const status = normalizeStatus(apiStatus)
-            if (status === 'finished') {
+            if (status === 'FT') {
               await supabase.from('fixtures').update({
                 status,
                 home_score: apiFixture.goals.home ?? 0,
@@ -316,7 +316,7 @@ export async function GET(request: Request) {
         }
 
         // Trigger scoring if score changed or match just finished
-        if (scoreChanged || (status === 'finished' && ourFixture.status !== 'finished')) {
+        if (scoreChanged || (status === 'FT' && ourFixture.status !== 'FT')) {
           await triggerScoring(ourFixture.id)
           updated++
         }
