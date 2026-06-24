@@ -473,6 +473,26 @@ export default function FixturesList({
   // Keep saveFixtureRef in sync
   useEffect(() => { saveFixtureRef.current = saveFixture }, [saveFixture])
 
+  // Force-sync predictions to DB at kickoff time for each upcoming fixture.
+  // Ensures picks in local state are flushed to DB even if the user hasn't
+  // interacted with the page recently — prevents late submitted_at timestamps.
+  useEffect(() => {
+    if (!fixtures.length || deadlineType === 'before_tournament') return
+    const now = Date.now()
+    const timers: ReturnType<typeof setTimeout>[] = []
+    fixtures.forEach(f => {
+      const kickoff = new Date(f.date).getTime()
+      const msUntilKickoff = kickoff - now
+      if (msUntilKickoff > 0 && msUntilKickoff < 24 * 60 * 60 * 1000) {
+        const timer = setTimeout(() => {
+          saveFixtureRef.current(f.id)
+        }, msUntilKickoff)
+        timers.push(timer)
+      }
+    })
+    return () => timers.forEach(clearTimeout)
+  }, [fixtures, deadlineType])
+
   function isLocked(f: Fixture) {
     if (deadlineType === 'before_tournament') return false
     return new Date(f.date) <= new Date()
