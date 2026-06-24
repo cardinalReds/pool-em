@@ -722,11 +722,17 @@ async function scoreBracketPools(allFixtures: any[]) {
         breakdown['CHAMPION'] = rules.finalPts
       }
 
-      // Save scores
+      // Save scores — merge with existing bracket_scores to avoid overwriting
+      // group-stage points that were calculated from actual_standings by /api/score-bracket
+      const existingScores = pick.bracket_scores || {}
+      const existingBreakdown: Record<string, number> = existingScores.breakdown || {}
+      const mergedBreakdown = { ...existingBreakdown, ...breakdown }
+      const mergedTotal = Object.values(mergedBreakdown).reduce((a, b) => a + b, 0)
+
       await supabase
         .from('bracket_picks')
         .update({
-          bracket_scores: { total: totalPts, breakdown },
+          bracket_scores: { total: mergedTotal, breakdown: mergedBreakdown },
         })
         .eq('id', pick.id)
     }
