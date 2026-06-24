@@ -4,7 +4,7 @@
     { "path": "/api/live", "schedule": "* * * * *" },
     { "path": "/api/reminders", "schedule": "*/30 * * * *" },
     { "path": "/api/odds", "schedule": "0 */6 * * *" },
-    { "path": "/api/f1/score", "schedule": "0 0 * * *" },
-    { "path": "/api/f1/live", "schedule": "0 0 * * *" }
+    { "path": "/api/live-f1", "schedule": "*/15 * * * *" },
+    { "path": "/api/score-bracket", "schedule": "*/5 * * * *" }
   ]
 }

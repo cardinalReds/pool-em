@@ -948,7 +948,8 @@ export async function POST(request: NextRequest) {
       .select('*')
       .eq('tournament_id', 'wc_2026')
 
-    await scoreBracketPools(allFixtures || [])
+    // Bracket scoring is handled by /api/score-bracket which reads actual_standings
+    // Do not call scoreBracketPools here as it would overwrite those scores
 
     // ── Score round specials ─────────────────────────────────────────────
     await scoreRoundSpecials(allFixtures || [])
