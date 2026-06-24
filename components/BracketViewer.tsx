@@ -79,6 +79,9 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
       setLoading(false)
     }
     load()
+    // Poll every 30 seconds so scores update automatically after admin locks a standing
+    const interval = setInterval(load, 5000)
+    return () => clearInterval(interval)
   }, [poolId])
 
   if (loading) return <div style={{ color: '#aaa', fontSize: '12px' }}>loading picks...</div>
