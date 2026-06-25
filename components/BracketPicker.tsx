@@ -90,7 +90,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       [groupName]: { ...(prev[groupName] || {}), [String(position)]: team }
     }))
     // Rescore bracket pools immediately so points reflect the new locked standing
-    fetch('/api/score-bracket', { method: 'POST' }).catch(() => {})
+    fetch('/api/score-bracket', { method: 'POST' }).then(() => window.dispatchEvent(new Event('bracket-scores-updated'))).catch(() => {})
   }
 
   async function unlockStanding(groupName: string, position: number) {
@@ -110,7 +110,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       return updated
     })
     // Rescore to remove points for the unlocked position
-    fetch('/api/score-bracket', { method: 'POST' }).catch(() => {})
+    fetch('/api/score-bracket', { method: 'POST' }).then(() => window.dispatchEvent(new Event('bracket-scores-updated'))).catch(() => {})
   }
 
   async function toggleAdvances(groupName: string, checked: boolean) {
@@ -121,7 +121,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       .eq('group_name', groupName)
       .eq('position', 3)
     setAdvances(prev => ({ ...prev, [`${groupName}_3`]: checked }))
-    fetch('/api/score-bracket', { method: 'POST' }).catch(() => {})
+    fetch('/api/score-bracket', { method: 'POST' }).then(() => window.dispatchEvent(new Event('bracket-scores-updated'))).catch(() => {})
   }
 
   function setStep(s: Step) {

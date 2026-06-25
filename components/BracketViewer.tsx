@@ -75,13 +75,14 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
 
       combined.sort((a, b) => (b.bracket_scores?.total ?? 0) - (a.bracket_scores?.total ?? 0))
       setPicks(combined)
-      if (combined.length > 0) setSelectedMember(combined[0].user_id)
+      setSelectedMember(prev => prev || (combined[0]?.user_id ?? ''))
       setLoading(false)
     }
     load()
-    // Poll every 30 seconds so scores update automatically after admin locks a standing
-    const interval = setInterval(load, 5000)
-    return () => clearInterval(interval)
+    // Refresh when BracketPicker signals scoring completed after a lock
+    const onScoresUpdated = () => load()
+    window.addEventListener('bracket-scores-updated', onScoresUpdated)
+    return () => window.removeEventListener('bracket-scores-updated', onScoresUpdated)
   }, [poolId])
 
   if (loading) return <div style={{ color: '#aaa', fontSize: '12px' }}>loading picks...</div>
