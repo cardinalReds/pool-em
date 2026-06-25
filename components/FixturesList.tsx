@@ -408,6 +408,8 @@ export default function FixturesList({
     fields: Partial<PredV2>,
   ) => {
     const key = `${fixtureId}:${categoryId}`
+    // Save scroll position before state update — mobile browsers can scroll to top on re-render
+    const scrollY = window.scrollY
     setPreds(prev => {
       const updated = {
         ...prev,
@@ -428,6 +430,8 @@ export default function FixturesList({
       } catch {}
       return updated
     })
+    // Restore scroll position after React re-renders
+    requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'instant' as any }))
     // Auto-save to DB after 800ms debounce
     if (autoSaveTimers.current[fixtureId]) clearTimeout(autoSaveTimers.current[fixtureId])
     autoSaveTimers.current[fixtureId] = setTimeout(() => {
