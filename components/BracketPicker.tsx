@@ -46,7 +46,8 @@ interface Props {
   tournamentId?: string
 }
 
-export default function BracketPicker({ poolId, userId, scoringRules, locked = false, isAdmin = false, tournamentId = 'wc_2026' }: Props) {
+  // Only the site owner can lock actual standings — not per-pool admins
+  const canLockStandings = userId === '5559329e-d20e-47ae-b612-503b9b2f09d0'
   const [step, setStepState] = useState<Step>('groups')
   const [showSummary, setShowSummary] = useState(false)
   const [showAdminStandings, setShowAdminStandings] = useState(false)
@@ -337,7 +338,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
     return (
       <div style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '13px' }}>
         {/* Admin: lock in actual group standings */}
-        {isAdmin && (
+        {canLockStandings && (
           <div style={{ marginBottom: '20px', border: '1px solid #f0d0d0', background: '#fffafa' }}>
             <button type="button" onClick={() => setShowAdminStandings(p => !p)}
               style={{
@@ -463,7 +464,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '13px' }}>
       {/* Admin: lock in actual group standings */}
-      {isAdmin && (
+      {canLockStandings && (
         <div style={{ marginBottom: '20px', border: '1px solid #f0d0d0', background: '#fffafa' }}>
           <button type="button" onClick={() => setShowAdminStandings(p => !p)}
             style={{
