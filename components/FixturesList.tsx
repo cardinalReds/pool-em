@@ -84,16 +84,20 @@ const FLAGS: Record<string, string> = {
   'Jamaica': '🇯🇲', 'Honduras': '🇭🇳',
 }
 
+const USER_TZ = typeof Intl !== 'undefined'
+  ? Intl.DateTimeFormat().resolvedOptions().timeZone
+  : 'America/Los_Angeles'
+
 function formatPT(dateStr: string) {
   return new Date(dateStr).toLocaleString('en-US', {
-    timeZone: 'America/Los_Angeles',
+    timeZone: USER_TZ,
     hour: 'numeric', minute: '2-digit',
-  }) + ' PT'
+  })
 }
 
 function formatDatePT(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('en-US', {
-    timeZone: 'America/Los_Angeles',
+    timeZone: USER_TZ,
     weekday: 'short', month: 'short', day: 'numeric',
   })
 }
@@ -644,7 +648,7 @@ export default function FixturesList({
         if (nextFixture) {
           // Get the PT date of the next fixture
           const ptDateStr = new Date(nextFixture.date).toLocaleDateString('en-US', {
-            timeZone: 'America/Los_Angeles',
+            timeZone: USER_TZ,
             year: 'numeric', month: '2-digit', day: '2-digit'
           })
           // Convert MM/DD/YYYY → YYYY-MM-DD
@@ -654,7 +658,7 @@ export default function FixturesList({
           const sorted = [...(data.fixtures as any[])].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
           const dateMap: Record<string, boolean> = {}
           sorted.forEach((f: any) => {
-            const ptD = new Date(f.date).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' })
+            const ptD = new Date(f.date).toLocaleDateString('en-US', { timeZone: USER_TZ, year: 'numeric', month: '2-digit', day: '2-digit' })
             const [fm, fd, fy] = ptD.split('/')
             dateMap[`${fy}-${fm}-${fd}`] = true
           })
