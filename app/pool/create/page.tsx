@@ -22,7 +22,7 @@ export default function CreatePoolPage() {
   // Step 2 — tournament + deadline
   const [sport, setSport] = useState('soccer')
   const [tournamentId, setTournamentId] = useState('wc_2026')
-  const [deadlineType, setDeadlineType] = useState<'before_each_game' | 'before_tournament'>('before_each_game')
+  const [deadlineType, setDeadlineType] = useState<'before_each_game' | 'before_tournament' | 'before_weekend' | 'before_session'>('before_each_game')
 
   // Step 3a — per-game ruleset (before_each_game only)
   const [selectedRules, setSelectedRules] = useState<SelectedRule[]>([])
@@ -57,15 +57,12 @@ export default function CreatePoolPage() {
   const TOURNAMENTS = [
     { id: 'wc_2026', name: 'FIFA World Cup 2026', sport: 'soccer', description: 'Group stage · Jun 12 – Jul 2' },
     { id: 'ufc_freedom_250', name: 'UFC Freedom 250', sport: 'mma', description: 'White House · Jun 14, 5pm PT' },
+    { id: 'f1_2026', name: 'Formula 1 2026', sport: 'f1', description: '23 races · Mar–Nov 2026' },
   ]
 
   // Step 2 → step 3: bracket pools skip ruleset builder
   function goToStep3() {
-    if (deadlineType === 'before_tournament') {
-      setStep(3) // bracket settings
-    } else {
-      setStep(3) // ruleset builder
-    }
+    setStep(3)
   }
 
   async function handleCreate() {
@@ -96,8 +93,8 @@ export default function CreatePoolPage() {
 
     if (poolError) { setError(poolError.message); setLoading(false); return }
 
-    // Save per-game rules (before_each_game pools)
-    if (deadlineType === 'before_each_game' && selectedRules.length > 0) {
+    // Save per-game rules (before_each_game, before_weekend, before_session pools)
+    if ((deadlineType === 'before_each_game' || deadlineType === 'before_weekend' || deadlineType === 'before_session') && selectedRules.length > 0) {
       await supabase.from('pool_rules').insert(
         selectedRules.map(r => ({
           pool_id: pool.id,
@@ -158,7 +155,7 @@ export default function CreatePoolPage() {
         <a href="/dashboard" style={{fontWeight: 700, fontSize: '13px', color: 'white', textDecoration: 'none'}}>pool'em</a>
       </div>
 
-      <div style={{maxWidth: step === 3 && (!isBracket || sport === 'mma') ? 1100 : 520, margin: '0 auto', padding: '24px 16px'}}>
+      <div style={{maxWidth: step === 3 && (!isBracket || sport === 'mma' || sport === 'f1') ? 1100 : 520, margin: '0 auto', padding: '24px 16px'}}>
         <div style={{marginBottom: '16px'}}>
           <h1 style={{fontWeight: 700, fontSize: '15px', marginBottom: '2px'}}>new pool</h1>
         </div>
@@ -204,6 +201,10 @@ export default function CreatePoolPage() {
                 <button key={t.id} onClick={() => { 
                   setTournamentId(t.id)
                   setSport(t.sport)
+                  // Reset deadline type to sensible default for each sport
+                  if (t.sport === 'f1') setDeadlineType('before_weekend' as any)
+                  else if (t.sport === 'mma') setDeadlineType('before_each_game')
+                  else setDeadlineType('before_each_game')
                 }}
                   style={{
                     textAlign: 'left', padding: '10px 12px', border: '1px solid',
@@ -218,11 +219,14 @@ export default function CreatePoolPage() {
 
             <label style={{display: 'block', fontWeight: 600, marginBottom: '8px'}}>prediction deadline</label>
             <div style={{display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px'}}>
-              {([
+              {sport === 'f1' ? ([
+                {id: 'before_weekend' as const, label: 'before each race weekend', desc: 'picks lock before the qualifying session starts — one ticket per GP weekend'},
+                {id: 'before_session' as const, label: 'before each session', desc: 'separate tickets for qualifying and race — picks lock before each session'},
+              ]) : ([
                 {id: 'before_each_game' as const, label: tournamentId === 'ufc_freedom_250' ? 'before each fight' : 'before each game', desc: tournamentId === 'ufc_freedom_250' ? 'picks lock at fight time — predict fight by fight' : 'picks lock at kickoff — predict game by game'},
                 ...(tournamentId === 'ufc_freedom_250' ? [{id: 'before_tournament' as const, label: 'before the card', desc: 'predict all fights before the card starts — picks lock at 5pm PT'}] : [{id: 'before_tournament' as const, label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'}]),
-              ]).map(opt => (
-                <button key={opt.id} onClick={() => setDeadlineType(opt.id)}
+              ])).map(opt => (
+                <button key={opt.id} onClick={() => setDeadlineType(opt.id as any)}
                   style={{
                     padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer', minHeight: 60,
                     borderColor: deadlineType === opt.id ? '#C8102E' : '#e0e0db',

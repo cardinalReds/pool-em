@@ -68,7 +68,31 @@ const WC_PLAYERS = [
   'Lionel Messi', 'Julián Álvarez', 'Enzo Fernández',
 ]
 
-function generateResult() {
+const EXAMPLE_FIXTURE_F1 = {
+  home_team: 'Max Verstappen',
+  away_team: 'Lewis Hamilton',
+  home_flag: '🇳🇱',
+  away_flag: '🇬🇧',
+  date: 'Monaco Grand Prix · May 25',
+  round: 'Race · Round 8',
+  goals_line: null,
+  corners_line: null,
+  card_pts_line: null,
+  handicap_line: null,
+}
+
+const F1_DRIVERS_2026 = [
+  'Max Verstappen', 'Yuki Tsunoda', // Red Bull
+  'Lewis Hamilton', 'Kimi Antonelli', // Ferrari
+  'George Russell', 'Andrea Kimi Antonelli', // Mercedes
+  'Lando Norris', 'Oscar Piastri', // McLaren
+  'Fernando Alonso', 'Lance Stroll', // Aston Martin
+  'Charles Leclerc', 'Lewis Hamilton', // Ferrari
+  'Pierre Gasly', 'Jack Doohan', // Alpine
+  'Nico Hülkenberg', 'Oliver Bearman', // Haas
+  'Isack Hadjar', 'Liam Lawson', // Racing Bulls
+  'Alexander Albon', 'Carlos Sainz', // Williams
+]
   const scores = [[0,0],[1,0],[0,1],[1,1],[2,0],[0,2],[2,1],[1,2],[2,2],[3,0],[0,3],[3,1],[1,3]]
   const score = scores[Math.floor(Math.random() * scores.length)]
   const htScores = [[0,0],[1,0],[0,1],[1,1]]
@@ -220,7 +244,7 @@ export default function RulesetBuilder({ sport, onComplete }: {
   sport: string
   onComplete: (rules: SelectedRule[]) => void
 }) {
-  const fixture = sport === 'mma' ? EXAMPLE_FIXTURE_MMA : EXAMPLE_FIXTURE
+  const fixture = sport === 'mma' ? EXAMPLE_FIXTURE_MMA : sport === 'f1' ? EXAMPLE_FIXTURE_F1 : EXAMPLE_FIXTURE
   const [categories, setCategories] = useState<Category[]>([])
   const [rules, setRules] = useState<Record<string, SelectedRule>>({})
   const [loading, setLoading] = useState(true)
@@ -558,13 +582,13 @@ export default function RulesetBuilder({ sport, onComplete }: {
           </div>
         )}
 
-        {/* Goalscorer search */}
+        {/* Goalscorer/driver search */}
         {(cat.input_type === 'player') && (
           <PlayerSearch
             value={userPicks[cat.id] || ''}
             onChange={v => setUserPicks(p => ({ ...p, [cat.id]: v }))}
-            players={WC_PLAYERS}
-            placeholder="search player..."
+            players={sport === 'f1' ? F1_DRIVERS_2026 : WC_PLAYERS}
+            placeholder={sport === 'f1' ? 'search driver...' : 'search player...'}
           />
         )}
 
@@ -592,12 +616,16 @@ export default function RulesetBuilder({ sport, onComplete }: {
       {/* Fixed header */}
       <div style={{ background: '#111', color: 'white', padding: '10px 12px', flexShrink: 0 }}>
         <div style={{ fontSize: '10px', color: '#888', marginBottom: '4px' }}>{fixture.round} · {fixture.date}</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontWeight: 700, fontSize: '13px' }}>{fixture.home_flag} {fixture.home_team}</span>
-          <span style={{ color: '#555', fontSize: '11px' }}>vs</span>
-          <span style={{ fontWeight: 700, fontSize: '13px' }}>{fixture.away_team} {fixture.away_flag}</span>
-        </div>
-        {result && (
+        {sport === 'f1' ? (
+          <div style={{ fontWeight: 700, fontSize: '14px', textAlign: 'center' as const }}>🏎 Monaco Grand Prix</div>
+        ) : (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 700, fontSize: '13px' }}>{fixture.home_flag} {fixture.home_team}</span>
+            <span style={{ color: '#555', fontSize: '11px' }}>vs</span>
+            <span style={{ fontWeight: 700, fontSize: '13px' }}>{fixture.away_team} {fixture.away_flag}</span>
+          </div>
+        )}
+        {result && sport !== 'f1' && (
           <div style={{ marginTop: '8px', lineHeight: 1.6 }}>
             <div style={{ fontWeight: 700, fontSize: '15px', color: 'white', textAlign: 'center' }}>{result.home_score} – {result.away_score}</div>
             <div style={{ textAlign: 'center', fontSize: '10px', color: '#aaa' }}>
@@ -624,11 +652,13 @@ export default function RulesetBuilder({ sport, onComplete }: {
             <TicketInput key={cat.id} cat={cat} />
           ))}
           <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #eee' }}>
-            <button
-              onClick={() => setResult(generateResult())}
-              style={{ width: '100%', padding: '10px', fontSize: '12px', background: '#f5f5f5', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '6px', minHeight: 44 }}>
-              🎲 generate random result
-            </button>
+            {sport !== 'f1' && (
+              <button
+                onClick={() => setResult(generateResult())}
+                style={{ width: '100%', padding: '10px', fontSize: '12px', background: '#f5f5f5', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '6px', minHeight: 44 }}>
+                🎲 generate random result
+              </button>
+            )}
             {result && Object.keys(userPicks).length > 0 && (
               <div style={{ textAlign: 'center', padding: '8px', background: '#fff5f5', border: '1px solid #f0d0d0' }}>
                 <span style={{ fontSize: '11px', color: '#555' }}>score for these picks: </span>
