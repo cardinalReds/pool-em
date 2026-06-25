@@ -177,7 +177,7 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
               </button>
               {openTeam === team && (
                 <div style={{ border: '1px solid #eee', borderTop: 'none', maxHeight: 220, overflowY: 'auto' as const }}>
-                  <button type="button" onClick={() => select(`Own Goal (${team})`)}
+                  <button type="button" onMouseDown={e => { e.preventDefault(); select(`Own Goal (${team})`) }}
                     style={{
                       width: '100%', padding: '10px 12px', border: 'none', borderBottom: '1px solid #f5f5f5',
                       background: value === `Own Goal (${team})` ? '#fff5f5' : '#fafafa',
@@ -188,7 +188,7 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
                     Own Goal
                   </button>
                   {getPlayers(team).map(p => (
-                    <button key={p.name} type="button" onClick={() => select(p.name)}
+                    <button key={p.name} type="button" onMouseDown={e => { e.preventDefault(); select(p.name) }}
                       style={{
                         width: '100%', padding: '10px 12px', border: 'none', borderBottom: '1px solid #f5f5f5',
                         background: value === p.name ? '#fff5f5' : 'white',
