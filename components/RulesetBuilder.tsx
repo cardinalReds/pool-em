@@ -265,7 +265,8 @@ export default function RulesetBuilder({ sport, onComplete }: {
   useEffect(() => {
     async function load() {
       const supabase = createClient()
-      const { data } = await supabase.from('ruleset_categories').select('*').eq('sport', sport).order('sort_order')
+      const { data, error } = await supabase.from('ruleset_categories').select('*').eq('sport', sport).order('sort_order')
+      console.log('RulesetBuilder load:', { sport, count: data?.length, error, data })
       const cats = data || []
       setCategories(cats)
       const initial: Record<string, SelectedRule> = {}
