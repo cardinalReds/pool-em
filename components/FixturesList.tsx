@@ -115,6 +115,9 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
   homeTeam: string
   awayTeam: string
 }) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+
   function getPlayers(team: string) {
     return (WC_SQUADS[team] || [])
       .slice()
@@ -129,44 +132,117 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
   const homePlayers = getPlayers(homeTeam)
   const awayPlayers = getPlayers(awayTeam)
 
-  function handleChange(v: string) {
+  const allOptions = [
+    { label: `Own Goal (${homeTeam})`, value: `Own Goal (${homeTeam})`, group: homeTeam },
+    ...homePlayers.map(p => ({ label: `${p.name} (${p.position})`, value: p.name, group: homeTeam })),
+    { label: `Own Goal (${awayTeam})`, value: `Own Goal (${awayTeam})`, group: awayTeam },
+    ...awayPlayers.map(p => ({ label: `${p.name} (${p.position})`, value: p.name, group: awayTeam })),
+  ]
+
+  const filtered = search.trim()
+    ? allOptions.filter(o => o.label.toLowerCase().includes(search.toLowerCase()))
+    : allOptions
+
+  function select(v: string) {
     const scrollY = window.scrollY
     onChange(v)
+    setOpen(false)
+    setSearch('')
     requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'instant' as any }))
   }
 
   return (
-    <select
-      value={value}
-      disabled={disabled}
-      onChange={e => handleChange(e.target.value)}
-      style={{
-        width: '100%', border: '1px solid #ddd', padding: '8px',
-        fontSize: '14px', fontFamily: 'inherit',
-        background: disabled ? '#fafafa' : 'white', minHeight: 44,
-      }}
-    >
-      <option value="">select player...</option>
-      {homePlayers.length > 0 && (
-        <optgroup label={homeTeam}>
-          <option value={`Own Goal (${homeTeam})`}>Own Goal</option>
-          {homePlayers.map(p => (
-            <option key={p.name} value={p.name}>{p.name} ({p.position})</option>
-          ))}
-        </optgroup>
+    <>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && setOpen(true)}
+        style={{
+          width: '100%', border: '1px solid #ddd', padding: '10px 12px',
+          fontSize: '13px', fontFamily: 'inherit', textAlign: 'left' as const,
+          background: disabled ? '#fafafa' : 'white', cursor: disabled ? 'default' : 'pointer',
+          color: value ? '#111' : '#aaa', minHeight: 44,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}
+      >
+        <span>{value || 'select player...'}</span>
+        {!disabled && <span style={{ color: '#aaa', fontSize: '11px' }}>▼</span>}
+      </button>
+
+      {open && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'flex-end',
+          }}
+          onClick={() => { setOpen(false); setSearch('') }}
+        >
+          <div
+            style={{
+              background: 'white', width: '100%', maxHeight: '70vh',
+              display: 'flex', flexDirection: 'column' as const,
+              borderRadius: '12px 12px 0 0', overflow: 'hidden',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontWeight: 700, fontSize: '14px' }}>First Goalscorer</span>
+              <button type="button" onClick={() => { setOpen(false); setSearch('') }}
+                style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#888', padding: '0 4px' }}>×</button>
+            </div>
+            {/* Search */}
+            <div style={{ padding: '8px 16px', borderBottom: '1px solid #eee' }}>
+              <input
+                type="text"
+                placeholder="search player..."
+                value={search}
+                autoFocus
+                onChange={e => setSearch(e.target.value)}
+                style={{
+                  width: '100%', border: '1px solid #ddd', padding: '8px 10px',
+                  fontSize: '14px', fontFamily: 'inherit', boxSizing: 'border-box' as const,
+                }}
+              />
+            </div>
+            {/* List */}
+            <div style={{ overflowY: 'auto' as const, flex: 1 }}>
+              {(() => {
+                let lastGroup = ''
+                return filtered.map((opt, i) => {
+                  const showHeader = opt.group !== lastGroup
+                  lastGroup = opt.group
+                  return (
+                    <div key={i}>
+                      {showHeader && (
+                        <div style={{ padding: '6px 16px', background: '#f5f5f5', fontSize: '11px', fontWeight: 700, color: '#888', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
+                          {opt.group}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => select(opt.value)}
+                        style={{
+                          width: '100%', padding: '12px 16px', border: 'none', borderBottom: '1px solid #f5f5f5',
+                          background: opt.value === value ? '#fff5f5' : 'white',
+                          color: opt.value === value ? '#C8102E' : '#111',
+                          fontWeight: opt.value === value ? 700 : 400,
+                          fontSize: '14px', fontFamily: 'inherit', textAlign: 'left' as const,
+                          cursor: 'pointer', minHeight: 44,
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    </div>
+                  )
+                })
+              })()}
+            </div>
+          </div>
+        </div>
       )}
-      {awayPlayers.length > 0 && (
-        <optgroup label={awayTeam}>
-          <option value={`Own Goal (${awayTeam})`}>Own Goal</option>
-          {awayPlayers.map(p => (
-            <option key={p.name} value={p.name}>{p.name} ({p.position})</option>
-          ))}
-        </optgroup>
-      )}
-      {homePlayers.length === 0 && awayPlayers.length === 0 && (
-        <option value="Own Goal">Own Goal</option>
-      )}
-    </select>
+    </>
   )
 }
 
