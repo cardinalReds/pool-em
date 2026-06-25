@@ -129,11 +129,17 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
   const homePlayers = getPlayers(homeTeam)
   const awayPlayers = getPlayers(awayTeam)
 
+  function handleChange(v: string) {
+    const scrollY = window.scrollY
+    onChange(v)
+    requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'instant' as any }))
+  }
+
   return (
     <select
       value={value}
       disabled={disabled}
-      onChange={e => onChange(e.target.value)}
+      onChange={e => handleChange(e.target.value)}
       style={{
         width: '100%', border: '1px solid #ddd', padding: '8px',
         fontSize: '14px', fontFamily: 'inherit',
@@ -143,6 +149,7 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
       <option value="">select player...</option>
       {homePlayers.length > 0 && (
         <optgroup label={homeTeam}>
+          <option value={`Own Goal (${homeTeam})`}>Own Goal</option>
           {homePlayers.map(p => (
             <option key={p.name} value={p.name}>{p.name} ({p.position})</option>
           ))}
@@ -150,10 +157,14 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
       )}
       {awayPlayers.length > 0 && (
         <optgroup label={awayTeam}>
+          <option value={`Own Goal (${awayTeam})`}>Own Goal</option>
           {awayPlayers.map(p => (
             <option key={p.name} value={p.name}>{p.name} ({p.position})</option>
           ))}
         </optgroup>
+      )}
+      {homePlayers.length === 0 && awayPlayers.length === 0 && (
+        <option value="Own Goal">Own Goal</option>
       )}
     </select>
   )
