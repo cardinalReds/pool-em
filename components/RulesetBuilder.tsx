@@ -93,6 +93,8 @@ const F1_DRIVERS_2026 = [
   'Isack Hadjar', 'Liam Lawson', // Racing Bulls
   'Alexander Albon', 'Carlos Sainz', // Williams
 ]
+
+function generateResult() {
   const scores = [[0,0],[1,0],[0,1],[1,1],[2,0],[0,2],[2,1],[1,2],[2,2],[3,0],[0,3],[3,1],[1,3]]
   const score = scores[Math.floor(Math.random() * scores.length)]
   const htScores = [[0,0],[1,0],[0,1],[1,1]]
