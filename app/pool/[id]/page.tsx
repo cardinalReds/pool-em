@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { RULE_PACKAGES } from '@/types'
 import FixturesList from '@/components/FixturesList'
+import F1SessionsList from '@/components/F1SessionsList'
 import ReminderButton from '@/components/ReminderButton'
 import InvitePanel from '@/components/InvitePanel'
 import { DEFAULT_BRACKET_SCORING } from '@/lib/bracketEngine'
@@ -616,7 +617,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                   )}
                 </>
               ) : user && (
-                <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />
+                {pool.sport === 'f1' ? <F1SessionsList poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} /> : <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />}
               )}
           </div>
           <div style={{display: mobilePanel === 'chat' ? 'block' : 'none', height: 'calc(100vh - 41px)'}}>
@@ -644,7 +645,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                   )}
                 </>
               ) : user && (
-                <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />
+                {pool.sport === 'f1' ? <F1SessionsList poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} /> : <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />}
               )}
             </div>
           </div>
