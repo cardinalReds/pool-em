@@ -579,13 +579,10 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       {isMobile ? (
         // ── Mobile layout — panel navigation ─────────────────────────────
         <div>
-          {mobilePanel === 'sidebar' && (
-            <div style={{background: 'white'}}>
-              {sidebarContent}
-            </div>
-          )}
-          {mobilePanel === 'predictions' && (
-            <div style={{padding: '16px'}}>
+          <div style={{display: mobilePanel === 'sidebar' ? 'block' : 'none', background: 'white'}}>
+            {sidebarContent}
+          </div>
+          <div style={{display: mobilePanel === 'predictions' ? 'block' : 'none', padding: '16px'}}>
               {/* Buy-in banner on mobile predictions panel */}
               {!isAdmin && pool.buy_in_amount && (pool.venmo_handle || pool.zelle_handle) && !leaderboard.find(m => m.user_id === user?.id)?.is_paid && (
                 <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '12px', marginBottom: '16px'}}>
@@ -621,13 +618,10 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               ) : user && (
                 <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />
               )}
-            </div>
-          )}
-          {mobilePanel === 'chat' && user && (
-            <div style={{height: 'calc(100vh - 41px)'}}>
-              <ShitChat poolId={pool.id} userId={user.id} displayName={user.user_metadata?.display_name || user.email?.split('@')[0] || 'anon'} />
-            </div>
-          )}
+          </div>
+          <div style={{display: mobilePanel === 'chat' ? 'block' : 'none', height: 'calc(100vh - 41px)'}}>
+            {user && <ShitChat poolId={pool.id} userId={user.id} displayName={user.user_metadata?.display_name || user.email?.split('@')[0] || 'anon'} />}
+          </div>
         </div>
       ) : (
         // ── Desktop layout — 3 columns ───────────────────────────────────
