@@ -56,17 +56,24 @@ async function fetchFixtureEvents(apiFixtureId: number): Promise<any[]> {
   return data.response ?? []
 }
 
-function extractFirstScorer(events: any[]): string | null {
+function extractFirstScorer(events: any[], homeTeam: string, awayTeam: string): string | null {
+  // Include own goals — filter only missed penalties
   const goals = events
-    .filter(
-      (e) =>
-        e.type === 'Goal' &&
-        e.detail !== 'Missed Penalty' &&
-        e.detail !== 'Own Goal'
-    )
+    .filter(e => e.type === 'Goal' && e.detail !== 'Missed Penalty')
     .sort((a, b) => a.time.elapsed - b.time.elapsed)
 
-  return goals[0]?.player?.name ?? null
+  const first = goals[0]
+  if (!first) return null
+
+  if (first.detail === 'Own Goal') {
+    // e.team is the team whose player scored the own goal (e.g. France/Magnan)
+    // The goal counts for the OTHER team (e.g. Spain)
+    const scoringTeam = first.team?.name || ''
+    const benefitingTeam = scoringTeam === homeTeam ? awayTeam : homeTeam
+    return `Own Goal (${benefitingTeam})`
+  }
+
+  return first.player?.name ?? null
 }
 
 
@@ -269,7 +276,7 @@ export async function GET(request: Request) {
         // Find our fixture by api_fixture_id
         const { data: ourFixture } = await supabase
           .from('fixtures')
-          .select('id, home_score, away_score, first_scorer_name, status')
+          .select('id, home_team, away_team, home_score, away_score, first_scorer_name, status')
           .eq('api_fixture_id', apiId)
           .single()
 
@@ -283,7 +290,7 @@ export async function GET(request: Request) {
         let firstScorer = ourFixture.first_scorer_name
         if (scoreChanged || (!firstScorer && homeScore + awayScore > 0)) {
           const events = await fetchFixtureEvents(apiId)
-          firstScorer = extractFirstScorer(events)
+          firstScorer = extractFirstScorer(events, ourFixture.home_team, ourFixture.away_team)
         }
 
         // Fetch live stats only when score changes (saves API calls)
