@@ -961,6 +961,7 @@ export default function FixturesList({
 
           function adjust(side: 'home' | 'away', delta: number) {
             if (locked || finished) return
+            const scrollY = window.scrollY
             const key = side === 'home' ? homeKey : awayKey
             const current = side === 'home' ? homeNum : awayNum
             const next = Math.max(0, Math.min(15, (current ?? 0) + delta))
@@ -973,6 +974,7 @@ export default function FixturesList({
               }
               return newInputs
             })
+            requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'instant' as any }))
           }
 
           const stepBtn = (disabled: boolean) => ({
