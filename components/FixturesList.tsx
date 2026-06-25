@@ -115,8 +115,7 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
   homeTeam: string
   awayTeam: string
 }) {
-  const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
+  const [openTeam, setOpenTeam] = useState<string | null>(null)
 
   function getPlayers(team: string) {
     return (WC_SQUADS[team] || [])
@@ -129,120 +128,88 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
       })
   }
 
-  const homePlayers = getPlayers(homeTeam)
-  const awayPlayers = getPlayers(awayTeam)
-
-  const allOptions = [
-    { label: `Own Goal (${homeTeam})`, value: `Own Goal (${homeTeam})`, group: homeTeam },
-    ...homePlayers.map(p => ({ label: `${p.name} (${p.position})`, value: p.name, group: homeTeam })),
-    { label: `Own Goal (${awayTeam})`, value: `Own Goal (${awayTeam})`, group: awayTeam },
-    ...awayPlayers.map(p => ({ label: `${p.name} (${p.position})`, value: p.name, group: awayTeam })),
-  ]
-
-  const filtered = search.trim()
-    ? allOptions.filter(o => o.label.toLowerCase().includes(search.toLowerCase()))
-    : allOptions
-
   function select(v: string) {
     const scrollY = window.scrollY
     onChange(v)
-    setOpen(false)
-    setSearch('')
+    setOpenTeam(null)
     requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'instant' as any }))
   }
 
-  return (
-    <>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => !disabled && setOpen(true)}
-        style={{
-          width: '100%', border: '1px solid #ddd', padding: '10px 12px',
-          fontSize: '13px', fontFamily: 'inherit', textAlign: 'left' as const,
-          background: disabled ? '#fafafa' : 'white', cursor: disabled ? 'default' : 'pointer',
-          color: value ? '#111' : '#aaa', minHeight: 44,
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}
-      >
-        <span>{value || 'select player...'}</span>
-        {!disabled && <span style={{ color: '#aaa', fontSize: '11px' }}>▼</span>}
-      </button>
+  function toggle(team: string) {
+    const scrollY = window.scrollY
+    setOpenTeam(prev => prev === team ? null : team)
+    requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'instant' as any }))
+  }
 
-      {open && (
-        <div
-          style={{
-            position: 'fixed', inset: 0, zIndex: 9999,
-            background: 'rgba(0,0,0,0.5)',
-            display: 'flex', alignItems: 'flex-end',
-          }}
-          onClick={() => { setOpen(false); setSearch('') }}
-        >
-          <div
-            style={{
-              background: 'white', width: '100%', maxHeight: '70vh',
-              display: 'flex', flexDirection: 'column' as const,
-              borderRadius: '12px 12px 0 0', overflow: 'hidden',
-            }}
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 700, fontSize: '14px' }}>First Goalscorer</span>
-              <button type="button" onClick={() => { setOpen(false); setSearch('') }}
-                style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer', color: '#888', padding: '0 4px' }}>×</button>
-            </div>
-            {/* Search */}
-            <div style={{ padding: '8px 16px', borderBottom: '1px solid #eee' }}>
-              <input
-                type="text"
-                placeholder="search player..."
-                value={search}
-                autoFocus
-                onChange={e => setSearch(e.target.value)}
-                style={{
-                  width: '100%', border: '1px solid #ddd', padding: '8px 10px',
-                  fontSize: '14px', fontFamily: 'inherit', boxSizing: 'border-box' as const,
-                }}
-              />
-            </div>
-            {/* List */}
-            <div style={{ overflowY: 'auto' as const, flex: 1 }}>
-              {(() => {
-                let lastGroup = ''
-                return filtered.map((opt, i) => {
-                  const showHeader = opt.group !== lastGroup
-                  lastGroup = opt.group
-                  return (
-                    <div key={i}>
-                      {showHeader && (
-                        <div style={{ padding: '6px 16px', background: '#f5f5f5', fontSize: '11px', fontWeight: 700, color: '#888', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>
-                          {opt.group}
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => select(opt.value)}
-                        style={{
-                          width: '100%', padding: '12px 16px', border: 'none', borderBottom: '1px solid #f5f5f5',
-                          background: opt.value === value ? '#fff5f5' : 'white',
-                          color: opt.value === value ? '#C8102E' : '#111',
-                          fontWeight: opt.value === value ? 700 : 400,
-                          fontSize: '14px', fontFamily: 'inherit', textAlign: 'left' as const,
-                          cursor: 'pointer', minHeight: 44,
-                        }}
-                      >
-                        {opt.label}
-                      </button>
-                    </div>
-                  )
-                })
-              })()}
-            </div>
-          </div>
+  const selectedTeam = value
+    ? (getPlayers(homeTeam).some(p => p.name === value) || value.includes(`(${homeTeam})`) ? homeTeam : awayTeam)
+    : null
+
+  return (
+    <div style={{ fontSize: '13px' }}>
+      {/* Current selection */}
+      {value && (
+        <div style={{ padding: '6px 10px', background: '#fff5f5', border: '1px solid #f0d0d0', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ color: '#C8102E', fontWeight: 600 }}>{value}</span>
+          {!disabled && (
+            <button type="button" onClick={() => select('')}
+              style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', fontSize: '16px', padding: '0 4px' }}>×</button>
+          )}
         </div>
       )}
-    </>
+      {/* Team buttons */}
+      {!disabled && (
+        <div style={{ display: 'flex', gap: 6 }}>
+          {[homeTeam, awayTeam].map(team => (
+            <div key={team} style={{ flex: 1 }}>
+              <button
+                type="button"
+                onClick={() => toggle(team)}
+                style={{
+                  width: '100%', padding: '8px 6px', border: '1px solid',
+                  borderColor: openTeam === team ? '#C8102E' : '#ddd',
+                  background: openTeam === team ? '#C8102E' : 'white',
+                  color: openTeam === team ? 'white' : '#333',
+                  fontSize: '12px', fontWeight: 600, fontFamily: 'inherit',
+                  cursor: 'pointer', textAlign: 'center' as const,
+                  whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis',
+                }}
+              >
+                {team} {openTeam === team ? '▲' : '▼'}
+              </button>
+              {openTeam === team && (
+                <div style={{ border: '1px solid #eee', borderTop: 'none', maxHeight: 220, overflowY: 'auto' as const }}>
+                  <button type="button" onClick={() => select(`Own Goal (${team})`)}
+                    style={{
+                      width: '100%', padding: '10px 12px', border: 'none', borderBottom: '1px solid #f5f5f5',
+                      background: value === `Own Goal (${team})` ? '#fff5f5' : '#fafafa',
+                      color: value === `Own Goal (${team})` ? '#C8102E' : '#888',
+                      fontWeight: 700, fontSize: '12px', fontFamily: 'inherit',
+                      textAlign: 'left' as const, cursor: 'pointer', minHeight: 40,
+                    }}>
+                    Own Goal
+                  </button>
+                  {getPlayers(team).map(p => (
+                    <button key={p.name} type="button" onClick={() => select(p.name)}
+                      style={{
+                        width: '100%', padding: '10px 12px', border: 'none', borderBottom: '1px solid #f5f5f5',
+                        background: value === p.name ? '#fff5f5' : 'white',
+                        color: value === p.name ? '#C8102E' : '#111',
+                        fontWeight: value === p.name ? 700 : 400,
+                        fontSize: '13px', fontFamily: 'inherit',
+                        textAlign: 'left' as const, cursor: 'pointer', minHeight: 40,
+                      }}>
+                      {p.name} <span style={{ color: '#aaa', fontSize: '11px' }}>({p.position})</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {disabled && value && null}
+    </div>
   )
 }
 
