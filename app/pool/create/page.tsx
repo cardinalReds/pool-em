@@ -219,13 +219,13 @@ export default function CreatePoolPage() {
 
             <label style={{display: 'block', fontWeight: 600, marginBottom: '8px'}}>prediction deadline</label>
             <div style={{display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px'}}>
-              {sport === 'f1' ? ([
-                {id: 'before_weekend' as const, label: 'before each race weekend', desc: 'picks lock before the qualifying session starts — one ticket per GP weekend'},
-                {id: 'before_session' as const, label: 'before each session', desc: 'separate tickets for qualifying and race — picks lock before each session'},
-              ]) : ([
-                {id: 'before_each_game' as const, label: tournamentId === 'ufc_freedom_250' ? 'before each fight' : 'before each game', desc: tournamentId === 'ufc_freedom_250' ? 'picks lock at fight time — predict fight by fight' : 'picks lock at kickoff — predict game by game'},
-                ...(tournamentId === 'ufc_freedom_250' ? [{id: 'before_tournament' as const, label: 'before the card', desc: 'predict all fights before the card starts — picks lock at 5pm PT'}] : [{id: 'before_tournament' as const, label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'}]),
-              ])).map(opt => (
+              {(sport === 'f1' ? [
+                {id: 'before_weekend', label: 'before each race weekend', desc: 'picks lock before the qualifying session starts — one ticket per GP weekend'},
+                {id: 'before_session', label: 'before each session', desc: 'separate tickets for qualifying and race — picks lock before each session'},
+              ] : [
+                {id: 'before_each_game', label: tournamentId === 'ufc_freedom_250' ? 'before each fight' : 'before each game', desc: tournamentId === 'ufc_freedom_250' ? 'picks lock at fight time — predict fight by fight' : 'picks lock at kickoff — predict game by game'},
+                ...(tournamentId === 'ufc_freedom_250' ? [{id: 'before_tournament', label: 'before the card', desc: 'predict all fights before the card starts — picks lock at 5pm PT'}] : [{id: 'before_tournament', label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'}]),
+              ]).map(opt => (
                 <button key={opt.id} onClick={() => setDeadlineType(opt.id as any)}
                   style={{
                     padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer', minHeight: 60,
