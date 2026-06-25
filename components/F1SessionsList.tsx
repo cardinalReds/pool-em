@@ -4,85 +4,95 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 // ── 2026 F1 Grid ─────────────────────────────────────────────────────────────
+// 11 teams, 22 drivers — confirmed 2026 lineup
+// Using formula1.com driver/team assets for logos and headshots
 const F1_GRID = [
   {
-    name: 'Red Bull Racing', color: '#3671C6',
-    logo: 'https://media.api-sports.io/formula-1/teams/1.png',
+    name: 'McLaren', color: '#FF8000',
+    logo: 'https://www.formula1.com/content/dam/fom-website/teams/2026/mclaren-logo.png.transform/2col/image.png',
     drivers: [
-      { name: 'Max Verstappen', number: 1, photo: 'https://media.api-sports.io/formula-1/drivers/1.png' },
-      { name: 'Yuki Tsunoda', number: 22, photo: 'https://media.api-sports.io/formula-1/drivers/822.png' },
+      { name: 'Lando Norris', number: 4, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/L/LANNOR01_Lando_Norris/lannor01.png.transform/2col/image.png' },
+      { name: 'Oscar Piastri', number: 81, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/O/OSCPIA01_Oscar_Piastri/oscpia01.png.transform/2col/image.png' },
     ],
   },
   {
     name: 'Ferrari', color: '#E8002D',
-    logo: 'https://media.api-sports.io/formula-1/teams/2.png',
+    logo: 'https://www.formula1.com/content/dam/fom-website/teams/2026/ferrari-logo.png.transform/2col/image.png',
     drivers: [
-      { name: 'Charles Leclerc', number: 16, photo: 'https://media.api-sports.io/formula-1/drivers/16.png' },
-      { name: 'Lewis Hamilton', number: 44, photo: 'https://media.api-sports.io/formula-1/drivers/44.png' },
+      { name: 'Charles Leclerc', number: 16, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/C/CHALEC01_Charles_Leclerc/chalec01.png.transform/2col/image.png' },
+      { name: 'Lewis Hamilton', number: 44, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/L/LEWHAM01_Lewis_Hamilton/lewham01.png.transform/2col/image.png' },
+    ],
+  },
+  {
+    name: 'Red Bull', color: '#3671C6',
+    logo: 'https://www.formula1.com/content/dam/fom-website/teams/2026/red-bull-racing-logo.png.transform/2col/image.png',
+    drivers: [
+      { name: 'Max Verstappen', number: 1, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/M/MAXVER01_Max_Verstappen/maxver01.png.transform/2col/image.png' },
+      { name: 'Isack Hadjar', number: 6, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/I/ISAHAD01_Isack_Hadjar/isahad01.png.transform/2col/image.png' },
     ],
   },
   {
     name: 'Mercedes', color: '#27F4D2',
-    logo: 'https://media.api-sports.io/formula-1/teams/3.png',
+    logo: 'https://www.formula1.com/content/dam/fom-website/teams/2026/mercedes-logo.png.transform/2col/image.png',
     drivers: [
-      { name: 'George Russell', number: 63, photo: 'https://media.api-sports.io/formula-1/drivers/63.png' },
-      { name: 'Kimi Antonelli', number: 12, photo: 'https://media.api-sports.io/formula-1/drivers/842.png' },
-    ],
-  },
-  {
-    name: 'McLaren', color: '#FF8000',
-    logo: 'https://media.api-sports.io/formula-1/teams/4.png',
-    drivers: [
-      { name: 'Lando Norris', number: 4, photo: 'https://media.api-sports.io/formula-1/drivers/4.png' },
-      { name: 'Oscar Piastri', number: 81, photo: 'https://media.api-sports.io/formula-1/drivers/827.png' },
+      { name: 'George Russell', number: 63, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/G/GEORUS01_George_Russell/georus01.png.transform/2col/image.png' },
+      { name: 'Kimi Antonelli', number: 12, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/A/ANDANT01_Andrea_Kimi_Antonelli/andant01.png.transform/2col/image.png' },
     ],
   },
   {
     name: 'Aston Martin', color: '#229971',
-    logo: 'https://media.api-sports.io/formula-1/teams/5.png',
+    logo: 'https://www.formula1.com/content/dam/fom-website/teams/2026/aston-martin-logo.png.transform/2col/image.png',
     drivers: [
-      { name: 'Fernando Alonso', number: 14, photo: 'https://media.api-sports.io/formula-1/drivers/14.png' },
-      { name: 'Lance Stroll', number: 18, photo: 'https://media.api-sports.io/formula-1/drivers/18.png' },
-    ],
-  },
-  {
-    name: 'Alpine', color: '#0093CC',
-    logo: 'https://media.api-sports.io/formula-1/teams/6.png',
-    drivers: [
-      { name: 'Pierre Gasly', number: 10, photo: 'https://media.api-sports.io/formula-1/drivers/10.png' },
-      { name: 'Jack Doohan', number: 7, photo: 'https://media.api-sports.io/formula-1/drivers/841.png' },
-    ],
-  },
-  {
-    name: 'Haas', color: '#B6BABD',
-    logo: 'https://media.api-sports.io/formula-1/teams/7.png',
-    drivers: [
-      { name: 'Nico Hülkenberg', number: 27, photo: 'https://media.api-sports.io/formula-1/drivers/27.png' },
-      { name: 'Oliver Bearman', number: 87, photo: 'https://media.api-sports.io/formula-1/drivers/843.png' },
-    ],
-  },
-  {
-    name: 'RB', color: '#6692FF',
-    logo: 'https://media.api-sports.io/formula-1/teams/8.png',
-    drivers: [
-      { name: 'Isack Hadjar', number: 6, photo: 'https://media.api-sports.io/formula-1/drivers/845.png' },
-      { name: 'Liam Lawson', number: 30, photo: 'https://media.api-sports.io/formula-1/drivers/839.png' },
+      { name: 'Fernando Alonso', number: 14, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/F/FERALO01_Fernando_Alonso/feralo01.png.transform/2col/image.png' },
+      { name: 'Lance Stroll', number: 18, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/L/LANSTR01_Lance_Stroll/lanstr01.png.transform/2col/image.png' },
     ],
   },
   {
     name: 'Williams', color: '#64C4FF',
-    logo: 'https://media.api-sports.io/formula-1/teams/9.png',
+    logo: 'https://www.formula1.com/content/dam/fom-website/teams/2026/williams-logo.png.transform/2col/image.png',
     drivers: [
-      { name: 'Alexander Albon', number: 23, photo: 'https://media.api-sports.io/formula-1/drivers/23.png' },
-      { name: 'Carlos Sainz', number: 55, photo: 'https://media.api-sports.io/formula-1/drivers/55.png' },
+      { name: 'Alexander Albon', number: 23, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/A/ALEALB01_Alexander_Albon/alealb01.png.transform/2col/image.png' },
+      { name: 'Carlos Sainz', number: 55, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/C/CARSAI01_Carlos_Sainz/carsai01.png.transform/2col/image.png' },
     ],
   },
   {
-    name: 'Kick Sauber', color: '#52E252',
-    logo: 'https://media.api-sports.io/formula-1/teams/10.png',
+    name: 'Alpine', color: '#0093CC',
+    logo: 'https://www.formula1.com/content/dam/fom-website/teams/2026/alpine-logo.png.transform/2col/image.png',
     drivers: [
-      { name: 'Nico Hülkenberg', number: 27, photo: 'https://media.api-sports.io/formula-1/drivers/27.png' },
-      { name: 'Gabriel Bortoleto', number: 5, photo: 'https://media.api-sports.io/formula-1/drivers/846.png' },
+      { name: 'Pierre Gasly', number: 10, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/P/PIEGAS01_Pierre_Gasly/piegas01.png.transform/2col/image.png' },
+      { name: 'Franco Colapinto', number: 43, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/F/FRACOL01_Franco_Colapinto/fracol01.png.transform/2col/image.png' },
+    ],
+  },
+  {
+    name: 'Haas', color: '#B6BABD',
+    logo: 'https://www.formula1.com/content/dam/fom-website/teams/2026/haas-logo.png.transform/2col/image.png',
+    drivers: [
+      { name: 'Esteban Ocon', number: 31, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/E/ESTOCO01_Esteban_Ocon/estoco01.png.transform/2col/image.png' },
+      { name: 'Oliver Bearman', number: 87, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/O/OLIBEA01_Oliver_Bearman/olibea01.png.transform/2col/image.png' },
+    ],
+  },
+  {
+    name: 'Racing Bulls', color: '#6692FF',
+    logo: 'https://www.formula1.com/content/dam/fom-website/teams/2026/racing-bulls-logo.png.transform/2col/image.png',
+    drivers: [
+      { name: 'Liam Lawson', number: 30, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/L/LIALAW01_Liam_Lawson/lialaw01.png.transform/2col/image.png' },
+      { name: 'Arvid Lindblad', number: 41, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/A/ARVLIN01_Arvid_Lindblad/arvlin01.png.transform/2col/image.png' },
+    ],
+  },
+  {
+    name: 'Audi', color: '#C00000',
+    logo: 'https://www.formula1.com/content/dam/fom-website/teams/2026/audi-logo.png.transform/2col/image.png',
+    drivers: [
+      { name: 'Nico Hülkenberg', number: 27, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/N/NICHUL01_Nico_Hulkenberg/nichul01.png.transform/2col/image.png' },
+      { name: 'Gabriel Bortoleto', number: 5, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/G/GABBOR01_Gabriel_Bortoleto/gabbor01.png.transform/2col/image.png' },
+    ],
+  },
+  {
+    name: 'Cadillac', color: '#CC0000',
+    logo: 'https://www.formula1.com/content/dam/fom-website/teams/2026/cadillac-logo.png.transform/2col/image.png',
+    drivers: [
+      { name: 'Sergio Pérez', number: 11, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/S/SERPER01_Sergio_Perez/serper01.png.transform/2col/image.png' },
+      { name: 'Valtteri Bottas', number: 77, photo: 'https://www.formula1.com/content/dam/fom-website/drivers/V/VALBOT01_Valtteri_Bottas/valbot01.png.transform/2col/image.png' },
     ],
   },
 ]

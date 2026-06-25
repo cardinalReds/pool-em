@@ -82,16 +82,28 @@ const EXAMPLE_FIXTURE_F1 = {
 }
 
 const F1_DRIVERS_2026 = [
-  'Max Verstappen', 'Yuki Tsunoda', // Red Bull
-  'Lewis Hamilton', 'Kimi Antonelli', // Ferrari
-  'George Russell', 'Andrea Kimi Antonelli', // Mercedes
-  'Lando Norris', 'Oscar Piastri', // McLaren
-  'Fernando Alonso', 'Lance Stroll', // Aston Martin
-  'Charles Leclerc', 'Lewis Hamilton', // Ferrari
-  'Pierre Gasly', 'Jack Doohan', // Alpine
-  'Nico Hülkenberg', 'Oliver Bearman', // Haas
-  'Isack Hadjar', 'Liam Lawson', // Racing Bulls
-  'Alexander Albon', 'Carlos Sainz', // Williams
+  // McLaren
+  'Lando Norris', 'Oscar Piastri',
+  // Ferrari
+  'Charles Leclerc', 'Lewis Hamilton',
+  // Red Bull
+  'Max Verstappen', 'Isack Hadjar',
+  // Mercedes
+  'George Russell', 'Kimi Antonelli',
+  // Aston Martin
+  'Fernando Alonso', 'Lance Stroll',
+  // Williams
+  'Alexander Albon', 'Carlos Sainz',
+  // Alpine
+  'Pierre Gasly', 'Franco Colapinto',
+  // Haas
+  'Esteban Ocon', 'Oliver Bearman',
+  // Racing Bulls
+  'Liam Lawson', 'Arvid Lindblad',
+  // Audi
+  'Nico Hülkenberg', 'Gabriel Bortoleto',
+  // Cadillac
+  'Sergio Pérez', 'Valtteri Bottas',
 ]
 
 function generateResult() {
