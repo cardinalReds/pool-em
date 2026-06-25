@@ -45,9 +45,9 @@ const SESSION_EMOJI: Record<string, string> = {
 
 // Which categories apply to which session types
 const SESSION_CATEGORIES: Record<string, string[]> = {
-  'Race': ['f1_race_winner', 'f1_podium', 'f1_points_finish', 'f1_fastest_lap', 'f1_first_retirement', 'f1_pole_to_win'],
-  '1st Qualifying': ['f1_pole_position', 'f1_top3_quali', 'f1_q1_eliminated'],
-  '2nd Qualifying': ['f1_pole_position', 'f1_top3_quali'],
+  'Race': ['f1_race_winner', 'f1_podium', 'f1_points_finish', 'f1_fastest_lap', 'f1_first_retirement', 'f1_pole_to_win', 'f1_top6_teammate'],
+  '1st Qualifying': ['f1_q1_eliminated'],
+  '2nd Qualifying': ['f1_top3_quali'],
   '3rd Qualifying': ['f1_pole_position', 'f1_top3_quali'],
   'Sprint': ['f1_sprint_winner', 'f1_sprint_podium'],
   'Sprint Qualifying': ['f1_pole_position', 'f1_top3_quali'],
