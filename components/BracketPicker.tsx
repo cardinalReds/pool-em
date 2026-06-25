@@ -46,6 +46,7 @@ interface Props {
   tournamentId?: string
 }
 
+export default function BracketPicker({ poolId, userId, scoringRules, locked = false, isAdmin = false, tournamentId = 'wc_2026' }: Props) {
   // Only the site owner can lock actual standings — not per-pool admins
   const canLockStandings = userId === '5559329e-d20e-47ae-b612-503b9b2f09d0'
   const [step, setStepState] = useState<Step>('groups')
