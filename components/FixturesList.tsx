@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { WC_SQUADS } from '@/lib/wc_squads'
@@ -136,9 +136,7 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
   }
 
   function toggle(team: string) {
-    const scrollY = window.scrollY
     setOpenTeam(prev => prev === team ? null : team)
-    requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'instant' as any }))
   }
 
   const selectedTeam = value
@@ -212,6 +210,378 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
     </div>
   )
 }
+
+// CategoryInput is defined outside FixturesList to prevent remounting on parent re-renders
+// (which would close PlayerDropdown's open state). All closure vars are passed as props.
+function CategoryInput({ fixture, rule, pred, locked, finished, updateLocal, scoreInputs, setScoreInputs }: {
+fixture: Fixture
+rule: PoolRule
+pred: PredV2 | undefined
+locked: boolean
+finished: boolean
+updateLocal: (fixtureId: number, categoryId: string, fields: any) => void
+scoreInputs: Record<string, string>
+setScoreInputs: React.Dispatch<React.SetStateAction<Record<string, string>>>
+}) {
+  const key = `${fixture.id}:${rule.category_id}`
+  // pred passed as prop
+  // locked passed as prop
+  // finished passed as prop
+  const isExact = rule.input_type === 'exact'
+
+  const btnStyle = (val: string | boolean | number): React.CSSProperties => {
+    const active = pred?.value_wld === val || pred?.value_ou === val || pred?.value_text === val || pred?.value_yesno === val || pred?.value_number === val
+    return {
+      flex: 1, padding: '8px 4px', fontSize: '12px', border: '1px solid',
+      cursor: locked || finished ? 'default' : 'pointer',
+      fontFamily: 'inherit', minHeight: 44,
+      borderColor: active ? '#C8102E' : '#ddd',
+      background: active ? '#C8102E' : locked || finished ? '#fafafa' : 'white',
+      color: active ? 'white' : '#555',
+      opacity: locked && !active ? 0.6 : 1,
+    }
+  }
+
+  // Points feedback
+  const feedback = finished && pred?.points_earned !== null && pred?.points_earned !== undefined ? (
+    <span style={{ fontSize: '10px', color: pred.points_earned > 0 ? '#2d7a2d' : '#aaa', marginLeft: 6 }}>
+      {pred.points_earned > 0 ? `+${pred.points_earned} pts` : '✗'}
+    </span>
+  ) : null
+
+  // ── MMA categories ──────────────────────────────────────────────────────
+  if (rule.category_id.startsWith('mma_')) {
+    return (
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: '10px', color: '#888', marginBottom: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontWeight: 600 }}>{rule.name}</span>
+          {feedback}
+        </div>
+
+        {/* Fight result — home fighter vs away fighter, no draw */}
+        {rule.category_id === 'mma_result' && (
+          <div style={{ display: 'flex', gap: 0 }}>
+            <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
+              disabled={locked || finished}
+              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block', fontSize: '11px' }}>{fixture.home_team}</span>
+            </button>
+            <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
+              disabled={locked || finished}
+              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block', fontSize: '11px' }}>{fixture.away_team}</span>
+            </button>
+          </div>
+        )}
+
+        {/* Method of victory */}
+        {rule.category_id === 'mma_method' && (
+          <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap' as const }}>
+            {['KO/TKO', 'Submission', 'Decision', 'DQ'].map((method, i, arr) => (
+              <button type="button" key={method}
+                style={{ ...btnStyle(method), ...(i < arr.length - 1 ? { borderRight: 'none' } : {}), flex: '1 1 auto', minWidth: 60 }}
+                disabled={locked || finished}
+                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: method })}>
+                {method}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Yes/No categories */}
+        {(rule.category_id === 'mma_goes_distance' || rule.category_id === 'mma_finish_rd1') && (
+          <div style={{ display: 'flex', gap: 0 }}>
+            <button type="button" style={{ ...btnStyle(true), borderRight: 'none' }}
+              disabled={locked || finished}
+              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_yesno: true })}>
+              Yes
+            </button>
+            <button type="button" style={{ ...btnStyle(false) }}
+              disabled={locked || finished}
+              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_yesno: false })}>
+              No
+            </button>
+          </div>
+        )}
+
+        {/* Total rounds O/U */}
+        {rule.category_id === 'mma_total_rounds_ou' && (
+          <div style={{ display: 'flex', gap: 0 }}>
+            <button type="button" style={{ ...btnStyle('over'), borderRight: 'none' }}
+              disabled={locked || finished}
+              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'over' })}>
+              over {fixture.line_total_rounds ?? '2.5'}
+            </button>
+            <button type="button" style={{ ...btnStyle('under') }}
+              disabled={locked || finished}
+              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'under' })}>
+              under {fixture.line_total_rounds ?? '2.5'}
+            </button>
+          </div>
+        )}
+
+        {/* Round finished */}
+        {rule.category_id === 'mma_round_finish' && (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
+            {[1, 2, 3, 4, 5].map(round => (
+              <button type="button" key={round}
+                style={{ ...btnStyle(round), flex: '0 0 44px' }}
+                disabled={locked || finished}
+                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_number: round })}>
+                R{round}
+              </button>
+            ))}
+            <button type="button"
+              style={{ ...btnStyle('Decision'), flex: '1 1 auto' }}
+              disabled={locked || finished}
+              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: 'Decision', value_number: null })}>
+              Decision
+            </button>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Soccer categories ────────────────────────────────────────────────────
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ fontSize: '10px', color: '#888', marginBottom: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontWeight: 600 }}>{rule.name}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {rule.requires_line && !finished && (() => {
+            let line: number | null = null
+            if (rule.category_id === 'soccer_total_goals_ou') line = fixture.line_total_goals
+            else if (rule.category_id === 'soccer_total_corners_ou') line = fixture.line_total_corners
+            else if (rule.category_id === 'soccer_card_points_ou') line = fixture.line_card_points
+            else if (rule.category_id === 'soccer_asian_handicap') line = fixture.line_asian_handicap_home
+            if (line != null) return null // line shown inline on buttons
+            return <span style={{ fontSize: '9px', color: '#bbb', fontStyle: 'italic' }}>line TBD 24h before</span>
+          })()}
+          {feedback}
+        </div>
+      </div>
+
+      {/* WLD */}
+      {rule.input_type === 'wld' &&
+        rule.category_id !== 'soccer_first_team_score' &&
+        rule.category_id !== 'soccer_first_yellow_team' && (
+        <div style={{ display: 'flex', gap: 0 }}>
+          <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
+            disabled={locked || finished}
+            onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
+              {FLAGS[fixture.home_team]} {fixture.home_team}
+              {rule.category_id === 'soccer_asian_handicap' && fixture.line_asian_handicap_home != null && (
+                <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: 3 }}>
+                  ({fixture.line_asian_handicap_home > 0 ? '+' : ''}{fixture.line_asian_handicap_home})
+                </span>
+              )}
+            </span>
+          </button>
+          {rule.category_id !== 'soccer_asian_handicap' && (
+            <button type="button" style={{ ...btnStyle('draw'), borderRight: 'none', flexShrink: 0, flex: '0 0 60px' }}
+              disabled={locked || finished}
+              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'draw' })}>
+              draw
+            </button>
+          )}
+          <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
+            disabled={locked || finished}
+            onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
+              {fixture.away_team} {FLAGS[fixture.away_team]}
+              {rule.category_id === 'soccer_asian_handicap' && fixture.line_asian_handicap_away != null && (
+                <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: 3 }}>
+                  ({fixture.line_asian_handicap_away > 0 ? '+' : ''}{fixture.line_asian_handicap_away})
+                </span>
+              )}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* First team to score */}
+      {rule.category_id === 'soccer_first_team_score' && (
+        <div style={{ display: 'flex', gap: 0 }}>
+          <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
+            disabled={locked || finished}
+            onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
+              {FLAGS[fixture.home_team]} {fixture.home_team}
+            </span>
+          </button>
+          <button type="button" style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
+            disabled={locked || finished}
+            onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'none' })}>
+            no goal
+          </button>
+          <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
+            disabled={locked || finished}
+            onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
+              {fixture.away_team} {FLAGS[fixture.away_team]}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* First yellow card */}
+      {rule.category_id === 'soccer_first_yellow_team' && (
+        <div style={{ display: 'flex', gap: 0 }}>
+          <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
+            disabled={locked || finished}
+            onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
+              {FLAGS[fixture.home_team]} {fixture.home_team}
+            </span>
+          </button>
+          <button type="button" style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
+            disabled={locked || finished}
+            onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'none' })}>
+            no card
+          </button>
+          <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
+            disabled={locked || finished}
+            onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
+              {fixture.away_team} {FLAGS[fixture.away_team]}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* Over / Under */}
+      {rule.input_type === 'ou' && (() => {
+        // Pick the right line based on category
+        let line: number | null = null
+        if (rule.category_id === 'soccer_total_goals_ou') line = fixture.line_total_goals
+        else if (rule.category_id === 'soccer_total_corners_ou') line = fixture.line_total_corners
+        else if (rule.category_id === 'soccer_card_points_ou') line = fixture.line_card_points
+        const lineLabel = line != null ? line.toString() : '—'
+        return (
+          <div style={{ display: 'flex', gap: 0 }}>
+            <button type="button" style={{ ...btnStyle('over'), borderRight: 'none' }}
+              disabled={locked || finished}
+              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'over' })}>
+              over {lineLabel}
+            </button>
+            <button type="button" style={btnStyle('under')}
+              disabled={locked || finished}
+              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'under' })}>
+              under {lineLabel}
+            </button>
+          </div>
+        )
+      })()}
+
+      {/* Exact score — stepper buttons instead of number inputs to avoid mobile keyboard scroll */}
+      {isExact && (() => {
+        const homeKey = `${fixture.id}:${rule.category_id}:home`
+        const awayKey = `${fixture.id}:${rule.category_id}:away`
+        const homeNum = scoreInputs[homeKey] !== undefined ? parseInt(scoreInputs[homeKey]) : null
+        const awayNum = scoreInputs[awayKey] !== undefined ? parseInt(scoreInputs[awayKey]) : null
+
+        function adjust(side: 'home' | 'away', delta: number) {
+          if (locked || finished) return
+          const scrollY = window.scrollY
+          const key = side === 'home' ? homeKey : awayKey
+          const current = side === 'home' ? homeNum : awayNum
+          const next = Math.max(0, Math.min(15, (current ?? 0) + delta))
+          setScoreInputs(prev => {
+            const newInputs = { ...prev, [key]: String(next) }
+            const h = side === 'home' ? next : (homeNum ?? null)
+            const a = side === 'away' ? next : (awayNum ?? null)
+            if (h !== null && a !== null) {
+              updateLocal(fixture.id, rule.category_id, { value_text: `${h}-${a}` })
+            }
+            return newInputs
+          })
+          requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'instant' as any }))
+        }
+
+        const stepBtn = (disabled: boolean) => ({
+          width: 32, height: 36, border: '1px solid #ddd',
+          background: disabled ? '#fafafa' : 'white',
+          fontSize: '20px', lineHeight: '1', cursor: disabled ? 'default' : 'pointer',
+          fontFamily: 'inherit', color: disabled ? '#ccc' : '#333',
+          WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' as const,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        })
+
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <button type="button" onClick={() => adjust('home', -1)} disabled={locked || finished || homeNum === 0} style={stepBtn(locked || finished || homeNum === 0)}>−</button>
+              <span style={{ width: 36, textAlign: 'center', fontSize: '18px', fontWeight: 600, color: homeNum !== null ? '#111' : '#ccc' }}>{homeNum !== null ? homeNum : '?'}</span>
+              <button type="button" onClick={() => adjust('home', 1)} disabled={locked || finished} style={stepBtn(locked || finished)}>+</button>
+            </div>
+            <span style={{ color: '#aaa' }}>–</span>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <button type="button" onClick={() => adjust('away', -1)} disabled={locked || finished || awayNum === 0} style={stepBtn(locked || finished || awayNum === 0)}>−</button>
+              <span style={{ width: 36, textAlign: 'center', fontSize: '18px', fontWeight: 600, color: awayNum !== null ? '#111' : '#ccc' }}>{awayNum !== null ? awayNum : '?'}</span>
+              <button type="button" onClick={() => adjust('away', 1)} disabled={locked || finished} style={stepBtn(locked || finished)}>+</button>
+            </div>
+            {finished && fixture.home_score !== null && (
+              <span style={{ fontSize: '10px', color: '#aaa', marginLeft: 4 }}>
+                actual: {fixture.home_score}–{fixture.away_score}
+              </span>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* Yes / No */}
+      {rule.input_type === 'yesno' && (
+        <div style={{ display: 'flex', gap: 0 }}>
+          <button type="button"
+            style={{ ...btnStyle(true), borderRight: 'none',
+              borderColor: pred?.value_yesno === true ? '#C8102E' : '#ddd',
+              background: pred?.value_yesno === true ? '#C8102E' : locked || finished ? '#fafafa' : 'white',
+              color: pred?.value_yesno === true ? 'white' : '#555',
+            }}
+            disabled={locked || finished}
+            onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_yesno: true })}>
+            yes
+          </button>
+          <button type="button"
+            style={{ ...btnStyle(false),
+              borderColor: pred?.value_yesno === false ? '#C8102E' : '#ddd',
+              background: pred?.value_yesno === false ? '#C8102E' : locked || finished ? '#fafafa' : 'white',
+              color: pred?.value_yesno === false ? 'white' : '#555',
+            }}
+            disabled={locked || finished}
+            onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_yesno: false })}>
+            no
+          </button>
+        </div>
+      )}
+
+      {/* Player dropdown */}
+      {rule.input_type === 'player' && (
+        <PlayerDropdown
+          value={pred?.value_text || ''}
+          disabled={locked || finished}
+          homeTeam={fixture.home_team}
+          awayTeam={fixture.away_team}
+          onChange={v => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: v })}
+        />
+      )}
+
+      {/* Team text */}
+      {rule.input_type === 'team' && (
+        <input
+          value={pred?.value_text || ''}
+          placeholder="team name..."
+          disabled={locked || finished}
+          style={{ width: '100%', border: '1px solid #ddd', padding: '5px 8px', fontSize: '11px', fontFamily: 'inherit', background: locked || finished ? '#fafafa' : 'white', boxSizing: 'border-box' }}
+          onChange={e => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: e.target.value })}
+        />
+      )}
+    </div>
+  )
+}
+
 
 export default function FixturesList({
   poolId, userId, packageId, deadlineType, tournamentId,
@@ -753,365 +1123,8 @@ export default function FixturesList({
   }
 
   // ── Per-category input inside a fixture card ─────────────────────────────
-  function CategoryInput({ fixture, rule }: { fixture: Fixture; rule: PoolRule }) {
-    const key = `${fixture.id}:${rule.category_id}`
-    const pred = preds[key]
-    const locked = isLocked(fixture)
-    const finished = fixture.status === 'FT'
-    const isExact = rule.input_type === 'exact'
 
-    const btnStyle = (val: string | boolean | number): React.CSSProperties => {
-      const active = pred?.value_wld === val || pred?.value_ou === val || pred?.value_text === val || pred?.value_yesno === val || pred?.value_number === val
-      return {
-        flex: 1, padding: '8px 4px', fontSize: '12px', border: '1px solid',
-        cursor: locked || finished ? 'default' : 'pointer',
-        fontFamily: 'inherit', minHeight: 44,
-        borderColor: active ? '#C8102E' : '#ddd',
-        background: active ? '#C8102E' : locked || finished ? '#fafafa' : 'white',
-        color: active ? 'white' : '#555',
-        opacity: locked && !active ? 0.6 : 1,
-      }
-    }
-
-    // Points feedback
-    const feedback = finished && pred?.points_earned !== null && pred?.points_earned !== undefined ? (
-      <span style={{ fontSize: '10px', color: pred.points_earned > 0 ? '#2d7a2d' : '#aaa', marginLeft: 6 }}>
-        {pred.points_earned > 0 ? `+${pred.points_earned} pts` : '✗'}
-      </span>
-    ) : null
-
-    // ── MMA categories ──────────────────────────────────────────────────────
-    if (rule.category_id.startsWith('mma_')) {
-      return (
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: '10px', color: '#888', marginBottom: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontWeight: 600 }}>{rule.name}</span>
-            {feedback}
-          </div>
-
-          {/* Fight result — home fighter vs away fighter, no draw */}
-          {rule.category_id === 'mma_result' && (
-            <div style={{ display: 'flex', gap: 0 }}>
-              <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
-                disabled={locked || finished}
-                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block', fontSize: '11px' }}>{fixture.home_team}</span>
-              </button>
-              <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
-                disabled={locked || finished}
-                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block', fontSize: '11px' }}>{fixture.away_team}</span>
-              </button>
-            </div>
-          )}
-
-          {/* Method of victory */}
-          {rule.category_id === 'mma_method' && (
-            <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap' as const }}>
-              {['KO/TKO', 'Submission', 'Decision', 'DQ'].map((method, i, arr) => (
-                <button type="button" key={method}
-                  style={{ ...btnStyle(method), ...(i < arr.length - 1 ? { borderRight: 'none' } : {}), flex: '1 1 auto', minWidth: 60 }}
-                  disabled={locked || finished}
-                  onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: method })}>
-                  {method}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Yes/No categories */}
-          {(rule.category_id === 'mma_goes_distance' || rule.category_id === 'mma_finish_rd1') && (
-            <div style={{ display: 'flex', gap: 0 }}>
-              <button type="button" style={{ ...btnStyle(true), borderRight: 'none' }}
-                disabled={locked || finished}
-                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_yesno: true })}>
-                Yes
-              </button>
-              <button type="button" style={{ ...btnStyle(false) }}
-                disabled={locked || finished}
-                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_yesno: false })}>
-                No
-              </button>
-            </div>
-          )}
-
-          {/* Total rounds O/U */}
-          {rule.category_id === 'mma_total_rounds_ou' && (
-            <div style={{ display: 'flex', gap: 0 }}>
-              <button type="button" style={{ ...btnStyle('over'), borderRight: 'none' }}
-                disabled={locked || finished}
-                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'over' })}>
-                over {fixture.line_total_rounds ?? '2.5'}
-              </button>
-              <button type="button" style={{ ...btnStyle('under') }}
-                disabled={locked || finished}
-                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'under' })}>
-                under {fixture.line_total_rounds ?? '2.5'}
-              </button>
-            </div>
-          )}
-
-          {/* Round finished */}
-          {rule.category_id === 'mma_round_finish' && (
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
-              {[1, 2, 3, 4, 5].map(round => (
-                <button type="button" key={round}
-                  style={{ ...btnStyle(round), flex: '0 0 44px' }}
-                  disabled={locked || finished}
-                  onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_number: round })}>
-                  R{round}
-                </button>
-              ))}
-              <button type="button"
-                style={{ ...btnStyle('Decision'), flex: '1 1 auto' }}
-                disabled={locked || finished}
-                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: 'Decision', value_number: null })}>
-                Decision
-              </button>
-            </div>
-          )}
-        </div>
-      )
-    }
-
-    // ── Soccer categories ────────────────────────────────────────────────────
-    return (
-      <div style={{ marginBottom: 8 }}>
-        <div style={{ fontSize: '10px', color: '#888', marginBottom: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontWeight: 600 }}>{rule.name}</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            {rule.requires_line && !finished && (() => {
-              let line: number | null = null
-              if (rule.category_id === 'soccer_total_goals_ou') line = fixture.line_total_goals
-              else if (rule.category_id === 'soccer_total_corners_ou') line = fixture.line_total_corners
-              else if (rule.category_id === 'soccer_card_points_ou') line = fixture.line_card_points
-              else if (rule.category_id === 'soccer_asian_handicap') line = fixture.line_asian_handicap_home
-              if (line != null) return null // line shown inline on buttons
-              return <span style={{ fontSize: '9px', color: '#bbb', fontStyle: 'italic' }}>line TBD 24h before</span>
-            })()}
-            {feedback}
-          </div>
-        </div>
-
-        {/* WLD */}
-        {rule.input_type === 'wld' &&
-          rule.category_id !== 'soccer_first_team_score' &&
-          rule.category_id !== 'soccer_first_yellow_team' && (
-          <div style={{ display: 'flex', gap: 0 }}>
-            <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
-              disabled={locked || finished}
-              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-                {FLAGS[fixture.home_team]} {fixture.home_team}
-                {rule.category_id === 'soccer_asian_handicap' && fixture.line_asian_handicap_home != null && (
-                  <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: 3 }}>
-                    ({fixture.line_asian_handicap_home > 0 ? '+' : ''}{fixture.line_asian_handicap_home})
-                  </span>
-                )}
-              </span>
-            </button>
-            {rule.category_id !== 'soccer_asian_handicap' && (
-              <button type="button" style={{ ...btnStyle('draw'), borderRight: 'none', flexShrink: 0, flex: '0 0 60px' }}
-                disabled={locked || finished}
-                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'draw' })}>
-                draw
-              </button>
-            )}
-            <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
-              disabled={locked || finished}
-              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-                {fixture.away_team} {FLAGS[fixture.away_team]}
-                {rule.category_id === 'soccer_asian_handicap' && fixture.line_asian_handicap_away != null && (
-                  <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: 3 }}>
-                    ({fixture.line_asian_handicap_away > 0 ? '+' : ''}{fixture.line_asian_handicap_away})
-                  </span>
-                )}
-              </span>
-            </button>
-          </div>
-        )}
-
-        {/* First team to score */}
-        {rule.category_id === 'soccer_first_team_score' && (
-          <div style={{ display: 'flex', gap: 0 }}>
-            <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
-              disabled={locked || finished}
-              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-                {FLAGS[fixture.home_team]} {fixture.home_team}
-              </span>
-            </button>
-            <button type="button" style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
-              disabled={locked || finished}
-              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'none' })}>
-              no goal
-            </button>
-            <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
-              disabled={locked || finished}
-              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-                {fixture.away_team} {FLAGS[fixture.away_team]}
-              </span>
-            </button>
-          </div>
-        )}
-
-        {/* First yellow card */}
-        {rule.category_id === 'soccer_first_yellow_team' && (
-          <div style={{ display: 'flex', gap: 0 }}>
-            <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
-              disabled={locked || finished}
-              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-                {FLAGS[fixture.home_team]} {fixture.home_team}
-              </span>
-            </button>
-            <button type="button" style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
-              disabled={locked || finished}
-              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'none' })}>
-              no card
-            </button>
-            <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
-              disabled={locked || finished}
-              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-                {fixture.away_team} {FLAGS[fixture.away_team]}
-              </span>
-            </button>
-          </div>
-        )}
-
-        {/* Over / Under */}
-        {rule.input_type === 'ou' && (() => {
-          // Pick the right line based on category
-          let line: number | null = null
-          if (rule.category_id === 'soccer_total_goals_ou') line = fixture.line_total_goals
-          else if (rule.category_id === 'soccer_total_corners_ou') line = fixture.line_total_corners
-          else if (rule.category_id === 'soccer_card_points_ou') line = fixture.line_card_points
-          const lineLabel = line != null ? line.toString() : '—'
-          return (
-            <div style={{ display: 'flex', gap: 0 }}>
-              <button type="button" style={{ ...btnStyle('over'), borderRight: 'none' }}
-                disabled={locked || finished}
-                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'over' })}>
-                over {lineLabel}
-              </button>
-              <button type="button" style={btnStyle('under')}
-                disabled={locked || finished}
-                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_ou: 'under' })}>
-                under {lineLabel}
-              </button>
-            </div>
-          )
-        })()}
-
-        {/* Exact score — stepper buttons instead of number inputs to avoid mobile keyboard scroll */}
-        {isExact && (() => {
-          const homeKey = `${fixture.id}:${rule.category_id}:home`
-          const awayKey = `${fixture.id}:${rule.category_id}:away`
-          const homeNum = scoreInputs[homeKey] !== undefined ? parseInt(scoreInputs[homeKey]) : null
-          const awayNum = scoreInputs[awayKey] !== undefined ? parseInt(scoreInputs[awayKey]) : null
-
-          function adjust(side: 'home' | 'away', delta: number) {
-            if (locked || finished) return
-            const scrollY = window.scrollY
-            const key = side === 'home' ? homeKey : awayKey
-            const current = side === 'home' ? homeNum : awayNum
-            const next = Math.max(0, Math.min(15, (current ?? 0) + delta))
-            setScoreInputs(prev => {
-              const newInputs = { ...prev, [key]: String(next) }
-              const h = side === 'home' ? next : (homeNum ?? null)
-              const a = side === 'away' ? next : (awayNum ?? null)
-              if (h !== null && a !== null) {
-                updateLocal(fixture.id, rule.category_id, { value_text: `${h}-${a}` })
-              }
-              return newInputs
-            })
-            requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'instant' as any }))
-          }
-
-          const stepBtn = (disabled: boolean) => ({
-            width: 32, height: 36, border: '1px solid #ddd',
-            background: disabled ? '#fafafa' : 'white',
-            fontSize: '20px', lineHeight: '1', cursor: disabled ? 'default' : 'pointer',
-            fontFamily: 'inherit', color: disabled ? '#ccc' : '#333',
-            WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' as const,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          })
-
-          return (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <button type="button" onClick={() => adjust('home', -1)} disabled={locked || finished || homeNum === 0} style={stepBtn(locked || finished || homeNum === 0)}>−</button>
-                <span style={{ width: 36, textAlign: 'center', fontSize: '18px', fontWeight: 600, color: homeNum !== null ? '#111' : '#ccc' }}>{homeNum !== null ? homeNum : '?'}</span>
-                <button type="button" onClick={() => adjust('home', 1)} disabled={locked || finished} style={stepBtn(locked || finished)}>+</button>
-              </div>
-              <span style={{ color: '#aaa' }}>–</span>
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <button type="button" onClick={() => adjust('away', -1)} disabled={locked || finished || awayNum === 0} style={stepBtn(locked || finished || awayNum === 0)}>−</button>
-                <span style={{ width: 36, textAlign: 'center', fontSize: '18px', fontWeight: 600, color: awayNum !== null ? '#111' : '#ccc' }}>{awayNum !== null ? awayNum : '?'}</span>
-                <button type="button" onClick={() => adjust('away', 1)} disabled={locked || finished} style={stepBtn(locked || finished)}>+</button>
-              </div>
-              {finished && fixture.home_score !== null && (
-                <span style={{ fontSize: '10px', color: '#aaa', marginLeft: 4 }}>
-                  actual: {fixture.home_score}–{fixture.away_score}
-                </span>
-              )}
-            </div>
-          )
-        })()}
-
-        {/* Yes / No */}
-        {rule.input_type === 'yesno' && (
-          <div style={{ display: 'flex', gap: 0 }}>
-            <button type="button"
-              style={{ ...btnStyle(true), borderRight: 'none',
-                borderColor: pred?.value_yesno === true ? '#C8102E' : '#ddd',
-                background: pred?.value_yesno === true ? '#C8102E' : locked || finished ? '#fafafa' : 'white',
-                color: pred?.value_yesno === true ? 'white' : '#555',
-              }}
-              disabled={locked || finished}
-              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_yesno: true })}>
-              yes
-            </button>
-            <button type="button"
-              style={{ ...btnStyle(false),
-                borderColor: pred?.value_yesno === false ? '#C8102E' : '#ddd',
-                background: pred?.value_yesno === false ? '#C8102E' : locked || finished ? '#fafafa' : 'white',
-                color: pred?.value_yesno === false ? 'white' : '#555',
-              }}
-              disabled={locked || finished}
-              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_yesno: false })}>
-              no
-            </button>
-          </div>
-        )}
-
-        {/* Player dropdown */}
-        {rule.input_type === 'player' && (
-          <PlayerDropdown
-            value={pred?.value_text || ''}
-            disabled={locked || finished}
-            homeTeam={fixture.home_team}
-            awayTeam={fixture.away_team}
-            onChange={v => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: v })}
-          />
-        )}
-
-        {/* Team text */}
-        {rule.input_type === 'team' && (
-          <input
-            value={pred?.value_text || ''}
-            placeholder="team name..."
-            disabled={locked || finished}
-            style={{ width: '100%', border: '1px solid #ddd', padding: '5px 8px', fontSize: '11px', fontFamily: 'inherit', background: locked || finished ? '#fafafa' : 'white', boxSizing: 'border-box' }}
-            onChange={e => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: e.target.value })}
-          />
-        )}
-      </div>
-    )
-  }
+  // CategoryInput is now defined outside this component — see above
 
   function formatPickValue(pred: PredV2 | undefined, rule: PoolRule, fixture: Fixture): string {
     if (!pred) return '—'
@@ -1222,7 +1235,17 @@ export default function FixturesList({
         {perGameRules.length > 0 && (
           <div style={{ padding: '8px 10px' }}>
             {perGameRules.map(rule => (
-              <CategoryInput key={rule.category_id} fixture={fixture} rule={rule} />
+              <CategoryInput
+                key={rule.category_id}
+                fixture={fixture}
+                rule={rule}
+                pred={preds[`${fixture.id}:${rule.category_id}`]}
+                locked={isLocked(fixture)}
+                finished={fixture.status === 'FT'}
+                updateLocal={updateLocal}
+                scoreInputs={scoreInputs}
+                setScoreInputs={setScoreInputs}
+              />
             ))}
             {!locked && !finished && (
               <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 6 }}>
