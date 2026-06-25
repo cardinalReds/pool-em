@@ -948,51 +948,51 @@ export default function FixturesList({
           )
         })()}
 
-        {/* Exact score */}
+        {/* Exact score — stepper buttons instead of number inputs to avoid mobile keyboard scroll */}
         {isExact && (() => {
           const homeKey = `${fixture.id}:${rule.category_id}:home`
           const awayKey = `${fixture.id}:${rule.category_id}:away`
-          const homeVal = scoreInputs[homeKey] ?? ''
-          const awayVal = scoreInputs[awayKey] ?? ''
+          const homeNum = scoreInputs[homeKey] !== undefined ? parseInt(scoreInputs[homeKey]) : null
+          const awayNum = scoreInputs[awayKey] !== undefined ? parseInt(scoreInputs[awayKey]) : null
+
+          function adjust(side: 'home' | 'away', delta: number) {
+            if (locked || finished) return
+            const key = side === 'home' ? homeKey : awayKey
+            const current = side === 'home' ? homeNum : awayNum
+            const next = Math.max(0, Math.min(15, (current ?? 0) + delta))
+            setScoreInputs(prev => {
+              const newInputs = { ...prev, [key]: String(next) }
+              const h = side === 'home' ? next : (homeNum ?? null)
+              const a = side === 'away' ? next : (awayNum ?? null)
+              if (h !== null && a !== null) {
+                updateLocal(fixture.id, rule.category_id, { value_text: `${h}-${a}` })
+              }
+              return newInputs
+            })
+          }
+
+          const stepBtn = (disabled: boolean) => ({
+            width: 32, height: 36, border: '1px solid #ddd',
+            background: disabled ? '#fafafa' : 'white',
+            fontSize: '20px', lineHeight: '1', cursor: disabled ? 'default' : 'pointer',
+            fontFamily: 'inherit', color: disabled ? '#ccc' : '#333',
+            WebkitTapHighlightColor: 'transparent', touchAction: 'manipulation' as const,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          })
+
           return (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              <input
-                type="number" min="0" max="15"
-                value={homeVal}
-                disabled={locked || finished}
-                style={{ width: 52, border: '1px solid #ddd', padding: '8px 4px', textAlign: 'center', fontSize: '16px', fontFamily: 'inherit', background: locked || finished ? '#fafafa' : 'white' }}
-                onChange={e => {
-                  const v = e.target.value
-                  setScoreInputs(prev => {
-                    const away = prev[awayKey] ?? ''
-                    const newInputs = { ...prev, [homeKey]: v }
-                    if (v !== '' && away !== '') {
-                      updateLocal(fixture.id, rule.category_id, { value_text: `${v}-${away}` })
-                    }
-                    // Don't overwrite existing DB value with null if only one side entered
-                    return newInputs
-                  })
-                }}
-              />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <button type="button" onClick={() => adjust('home', -1)} disabled={locked || finished || homeNum === 0} style={stepBtn(locked || finished || homeNum === 0)}>−</button>
+                <span style={{ width: 36, textAlign: 'center', fontSize: '18px', fontWeight: 600, color: homeNum !== null ? '#111' : '#ccc' }}>{homeNum !== null ? homeNum : '?'}</span>
+                <button type="button" onClick={() => adjust('home', 1)} disabled={locked || finished} style={stepBtn(locked || finished)}>+</button>
+              </div>
               <span style={{ color: '#aaa' }}>–</span>
-              <input
-                type="number" min="0" max="15"
-                value={awayVal}
-                disabled={locked || finished}
-                style={{ width: 52, border: '1px solid #ddd', padding: '8px 4px', textAlign: 'center', fontSize: '16px', fontFamily: 'inherit', background: locked || finished ? '#fafafa' : 'white' }}
-                onChange={e => {
-                  const v = e.target.value
-                  setScoreInputs(prev => {
-                    const home = prev[homeKey] ?? ''
-                    const newInputs = { ...prev, [awayKey]: v }
-                    if (home !== '' && v !== '') {
-                      updateLocal(fixture.id, rule.category_id, { value_text: `${home}-${v}` })
-                    }
-                    // Don't overwrite existing DB value with null if only one side entered
-                    return newInputs
-                  })
-                }}
-              />
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <button type="button" onClick={() => adjust('away', -1)} disabled={locked || finished || awayNum === 0} style={stepBtn(locked || finished || awayNum === 0)}>−</button>
+                <span style={{ width: 36, textAlign: 'center', fontSize: '18px', fontWeight: 600, color: awayNum !== null ? '#111' : '#ccc' }}>{awayNum !== null ? awayNum : '?'}</span>
+                <button type="button" onClick={() => adjust('away', 1)} disabled={locked || finished} style={stepBtn(locked || finished)}>+</button>
+              </div>
               {finished && fixture.home_score !== null && (
                 <span style={{ fontSize: '10px', color: '#aaa', marginLeft: 4 }}>
                   actual: {fixture.home_score}–{fixture.away_score}
