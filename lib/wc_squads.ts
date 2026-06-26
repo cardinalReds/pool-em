@@ -813,7 +813,7 @@ export const WC_SQUADS: Record<string, Player[]> = {
     { name: 'Ferran Torres', position: 'Midfielder', number: 7 },
     { name: 'Nico Williams', position: 'Attacker', number: 17 },
   ],
-  'Cape Verde': [
+  'Cabo Verde': [
     { name: 'Márcio Rosa', position: 'Goalkeeper', number: 12 },
     { name: 'Vózinha', position: 'Goalkeeper', number: 1 },
     { name: 'C. dos Santos', position: 'Goalkeeper', number: 23 },
