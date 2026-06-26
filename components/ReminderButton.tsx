@@ -100,27 +100,29 @@ export default function ReminderButton({ poolId, userId, userEmail }: {
           </div>
           <div style={{fontSize: '10px', color: '#aaa', marginBottom: '10px', wordBreak: 'break-all'}}>📧 {userEmail}</div>
 
-          {/* Optional SMS opt-in */}
-          <div style={{marginBottom: '10px'}}>
-            <label style={{display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '11px', color: '#555', marginBottom: '6px'}}>
-              <input type="checkbox" checked={smsOptIn} onChange={e => setSmsOptIn(e.target.checked)} />
-              also text me (optional)
-            </label>
-            {smsOptIn && (
-              <div>
-                <input
-                  type="tel"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  placeholder="+1 555 000 0000"
-                  style={{width: '100%', border: '1px solid #ddd', padding: '5px 8px', fontSize: '12px', fontFamily: 'inherit', boxSizing: 'border-box' as const, marginBottom: '4px'}}
-                />
-                <div style={{fontSize: '9px', color: '#aaa', lineHeight: 1.4}}>
-                  By checking this box you consent to receive SMS reminders from pool'em. Msg & data rates may apply. Reply STOP to opt out.
+          {/* SMS opt-in — enabled once Twilio campaign approved */}
+          {false && (
+            <div style={{marginBottom: '10px'}}>
+              <label style={{display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '11px', color: '#555', marginBottom: '6px'}}>
+                <input type="checkbox" checked={smsOptIn} onChange={e => setSmsOptIn(e.target.checked)} />
+                also text me (optional)
+              </label>
+              {smsOptIn && (
+                <div>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={e => setPhone(e.target.value)}
+                    placeholder="+1 555 000 0000"
+                    style={{width: '100%', border: '1px solid #ddd', padding: '5px 8px', fontSize: '12px', fontFamily: 'inherit', boxSizing: 'border-box' as const, marginBottom: '4px'}}
+                  />
+                  <div style={{fontSize: '9px', color: '#aaa', lineHeight: 1.4}}>
+                    By checking this box you consent to receive SMS reminders from pool'em. Msg & data rates may apply. Reply STOP to opt out.
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
           <button onClick={handleSave} disabled={status === 'saving'}
             style={{
