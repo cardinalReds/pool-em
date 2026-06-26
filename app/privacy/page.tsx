@@ -50,6 +50,11 @@ export default function PrivacyPage() {
 
       <h2 style={{ fontSize: '16px', fontWeight: 700, marginTop: '32px', marginBottom: '8px' }}>9. Contact</h2>
       <p>If you have questions about this privacy policy or your data, contact us at <a href="mailto:fred@cardinalreds.com" style={{ color: '#C8102E' }}>fred@cardinalreds.com</a>.</p>
+      <p style={{ marginTop: '8px' }}>
+        Cardinal Reds<br />
+        San Luis Obispo, CA<br />
+        <a href="mailto:fred@cardinalreds.com" style={{ color: '#C8102E' }}>fred@cardinalreds.com</a>
+      </p>
 
       <div style={{ marginTop: '60px', paddingTop: '20px', borderTop: '1px solid #eee', fontSize: '12px', color: '#aaa' }}>
         <a href="/terms" style={{ color: '#aaa' }}>Terms & Conditions</a> · <a href="/" style={{ color: '#aaa' }}>pool'em</a>

@@ -146,6 +146,9 @@ export default function InvitePanel({ poolId, poolName, inviteUrl, buyInAmount, 
             style={{ width: '100%', padding: '7px', fontSize: '11px', fontWeight: 600, background: phone.trim() ? '#111' : '#ddd', color: 'white', border: 'none', cursor: phone.trim() ? 'pointer' : 'default', fontFamily: 'inherit' }}>
             {sending ? 'sending...' : smsSent ? '✓ sent!' : 'send invite via sms'}
           </button>
+          <div style={{ fontSize: '10px', color: '#aaa', lineHeight: 1.4 }}>
+            By sending, you confirm the recipient has agreed to receive one SMS invitation from pool'em. Reply STOP to opt out. Msg & data rates may apply.
+          </div>
           {error && <div style={{ fontSize: '10px', color: '#C8102E' }}>{error}</div>}
         </div>
       )}
