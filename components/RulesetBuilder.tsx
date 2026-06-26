@@ -258,6 +258,51 @@ function PlayerSearch({ value, onChange, players, placeholder }: {
   )
 }
 
+// F1 driver dropdown for the preview ticket — team-organized, no search
+function F1PreviewDropdown({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const team = F1_GRID_PREVIEW.find(t => t.drivers.includes(value))
+  return (
+    <div style={{ position: 'relative' as const }}>
+      <button type="button" onMouseDown={() => setOpen(o => !o)}
+        style={{ width: '100%', padding: '6px 10px', border: '1px solid', borderColor: value ? '#C8102E' : '#ddd', background: 'white', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' as const, fontSize: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ color: value ? '#C8102E' : '#aaa', fontWeight: value ? 700 : 400 }}>{value || 'select driver...'}</span>
+        <span style={{ fontSize: '10px', color: '#aaa' }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute' as const, top: '100%', left: 0, right: 0, zIndex: 200, background: 'white', border: '1px solid #ddd', borderTop: 'none', maxHeight: 220, overflowY: 'auto' as const, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+          {value && <button type="button" onMouseDown={e => { e.preventDefault(); onChange(''); setOpen(false) }}
+            style={{ width: '100%', padding: '6px 10px', border: 'none', borderBottom: '1px solid #f0f0f0', background: '#fafafa', color: '#aaa', fontSize: '11px', fontFamily: 'inherit', textAlign: 'left' as const, cursor: 'pointer' }}>— clear</button>}
+          {F1_GRID_PREVIEW.map(t => (
+            <div key={t.name}>
+              <div style={{ padding: '4px 10px', background: '#f8f8f8', fontSize: '10px', fontWeight: 700, color: t.color, textTransform: 'uppercase' as const, letterSpacing: '0.05em', borderBottom: '1px solid #f0f0f0' }}>{t.name}</div>
+              {t.drivers.map(d => (
+                <button key={d} type="button" onMouseDown={e => { e.preventDefault(); onChange(d); setOpen(false) }}
+                  style={{ width: '100%', padding: '7px 10px', border: 'none', borderBottom: '1px solid #f5f5f5', background: value === d ? '#fff5f5' : 'white', color: value === d ? '#C8102E' : '#111', fontWeight: value === d ? 700 : 400, fontSize: '12px', fontFamily: 'inherit', textAlign: 'left' as const, cursor: 'pointer' }}>{d}</button>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Lightweight grid for preview (names + team colors only, no photos needed)
+const F1_GRID_PREVIEW = [
+  { name: 'McLaren', color: '#FF8000', drivers: ['Lando Norris', 'Oscar Piastri'] },
+  { name: 'Ferrari', color: '#E8002D', drivers: ['Charles Leclerc', 'Lewis Hamilton'] },
+  { name: 'Red Bull', color: '#3671C6', drivers: ['Max Verstappen', 'Isack Hadjar'] },
+  { name: 'Mercedes', color: '#27F4D2', drivers: ['George Russell', 'Kimi Antonelli'] },
+  { name: 'Aston Martin', color: '#229971', drivers: ['Fernando Alonso', 'Lance Stroll'] },
+  { name: 'Williams', color: '#64C4FF', drivers: ['Alexander Albon', 'Carlos Sainz'] },
+  { name: 'Alpine', color: '#0093CC', drivers: ['Pierre Gasly', 'Franco Colapinto'] },
+  { name: 'Haas', color: '#B6BABD', drivers: ['Esteban Ocon', 'Oliver Bearman'] },
+  { name: 'Racing Bulls', color: '#6692FF', drivers: ['Liam Lawson', 'Arvid Lindblad'] },
+  { name: 'Audi', color: '#C00000', drivers: ['Nico Hülkenberg', 'Gabriel Bortoleto'] },
+  { name: 'Cadillac', color: '#CC0000', drivers: ['Sergio Pérez', 'Valtteri Bottas'] },
+]
+
 export default function RulesetBuilder({ sport, onComplete }: {
   sport: string
   onComplete: (rules: SelectedRule[]) => void
@@ -620,12 +665,20 @@ export default function RulesetBuilder({ sport, onComplete }: {
         )}
 
         {/* Goalscorer/driver search */}
-        {(cat.input_type === 'player') && (
+        {(cat.input_type === 'player') && sport !== 'f1' && (
           <PlayerSearch
             value={userPicks[cat.id] || ''}
             onChange={v => setUserPicks(p => ({ ...p, [cat.id]: v }))}
-            players={sport === 'f1' ? F1_DRIVERS_2026 : WC_PLAYERS}
-            placeholder={sport === 'f1' ? 'search driver...' : 'search player...'}
+            players={WC_PLAYERS}
+            placeholder="search player..."
+          />
+        )}
+
+        {/* F1 driver dropdown — organized by team, no search */}
+        {(cat.input_type === 'player') && sport === 'f1' && (
+          <F1PreviewDropdown
+            value={userPicks[cat.id] || ''}
+            onChange={v => setUserPicks(p => ({ ...p, [cat.id]: v }))}
           />
         )}
 
