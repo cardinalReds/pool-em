@@ -259,10 +259,16 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
   const [preds, setPreds] = useState<Record<string, any>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<number | null>(null)
+  const [saved, setSaved] = useState<Record<number, boolean>>({})
   const [gpIndex, setGpIndex] = useState(0)
   const saveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
   const predsRef = useRef(preds)
+  const poolRulesRef = useRef(poolRules)
+  const sessionsRef = useRef(sessions)
   useEffect(() => { predsRef.current = preds }, [preds])
+  useEffect(() => { poolRulesRef.current = poolRules }, [poolRules])
+  useEffect(() => { sessionsRef.current = sessions }, [sessions])
+  const saveSessionRef = useRef<(sessionId: number) => Promise<void>>(async () => {})
 
   useEffect(() => {
     async function load() {
@@ -302,35 +308,55 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
     setPreds(prev => ({ ...prev, [`${sessionId}:${categoryId}`]: { ...prev[`${sessionId}:${categoryId}`], category_id: categoryId, ...value } }))
     requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'instant' as any }))
     if (saveTimers.current[sessionId]) clearTimeout(saveTimers.current[sessionId])
-    saveTimers.current[sessionId] = setTimeout(() => savePreds(sessionId), 800)
+    saveTimers.current[sessionId] = setTimeout(() => saveSessionRef.current(sessionId), 800)
   }
 
-  const savePreds = useCallback(async (sessionId: number) => {
+  const saveSession = useCallback(async (sessionId: number) => {
     setSaving(sessionId)
     const supabase = createClient()
-    const session = sessions.find(s => s.id === sessionId)
-    if (!session) return
+    const currentPreds = predsRef.current
+    const currentRules = poolRulesRef.current
+    const currentSessions = sessionsRef.current
+    const session = currentSessions.find(s => s.id === sessionId)
+    if (!session) { setSaving(null); return }
     const catIds = SESSION_CATEGORIES[session.session_type] || []
     const rows: any[] = []
-    console.log('savePreds:', sessionId, session.session_type, 'catIds:', catIds)
-    console.log('poolRules:', poolRules.map(r => r.category_id))
-    console.log('predsRef keys:', Object.keys(predsRef.current).filter(k => k.startsWith(String(sessionId))))
 
-    for (const r of poolRules.filter(r => catIds.includes(r.category_id))) {
+    for (const r of currentRules.filter(r => catIds.includes(r.category_id))) {
       if (r.category_id === 'f1_podium_order') {
         for (const pos of [1, 2, 3]) {
-          const val = predsRef.current[`${sessionId}:f1_podium_order_${pos}`]?.value_text
-          if (val) rows.push({ pool_id: poolId, user_id: userId, fixture_id: sessionId, category_id: `f1_podium_order_${pos}`, value_text: val, value_wld: null, value_yesno: null, value_number: null, value_ou: null, submitted_at: new Date().toISOString() })
+          const val = currentPreds[`${sessionId}:f1_podium_order_${pos}`]?.value_text
+          if (val) rows.push({
+            pool_id: poolId, user_id: userId, fixture_id: sessionId,
+            category_id: `f1_podium_order_${pos}`, value_text: val,
+            value_wld: null, value_yesno: null, value_number: null, value_ou: null,
+            submitted_at: new Date().toISOString(),
+          })
         }
         continue
       }
-      const pred = predsRef.current[`${sessionId}:${r.category_id}`]
+      const pred = currentPreds[`${sessionId}:${r.category_id}`]
       if (pred?.value_text || pred?.value_wld || (pred?.value_yesno !== null && pred?.value_yesno !== undefined))
-        rows.push({ pool_id: poolId, user_id: userId, fixture_id: sessionId, category_id: r.category_id, value_text: pred.value_text ?? null, value_wld: pred.value_wld ?? null, value_yesno: pred.value_yesno ?? null, value_number: null, value_ou: null, submitted_at: new Date().toISOString() })
+        rows.push({
+          pool_id: poolId, user_id: userId, fixture_id: sessionId,
+          category_id: r.category_id,
+          value_text: pred.value_text ?? null,
+          value_wld: pred.value_wld ?? null,
+          value_yesno: pred.value_yesno ?? null,
+          value_number: null, value_ou: null,
+          submitted_at: new Date().toISOString(),
+        })
     }
-    if (rows.length > 0) await supabase.from('predictions_v2').upsert(rows, { onConflict: 'pool_id,user_id,fixture_id,category_id' })
+
+    if (rows.length > 0) {
+      await supabase.from('predictions_v2').upsert(rows, { onConflict: 'pool_id,user_id,fixture_id,category_id' })
+    }
     setSaving(null)
-  }, [poolId, userId, poolRules, sessions])
+    setSaved(prev => ({ ...prev, [sessionId]: true }))
+    setTimeout(() => setSaved(prev => ({ ...prev, [sessionId]: false })), 3000)
+  }, [poolId, userId])
+
+  useEffect(() => { saveSessionRef.current = saveSession }, [saveSession])
 
   if (loading) return <div style={{ color: '#aaa', fontSize: '12px', padding: 16 }}>loading sessions...</div>
 
@@ -395,6 +421,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                 <span style={{ fontWeight: 700, fontSize: '13px' }}>{SESSION_LABEL[session.session_type] || session.session_type}</span>
                 {locked && <span style={{ fontSize: '10px', color: '#aaa' }}>🔒 locked</span>}
                 {saving === session.id && <span style={{ fontSize: '10px', color: '#aaa' }}>saving...</span>}
+                {saved[session.id] && <span style={{ fontSize: '10px', color: '#2d7a2d' }}>✓ saved</span>}
               </div>
               <span style={{ fontSize: '11px', color: '#aaa' }}>{fmt(session.date)}</span>
             </div>
