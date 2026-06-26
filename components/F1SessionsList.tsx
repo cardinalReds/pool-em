@@ -111,10 +111,13 @@ const USER_TZ = typeof Intl !== 'undefined'
   ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'America/Los_Angeles'
 
 function fmt(dateStr: string) {
-  return new Date(dateStr).toLocaleString('en-US', {
+  const date = new Date(dateStr)
+  const time = date.toLocaleString('en-US', {
     timeZone: USER_TZ, weekday: 'short', month: 'short', day: 'numeric',
     hour: 'numeric', minute: '2-digit',
   })
+  const tz = date.toLocaleTimeString('en-US', { timeZone: USER_TZ, timeZoneName: 'short' }).split(' ').pop()
+  return `${time} ${tz}`
 }
 
 function fmtShort(dateStr: string) {
@@ -465,6 +468,27 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
         </button>
       </div>
 
+      {/* Lock deadline banner */}
+      {(() => {
+        const firstSession = sorted[0]
+        const lockTime = new Date(firstSession.date)
+        const isWeekendLocked = deadlineType === 'before_weekend' && lockTime <= new Date()
+        const locksSoon = !isWeekendLocked && lockTime.getTime() - Date.now() < 24 * 60 * 60 * 1000
+        if (isWeekendLocked) return (
+          <div style={{ padding: '8px 14px', background: '#f5f5f5', borderBottom: '1px solid #e0e0db', fontSize: '11px', color: '#aaa' }}>
+            🔒 predictions locked — weekend started {fmt(firstSession.date)}
+          </div>
+        )
+        return (
+          <div style={{ padding: '8px 14px', background: locksSoon ? '#fffbf0' : '#f0fff4', borderBottom: '1px solid #e0e0db', fontSize: '11px', color: locksSoon ? '#b45309' : '#2d7a2d' }}>
+            {deadlineType === 'before_weekend'
+              ? `⏰ all picks lock ${fmt(firstSession.date)} — before ${SESSION_LABEL[firstSession.session_type] || firstSession.session_type} starts`
+              : `picks lock before each session starts`
+            }
+          </div>
+        )
+      })()}
+
       {/* Sessions for current GP */}
       {sorted.map(session => {
         const catIds = SESSION_CATEGORIES[session.session_type] || []
@@ -479,11 +503,21 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: '14px' }}>{session.session_type === 'Race' ? '🏁' : session.session_type === 'Sprint' ? '⚡' : '⏱'}</span>
                 <span style={{ fontWeight: 700, fontSize: '13px' }}>{SESSION_LABEL[session.session_type] || session.session_type}</span>
-                {locked && <span style={{ fontSize: '10px', color: '#aaa' }}>🔒 locked</span>}
-                {saving === session.id && <span style={{ fontSize: '10px', color: '#aaa' }}>saving...</span>}
-                {saved[session.id] && <span style={{ fontSize: '10px', color: '#2d7a2d' }}>✓ saved</span>}
+                {locked
+                  ? <span style={{ fontSize: '10px', color: '#aaa' }}>🔒 locked</span>
+                  : saving === session.id
+                  ? <span style={{ fontSize: '10px', color: '#aaa' }}>saving...</span>
+                  : saved[session.id]
+                  ? <span style={{ fontSize: '10px', color: '#2d7a2d' }}>✓ saved</span>
+                  : null
+                }
               </div>
-              <span style={{ fontSize: '11px', color: '#aaa' }}>{fmt(session.date)}</span>
+              <div style={{ textAlign: 'right' as const }}>
+                <div style={{ fontSize: '11px', color: '#aaa' }}>{fmt(session.date)}</div>
+                {!locked && deadlineType === 'before_session' && (
+                  <div style={{ fontSize: '10px', color: '#C8102E' }}>picks lock at start</div>
+                )}
+              </div>
             </div>
 
             {/* Categories */}
