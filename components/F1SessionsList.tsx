@@ -257,27 +257,34 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
   const [sessions, setSessions] = useState<F1Session[]>([])
   const [poolRules, setPoolRules] = useState<PoolRule[]>([])
   const [preds, setPreds] = useState<Record<string, any>>({})
+  const [memberPreds, setMemberPreds] = useState<Record<string, any>>({})
+  const [members, setMembers] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<number | null>(null)
   const [saved, setSaved] = useState<Record<number, boolean>>({})
   const [gpIndex, setGpIndex] = useState(0)
-  const saveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
+  const LS_KEY = `f1_preds_${poolId}_${userId}`
+  const autoSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
   const predsRef = useRef(preds)
   const poolRulesRef = useRef(poolRules)
   const sessionsRef = useRef(sessions)
   useEffect(() => { predsRef.current = preds }, [preds])
   useEffect(() => { poolRulesRef.current = poolRules }, [poolRules])
   useEffect(() => { sessionsRef.current = sessions }, [sessions])
+  // Use a ref for saveSession so updatePred always calls the latest version
   const saveSessionRef = useRef<(sessionId: number) => Promise<void>>(async () => {})
 
   useEffect(() => {
     async function load() {
       const supabase = createClient()
-      const [sessionsRes, rulesRes, predsRes] = await Promise.all([
+      const [sessionsRes, rulesRes, myPredsRes, allPredsRes, membersRes] = await Promise.all([
         supabase.from('f1_sessions').select('*').eq('tournament_id', tournamentId).order('date'),
         supabase.from('pool_rules').select('category_id, points, bonus_points, ruleset_categories(name, input_type)').eq('pool_id', poolId),
         supabase.from('predictions_v2').select('*').eq('pool_id', poolId).eq('user_id', userId).limit(10000),
+        supabase.from('predictions_v2').select('*').eq('pool_id', poolId).limit(10000),
+        supabase.from('pool_members').select('user_id, display_name').eq('pool_id', poolId),
       ])
+
       const allSessions = sessionsRes.data || []
       setSessions(allSessions)
       setPoolRules((rulesRes.data || []).map((r: any) => ({
@@ -285,16 +292,57 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
         name: r.ruleset_categories?.name || r.category_id,
         input_type: r.ruleset_categories?.input_type || 'player',
       })))
+
+      // Load my predictions
       const predMap: Record<string, any> = {}
-      for (const p of predsRes.data || []) predMap[`${p.fixture_id}:${p.category_id}`] = p
+      for (const p of myPredsRes.data || []) predMap[`${p.fixture_id}:${p.category_id}`] = p
+      
+      // Merge localStorage backup
+      try {
+        const lsKey = `f1_preds_${poolId}_${userId}`
+        const lsRaw = localStorage.getItem(lsKey)
+        if (lsRaw) {
+          const lsPreds: Record<string, any> = JSON.parse(lsRaw)
+          const rowsToUpsert: any[] = []
+          Object.entries(lsPreds).forEach(([key, lsPred]: [string, any]) => {
+            const dbPred = predMap[key]
+            const dbHasValue = dbPred && (dbPred.value_wld || dbPred.value_text || dbPred.value_yesno !== null)
+            if (!dbHasValue && lsPred?.value_text) {
+              predMap[key] = lsPred
+              rowsToUpsert.push({
+                pool_id: poolId, user_id: userId,
+                fixture_id: lsPred.fixture_id, category_id: lsPred.category_id,
+                value_text: lsPred.value_text ?? null, value_wld: null, value_yesno: null,
+                value_number: null, value_ou: null, submitted_at: new Date().toISOString(),
+              })
+            }
+          })
+          if (rowsToUpsert.length > 0) {
+            await supabase.from('predictions_v2').upsert(rowsToUpsert, { onConflict: 'pool_id,user_id,fixture_id,category_id' })
+          }
+        }
+      } catch {}
+
       setPreds(predMap)
 
-      // Find the next upcoming GP and set that as the initial page
-      const gpNames = [...new Set(allSessions.map(s => s.competition_name))]
+      // Load all members' predictions for display after sessions are locked
+      const allPredMap: Record<string, any> = {}
+      for (const p of allPredsRes.data || []) {
+        allPredMap[`${p.user_id}:${p.fixture_id}:${p.category_id}`] = p
+      }
+      setMemberPreds(allPredMap)
+
+      // Load member names
+      const memberMap: Record<string, string> = {}
+      for (const m of membersRes.data || []) memberMap[m.user_id] = m.display_name
+      setMembers(memberMap)
+
+      // Find the next upcoming GP
+      const gpNames = [...new Set(allSessions.map((s: F1Session) => s.competition_name))]
       const now = new Date()
       const nextIdx = gpNames.findIndex(gp => {
-        const gpSessions = allSessions.filter(s => s.competition_name === gp)
-        const race = gpSessions.find(s => s.session_type === 'Race')
+        const gpSessions = allSessions.filter((s: F1Session) => s.competition_name === gp)
+        const race = gpSessions.find((s: F1Session) => s.session_type === 'Race')
         return race && new Date(race.date) > now
       })
       setGpIndex(nextIdx >= 0 ? nextIdx : Math.max(0, gpNames.length - 1))
@@ -305,10 +353,22 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
 
   function updatePred(sessionId: number, categoryId: string, value: any) {
     const scrollY = window.scrollY
-    setPreds(prev => ({ ...prev, [`${sessionId}:${categoryId}`]: { ...prev[`${sessionId}:${categoryId}`], category_id: categoryId, ...value } }))
+    const key = `${sessionId}:${categoryId}`
+    setPreds(prev => {
+      const updated = { ...prev, [key]: { ...(prev[key] || { fixture_id: sessionId, category_id: categoryId }), ...value } }
+      // Persist to localStorage as backup
+      try {
+        const toStore: Record<string, any> = {}
+        Object.entries(updated).forEach(([k, v]: [string, any]) => {
+          if (v.value_text || v.value_wld || v.value_yesno !== null) toStore[k] = v
+        })
+        localStorage.setItem(LS_KEY, JSON.stringify(toStore))
+      } catch {}
+      return updated
+    })
     requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'instant' as any }))
-    if (saveTimers.current[sessionId]) clearTimeout(saveTimers.current[sessionId])
-    saveTimers.current[sessionId] = setTimeout(() => saveSessionRef.current(sessionId), 800)
+    if (autoSaveTimers.current[sessionId]) clearTimeout(autoSaveTimers.current[sessionId])
+    autoSaveTimers.current[sessionId] = setTimeout(() => saveSessionRef.current(sessionId), 800)
   }
 
   const saveSession = useCallback(async (sessionId: number) => {
@@ -336,12 +396,11 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
         continue
       }
       const pred = currentPreds[`${sessionId}:${r.category_id}`]
-      if (pred?.value_text || pred?.value_wld || (pred?.value_yesno !== null && pred?.value_yesno !== undefined))
+      if (pred?.value_text || pred?.value_yesno !== null && pred?.value_yesno !== undefined)
         rows.push({
           pool_id: poolId, user_id: userId, fixture_id: sessionId,
           category_id: r.category_id,
-          value_text: pred.value_text ?? null,
-          value_wld: pred.value_wld ?? null,
+          value_text: pred.value_text ?? null, value_wld: null,
           value_yesno: pred.value_yesno ?? null,
           value_number: null, value_ou: null,
           submitted_at: new Date().toISOString(),
@@ -356,6 +415,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
     setTimeout(() => setSaved(prev => ({ ...prev, [sessionId]: false })), 3000)
   }, [poolId, userId])
 
+  // Keep saveSessionRef in sync with latest saveSession
   useEffect(() => { saveSessionRef.current = saveSession }, [saveSession])
 
   if (loading) return <div style={{ color: '#aaa', fontSize: '12px', padding: 16 }}>loading sessions...</div>
@@ -471,6 +531,44 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                   </div>
                 )
               })}
+              {/* Auto-save message / saving indicator */}
+              {!locked && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, paddingTop: 8, borderTop: '1px solid #f0f0f0' }}>
+                  {saving === session.id
+                    ? <span style={{ fontSize: '11px', color: '#aaa' }}>saving...</span>
+                    : saved[session.id]
+                    ? <span style={{ fontSize: '11px', color: '#2d7a2d' }}>✓ saved</span>
+                    : <span style={{ fontSize: '11px', color: '#2d7a2d' }}>✓ predictions are automatically saved</span>
+                  }
+                </div>
+              )}
+
+              {/* Everyone's picks — shown after session is locked */}
+              {locked && Object.keys(members).length > 0 && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
+                  <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 8 }}>everyone's picks</div>
+                  {Object.entries(members).map(([memberId, name]) => {
+                    const picks = sessionRules.map(r => {
+                      if (r.category_id === 'f1_podium_order') {
+                        const p1 = memberPreds[`${memberId}:${session.id}:f1_podium_order_1`]?.value_text
+                        const p2 = memberPreds[`${memberId}:${session.id}:f1_podium_order_2`]?.value_text
+                        const p3 = memberPreds[`${memberId}:${session.id}:f1_podium_order_3`]?.value_text
+                        return p1 ? `${p1} / ${p2} / ${p3}` : null
+                      }
+                      const p = memberPreds[`${memberId}:${session.id}:${r.category_id}`]
+                      return p?.value_text || (p?.value_yesno != null ? (p.value_yesno ? 'yes' : 'no') : null)
+                    }).filter(Boolean)
+                    if (!picks.length) return null
+                    return (
+                      <div key={memberId} style={{ marginBottom: 6, fontSize: '11px' }}>
+                        <span style={{ fontWeight: 600, color: '#555' }}>{name}: </span>
+                        <span style={{ color: '#888' }}>{picks.join(' · ')}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
             </div>
           </div>
         )
