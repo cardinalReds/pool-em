@@ -312,6 +312,9 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
     if (!session) return
     const catIds = SESSION_CATEGORIES[session.session_type] || []
     const rows: any[] = []
+    console.log('savePreds:', sessionId, session.session_type, 'catIds:', catIds)
+    console.log('poolRules:', poolRules.map(r => r.category_id))
+    console.log('predsRef keys:', Object.keys(predsRef.current).filter(k => k.startsWith(String(sessionId))))
 
     for (const r of poolRules.filter(r => catIds.includes(r.category_id))) {
       if (r.category_id === 'f1_podium_order') {
