@@ -100,7 +100,10 @@ export default function InvitePanel({ poolId, poolName, inviteUrl, buyInAmount, 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid #eee', marginBottom: '12px' }}>
         <button style={tabStyle('link')} onClick={() => setTab('link')}>link</button>
-        <button style={tabStyle('sms')} onClick={() => setTab('sms')}>sms</button>
+        <button style={{...tabStyle('sms'), cursor: 'default', opacity: 0.4}} onClick={() => {}}>
+          sms
+          <span style={{ fontSize: '8px', fontWeight: 600, color: '#aaa', background: '#f0f0f0', padding: '1px 4px', marginLeft: 4, verticalAlign: 'middle' }}>soon</span>
+        </button>
         <button style={tabStyle('email')} onClick={() => setTab('email')}>email</button>
       </div>
 
