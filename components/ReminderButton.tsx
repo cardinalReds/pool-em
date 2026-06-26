@@ -100,12 +100,12 @@ export default function ReminderButton({ poolId, userId, userEmail }: {
           </div>
           <div style={{fontSize: '10px', color: '#aaa', marginBottom: '10px', wordBreak: 'break-all'}}>📧 {userEmail}</div>
 
-          {/* SMS opt-in — enabled once Twilio campaign approved */}
-          {false && (
+          {/* SMS opt-in — hidden until Twilio campaign approved, show for screenshot */}
+          {true && (
             <div style={{marginBottom: '10px'}}>
-              <label style={{display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '11px', color: '#555', marginBottom: '6px'}}>
-                <input type="checkbox" checked={smsOptIn} onChange={e => setSmsOptIn(e.target.checked)} />
-                also text me (optional)
+              <label style={{display: 'flex', alignItems: 'flex-start', gap: '6px', cursor: 'pointer', fontSize: '11px', color: '#555', marginBottom: '6px'}}>
+                <input type="checkbox" checked={smsOptIn} onChange={e => setSmsOptIn(e.target.checked)} style={{marginTop: '2px', flexShrink: 0}} />
+                <span>also text me (optional)</span>
               </label>
               {smsOptIn && (
                 <div>
@@ -114,13 +114,13 @@ export default function ReminderButton({ poolId, userId, userEmail }: {
                     value={phone}
                     onChange={e => setPhone(e.target.value)}
                     placeholder="+1 555 000 0000"
-                    style={{width: '100%', border: '1px solid #ddd', padding: '5px 8px', fontSize: '12px', fontFamily: 'inherit', boxSizing: 'border-box' as const, marginBottom: '4px'}}
+                    style={{width: '100%', border: '1px solid #ddd', padding: '5px 8px', fontSize: '12px', fontFamily: 'inherit', boxSizing: 'border-box' as const, marginBottom: '6px'}}
                   />
-                  <div style={{fontSize: '9px', color: '#aaa', lineHeight: 1.4}}>
-                    By checking this box you consent to receive SMS reminders from pool'em. Msg & data rates may apply. Reply STOP to opt out.
-                  </div>
                 </div>
               )}
+              <div style={{fontSize: '9px', color: '#aaa', lineHeight: 1.5}}>
+                By checking this box you consent to receive SMS match reminders from pool'em. Message frequency varies based on your pool activity. Msg & data rates may apply. Reply STOP to opt out, HELP for help. <a href="/terms" style={{color: '#aaa'}}>Terms</a> · <a href="/privacy" style={{color: '#aaa'}}>Privacy Policy</a>
+              </div>
             </div>
           )}
 
