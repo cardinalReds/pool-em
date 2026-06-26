@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       // Window: kickoff is between (hours_before - 0.5) and (hours_before + 0.5) hours away
       const { data: allReminders } = await supabase
         .from('reminders')
-        .select('id, user_id, email, hours_before, pool_id, sent_fixture_ids')
+        .select('id, user_id, email, phone, hours_before, pool_id, sent_fixture_ids')
 
       const matchingReminders = (allReminders || []).filter(r => {
         const target = r.hours_before * 60 // minutes
@@ -128,6 +128,27 @@ export async function POST(request: NextRequest) {
 
         if (res.ok) {
           sent++
+
+          // Also send SMS if user has opted in
+          if (reminder.phone) {
+            const accountSid = process.env.TWILIO_ACCOUNT_SID
+            const authToken = process.env.TWILIO_AUTH_TOKEN
+            const fromNumber = process.env.TWILIO_PHONE_NUMBER
+            if (accountSid && authToken && fromNumber) {
+              const smsBody = hasPicks
+                ? `pool'em: ${fixture.home_team} vs ${fixture.away_team} kicks off in ${hoursLabel}h. You've already submitted your picks! ${poolUrl}`
+                : `pool'em: ${fixture.home_team} vs ${fixture.away_team} kicks off in ${hoursLabel}h. You haven't picked yet — submit now: ${poolUrl} Reply STOP to opt out.`
+              await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({ From: fromNumber, To: reminder.phone, Body: smsBody }).toString(),
+              })
+            }
+          }
+
           // Mark this fixture as sent so we don't send again
           await supabase
             .from('reminders')
