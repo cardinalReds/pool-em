@@ -352,8 +352,11 @@ export default function RulesetBuilder({ sport, onComplete }: {
     const rule = rules[cat.id]
     if (!rule) return null
     const isExact = cat.id === 'soccer_exact_score' || cat.id === 'soccer_ht_exact_score'
+    const isPodiumOrder = cat.id === 'f1_podium_order'
     const isRound = ROUND_SPECIALS.includes(cat.id)
-    const description = DESCRIPTION_OVERRIDES[cat.id] || cat.description
+    const description = isPodiumOrder
+      ? 'Predict the exact finishing order for P1, P2 and P3.'
+      : (DESCRIPTION_OVERRIDES[cat.id] || cat.description)
 
     return (
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 0', borderBottom: '1px solid #f5f5f5' }}>
@@ -389,11 +392,12 @@ export default function RulesetBuilder({ sport, onComplete }: {
           {rule.enabled && (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
-                <span style={{ fontSize: '11px', color: '#555' }}>{isExact ? 'pts per team score:' : 'points:'}</span>
+                <span style={{ fontSize: '11px', color: '#555' }}>{isExact ? 'pts per team score:' : isPodiumOrder ? 'exact position:' : 'points:'}</span>
                 <input type="number" min="1" max="20" value={rule.points}
                   onChange={e => setPoints(cat.id, parseInt(e.target.value) || 1)}
                   style={{ width: 44, border: '1px solid #ddd', padding: '2px 6px', fontSize: '12px', fontWeight: 600, textAlign: 'center', fontFamily: 'inherit' }} />
-                {!isExact && <span style={{ fontSize: '11px', color: '#aaa' }}>per correct prediction</span>}
+                {!isExact && !isPodiumOrder && <span style={{ fontSize: '11px', color: '#aaa' }}>per correct prediction</span>}
+                {isPodiumOrder && <span style={{ fontSize: '11px', color: '#aaa' }}>pts</span>}
               </div>
               {isExact && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
@@ -404,9 +408,23 @@ export default function RulesetBuilder({ sport, onComplete }: {
                   <span style={{ fontSize: '11px', color: '#aaa' }}>bonus pts (both right)</span>
                 </div>
               )}
+              {isPodiumOrder && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
+                  <span style={{ fontSize: '11px', color: '#555' }}>on podium, wrong spot:</span>
+                  <input type="number" min="0" max="20" value={rule.bonus_points}
+                    onChange={e => setBonusPoints(cat.id, parseInt(e.target.value) || 0)}
+                    style={{ width: 44, border: '1px solid #ddd', padding: '2px 6px', fontSize: '12px', fontWeight: 600, textAlign: 'center', fontFamily: 'inherit' }} />
+                  <span style={{ fontSize: '11px', color: '#aaa' }}>pts</span>
+                </div>
+              )}
               {isExact && (
                 <div style={{ fontSize: '10px', color: '#aaa', marginTop: '4px', lineHeight: 1.5 }}>
                   e.g. 1 team right → <strong>{rule.points} pt</strong> · both right → <strong>{rule.points * 2 + rule.bonus_points} pts</strong> ({rule.points}+{rule.points}+{rule.bonus_points})
+                </div>
+              )}
+              {isPodiumOrder && (
+                <div style={{ fontSize: '10px', color: '#aaa', marginTop: '4px', lineHeight: 1.5 }}>
+                  e.g. P1 correct → <strong>{rule.points} pts</strong> · driver on podium wrong spot → <strong>{rule.bonus_points} pts</strong>
                 </div>
               )}
             </div>
