@@ -537,7 +537,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       </Section>
 
       {/* Delete */}
-      {isAdmin && new Date() < new Date('2026-06-11T19:00:00Z') && (
+      {isAdmin && (
         <Section title="danger zone" defaultOpen={false}>
           <DeletePool poolId={pool.id} />
         </Section>
