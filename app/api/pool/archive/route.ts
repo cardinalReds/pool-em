@@ -13,12 +13,27 @@ export async function POST(request: NextRequest) {
 
     const { data: pool } = await supabase
       .from('pools')
-      .select('admin_id')
+      .select('admin_id, tournament_id')
       .eq('id', poolId)
       .single()
 
     if (!pool || pool.admin_id !== userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
+    }
+
+    // Only allow archiving if the competition is over (no live or upcoming fixtures)
+    // Skip this check when unarchiving
+    if (archived !== false && pool.tournament_id) {
+      const { data: activeFixtures } = await supabase
+        .from('fixtures')
+        .select('id')
+        .eq('tournament_id', pool.tournament_id)
+        .in('status', ['NS', 'live', '1H', '2H', 'HT', 'ET', 'P'])
+        .limit(1)
+
+      if (activeFixtures && activeFixtures.length > 0) {
+        return NextResponse.json({ error: 'Competition is not over yet' }, { status: 400 })
+      }
     }
 
     await supabase
