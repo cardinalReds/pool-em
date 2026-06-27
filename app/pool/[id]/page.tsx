@@ -38,7 +38,6 @@ function DeletePool({ poolId }: { poolId: string }) {
 
   return (
     <div>
-      <div style={{fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '8px'}}>danger zone</div>
       {!confirming ? (
         <button onClick={() => setConfirming(true)}
           style={{fontSize: '12px', padding: '8px 10px', width: '100%', background: 'white', color: '#C8102E', border: '1px solid #C8102E', cursor: 'pointer', fontFamily: 'inherit'}}>
@@ -539,7 +538,10 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       {/* Delete */}
       {isAdmin && (
         <Section title="danger zone" defaultOpen={false}>
-          <DeletePool poolId={pool.id} />
+          <ArchivePool poolId={pool.id} userId={user.id} archived={!!pool.archived} />
+          <div style={{marginTop: 12}}>
+            <DeletePool poolId={pool.id} />
+          </div>
         </Section>
       )}
     </div>
