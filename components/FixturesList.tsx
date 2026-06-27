@@ -563,7 +563,12 @@ poolRules: PoolRule[]
               if (!existingPreds[bttsKey]?.value_yesno !== undefined) {
                 updateLocal(fixture.id, 'soccer_btts', { value_yesno: h > 0 && a > 0 })
               }
-              // Total goals O/U
+              // First team to score — only derivable when one team has 0 goals
+              const firstTeamKey = `${fixture.id}:soccer_first_team_score`
+              if (!existingPreds[firstTeamKey]?.value_wld && h !== a) {
+                if (a === 0) updateLocal(fixture.id, 'soccer_first_team_score', { value_wld: 'home' })
+                else if (h === 0) updateLocal(fixture.id, 'soccer_first_team_score', { value_wld: 'away' })
+              }
               const totalGoals = h + a
               const goalsKey = `${fixture.id}:soccer_total_goals_ou`
               const line = fixture.line_total_goals
