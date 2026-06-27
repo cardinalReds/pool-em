@@ -120,6 +120,39 @@ export async function POST() {
       actualStandings[row.group_name][String(row.position)] = row.team
     }
 
+    // ── Populate TBD knockout fixtures with actual team names ─────────────
+    // When group standings are locked, update fixtures that still have TBD team names
+    if (rows.length > 0) {
+      const { data: tbdFixtures } = await supabase
+        .from('fixtures')
+        .select('id, home_team, away_team')
+        .eq('tournament_id', 'wc_2026')
+        .or('home_team.ilike.TBD%,away_team.ilike.TBD%')
+
+      for (const fixture of tbdFixtures || []) {
+        const updates: Record<string, string> = {}
+
+        function resolveTeam(placeholder: string): string | null {
+          const m1 = placeholder.match(/TBD \(1([A-Z])\)/)
+          if (m1) return actualStandings[m1[1]]?.['1'] || null
+          const m2 = placeholder.match(/TBD \(2([A-Z])\)/)
+          if (m2) return actualStandings[m2[1]]?.['2'] || null
+          // TBD (3) — best 3rd place, can't resolve until all groups done
+          return null
+        }
+
+        const newHome = fixture.home_team.startsWith('TBD') ? resolveTeam(fixture.home_team) : null
+        const newAway = fixture.away_team.startsWith('TBD') ? resolveTeam(fixture.away_team) : null
+
+        if (newHome) updates.home_team = newHome
+        if (newAway) updates.away_team = newAway
+
+        if (Object.keys(updates).length > 0) {
+          await supabase.from('fixtures').update(updates).eq('id', fixture.id)
+        }
+      }
+    }
+
     // ── Load fixtures for knockout round results ─────────────────────────
     const { data: allFixtures } = await supabase
       .from('fixtures')

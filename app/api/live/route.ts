@@ -9,6 +9,54 @@ const supabase = createClient(
 const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io'
 
 // Map API-Football status codes to our status values
+async function populateTBDFixtures() {
+  // Load actual standings
+  const { data: rows } = await supabase
+    .from('actual_standings')
+    .select('group_name, position, team, advances')
+    .eq('tournament_id', 'wc_2026')
+
+  if (!rows?.length) return
+
+  // Build standings map
+  const standings: Record<string, Record<string, string>> = {}
+  for (const row of rows) {
+    if (!standings[row.group_name]) standings[row.group_name] = {}
+    standings[row.group_name][String(row.position)] = row.team
+  }
+
+  // Find TBD fixtures and resolve them
+  const { data: tbdFixtures } = await supabase
+    .from('fixtures')
+    .select('id, home_team, away_team')
+    .eq('tournament_id', 'wc_2026')
+    .or('home_team.ilike.TBD%,away_team.ilike.TBD%')
+
+  function resolve(placeholder: string): string | null {
+    const m1 = placeholder.match(/TBD \(1([A-L])\)/)
+    if (m1) return standings[m1[1]]?.['1'] || null
+    const m2 = placeholder.match(/TBD \(2([A-L])\)/)
+    if (m2) return standings[m2[1]]?.['2'] || null
+    // TBD (3) — best 3rd place — cannot resolve until all groups done
+    return null
+  }
+
+  for (const fixture of tbdFixtures || []) {
+    const updates: Record<string, string> = {}
+    if (fixture.home_team.startsWith('TBD')) {
+      const resolved = resolve(fixture.home_team)
+      if (resolved) updates.home_team = resolved
+    }
+    if (fixture.away_team.startsWith('TBD')) {
+      const resolved = resolve(fixture.away_team)
+      if (resolved) updates.away_team = resolved
+    }
+    if (Object.keys(updates).length > 0) {
+      await supabase.from('fixtures').update(updates).eq('id', fixture.id)
+    }
+  }
+}
+
 function normalizeStatus(apiStatus: string): string {
   const live = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'INT', 'LIVE']
   const finished = ['FT', 'AET', 'PEN']
@@ -276,7 +324,7 @@ export async function GET(request: Request) {
         // Find our fixture by api_fixture_id
         const { data: ourFixture } = await supabase
           .from('fixtures')
-          .select('id, home_team, away_team, home_score, away_score, first_scorer_name, status')
+          .select('id, home_team, away_team, home_score, away_score, first_scorer_name, status, round')
           .eq('api_fixture_id', apiId)
           .single()
 
@@ -334,6 +382,11 @@ export async function GET(request: Request) {
         if (scoreChanged || (status === 'FT' && ourFixture.status !== 'FT')) {
           await triggerScoring(ourFixture.id)
           updated++
+        }
+
+        // When a group game finishes, populate TBD knockout fixtures from actual_standings
+        if (status === 'FT' && ourFixture.status !== 'FT' && !['Round of 32','Round of 16','Quarter-finals','Semi-finals','Final'].includes(ourFixture.round || '')) {
+          await populateTBDFixtures()
         }
       }
 

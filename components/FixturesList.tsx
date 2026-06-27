@@ -1192,7 +1192,16 @@ export default function FixturesList({
     const locked = isLocked(fixture)
     const finished = fixture.status === 'FT'
     const isLive = fixture.status === 'live'
-    const perGameRules = poolRules.filter(r => r.prediction_type === 'per_game')
+    const perGameRules = poolRules
+      .filter(r => r.prediction_type === 'per_game')
+      .slice()
+      .sort((a, b) => {
+        if (isKnockoutRound(fixture.round)) {
+          if (a.category_id === 'soccer_team_to_advance') return -1
+          if (b.category_id === 'soccer_team_to_advance') return 1
+        }
+        return 0
+      })
     const hasAnyPick = perGameRules.some(r => {
       const p = preds[`${fixture.id}:${r.category_id}`]
       return p?.value_wld || p?.value_ou || p?.value_text || p?.value_yesno !== null
