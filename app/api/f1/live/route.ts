@@ -32,14 +32,14 @@ async function fetchSessionStatus(competitionId: number, season: number): Promis
 }
 
 async function triggerScoring() {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL
-  await fetch(`${appUrl}/api/f1/score`, {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.pool-em.com'
+  await fetch(`${appUrl}/api/score-f1`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${process.env.CRON_SECRET}`,
     },
-  })
+  }).catch(() => {})
 }
 
 export async function GET(request: Request) {
@@ -55,7 +55,7 @@ export async function GET(request: Request) {
     // hours — i.e. an active or just-finished race weekend. Skip the API
     // call entirely outside that window.
     const now = new Date()
-    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
     const sixHoursFromNow = new Date(now.getTime() + 6 * 60 * 60 * 1000)
 
     const { data: candidateSessions } = await supabase
@@ -63,7 +63,8 @@ export async function GET(request: Request) {
       .select('id, competition_id, competition_name, season, session_type, status')
       .eq('tournament_id', TOURNAMENT_ID)
       .neq('status', 'Completed')
-      .gte('date', threeDaysAgo.toISOString())
+      .neq('status', 'Cancelled')
+      .gte('date', sevenDaysAgo.toISOString())
       .lte('date', sixHoursFromNow.toISOString())
 
     if (!candidateSessions?.length) {

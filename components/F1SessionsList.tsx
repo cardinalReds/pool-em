@@ -548,8 +548,28 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                     </div>
 
                     {rule.category_id === 'f1_podium_order' ? (
-                      <PodiumOrderPicker p1={p1} p2={p2} p3={p3} disabled={locked}
-                        onChange={(pos, driver) => updatePred(session.id, `f1_podium_order_${pos}`, { value_text: driver })} />
+                      <div>
+                        <div style={{ display: 'flex', gap: 4, marginBottom: 4 }}>
+                          {['🥇 P1', '🥈 P2', '🥉 P3'].map(label => (
+                            <div key={label} style={{ flex: 1, fontSize: '10px', color: '#888', textAlign: 'center' as const }}>{label}</div>
+                          ))}
+                        </div>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {([1, 2, 3] as const).map(pos => (
+                            <div key={pos} style={{ flex: 1 }}>
+                              <DriverDropdown
+                                value={preds[`${session.id}:f1_podium_order_${pos}`]?.value_text || ''}
+                                disabled={locked}
+                                exclude={([1,2,3] as const).filter(p => p !== pos).map(p => preds[`${session.id}:f1_podium_order_${p}`]?.value_text).filter(Boolean) as string[]}
+                                onChange={v => updatePred(session.id, `f1_podium_order_${pos}`, { value_text: v })}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#aaa', marginTop: 4 }}>
+                          {rule.points} pts exact · {rule.bonus_points || 2} pts correct driver wrong spot
+                        </div>
+                      </div>
                     ) : rule.input_type === 'player' ? (
                       <DriverDropdown value={pred?.value_text || ''} disabled={locked}
                         onChange={v => updatePred(session.id, rule.category_id, { value_text: v })} />

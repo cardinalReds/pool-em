@@ -124,7 +124,20 @@ function scoreF1Prediction(categoryId: string, pred: any, results: DriverResult[
       return 0
     }
 
-    case 'f1_sprint_winner': {
+    case 'f1_podium_order_1':
+    case 'f1_podium_order_2':
+    case 'f1_podium_order_3': {
+      const pos = parseInt(categoryId.slice(-1)) // 1, 2, or 3
+      const actualAtPos = finishers[pos - 1]?.driver_name
+      const pick = pred.value_text
+      if (!pick || !actualAtPos) return 0
+      if (driverMatches(pick, actualAtPos)) return rule.points // exact position
+      // Partial credit: correct driver but wrong position
+      const onPodium = podium.some(name => driverMatches(pick, name))
+      return onPodium ? (rule.bonus_points || 0) : 0
+    }
+
+
       const sprintWinner = finishers[0]?.driver_name
       return driverMatches(pred.value_text, sprintWinner) ? rule.points : 0
     }
