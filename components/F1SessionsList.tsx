@@ -585,29 +585,82 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                 </div>
               )}
 
-              {/* Everyone's picks — shown after session is locked */}
+              {/* Everyone's picks — table layout matching soccer */}
               {locked && Object.keys(members).length > 0 && (
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f0f0f0' }}>
                   <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 8 }}>everyone's picks</div>
-                  {Object.entries(members).map(([memberId, name]) => {
-                    const picks = sessionRules.map(r => {
-                      if (r.category_id === 'f1_podium_order') {
-                        const p1 = memberPreds[`${memberId}:${session.id}:f1_podium_order_1`]?.value_text
-                        const p2 = memberPreds[`${memberId}:${session.id}:f1_podium_order_2`]?.value_text
-                        const p3 = memberPreds[`${memberId}:${session.id}:f1_podium_order_3`]?.value_text
-                        return p1 ? `${p1} / ${p2} / ${p3}` : null
-                      }
-                      const p = memberPreds[`${memberId}:${session.id}:${r.category_id}`]
-                      return p?.value_text || (p?.value_yesno != null ? (p.value_yesno ? 'yes' : 'no') : null)
-                    }).filter(Boolean)
-                    if (!picks.length) return null
-                    return (
-                      <div key={memberId} style={{ marginBottom: 6, fontSize: '11px' }}>
-                        <span style={{ fontWeight: 600, color: '#555' }}>{name}: </span>
-                        <span style={{ color: '#888' }}>{picks.join(' · ')}</span>
-                      </div>
-                    )
-                  })}
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                      <thead>
+                        <tr>
+                          <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const }}></td>
+                          {sessionRules.map(r => (
+                            <td key={r.category_id} style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const, textAlign: 'center' as const }}>
+                              {r.name}
+                            </td>
+                          ))}
+                          <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>pts</td>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(members)
+                          .filter(([memberId]) =>
+                            sessionRules.some(r => {
+                              const key = r.category_id === 'f1_podium_order'
+                                ? `${memberId}:${session.id}:f1_podium_order_1`
+                                : `${memberId}:${session.id}:${r.category_id}`
+                              const p = memberPreds[key]
+                              return p?.value_text || p?.value_yesno != null
+                            })
+                          )
+                          .map(([memberId, name]) => {
+                            const totalPts = sessionRules.reduce((sum, r) => {
+                              const key = r.category_id === 'f1_podium_order'
+                                ? `${memberId}:${session.id}:f1_podium_order_1`
+                                : `${memberId}:${session.id}:${r.category_id}`
+                              return sum + (memberPreds[key]?.points_earned ?? 0)
+                            }, 0)
+                            return { memberId, name, totalPts }
+                          })
+                          .sort((a, b) => b.totalPts - a.totalPts)
+                          .map(({ memberId, name, totalPts }) => {
+                            const isMe = memberId === userId
+                            return (
+                              <tr key={memberId} style={{ background: isMe ? '#fff5f5' : 'transparent' }}>
+                                <td style={{ padding: '4px 6px', fontWeight: isMe ? 700 : 400, color: isMe ? '#C8102E' : '#555', whiteSpace: 'nowrap' as const, borderTop: '1px solid #f5f5f5' }}>
+                                  {name}{isMe ? ' (you)' : ''}
+                                </td>
+                                {sessionRules.map(r => {
+                                  let display: string = '—'
+                                  let correct: boolean | null = null
+                                  if (r.category_id === 'f1_podium_order') {
+                                    const p1 = memberPreds[`${memberId}:${session.id}:f1_podium_order_1`]?.value_text
+                                    const p2 = memberPreds[`${memberId}:${session.id}:f1_podium_order_2`]?.value_text
+                                    const p3 = memberPreds[`${memberId}:${session.id}:f1_podium_order_3`]?.value_text
+                                    if (p1) display = `${p1} / ${p2} / ${p3}`
+                                  } else {
+                                    const p = memberPreds[`${memberId}:${session.id}:${r.category_id}`]
+                                    if (p?.value_text) display = p.value_text
+                                    else if (p?.value_yesno != null) display = p.value_yesno ? 'yes' : 'no'
+                                    correct = p?.is_correct ?? null
+                                  }
+                                  return (
+                                    <td key={r.category_id} style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', color: correct === true ? '#2d7a2d' : correct === false ? '#aaa' : '#555', whiteSpace: 'nowrap' as const }}>
+                                      {display === '—' ? <span style={{ color: '#ddd' }}>—</span> : display}
+                                      {correct === true && ' ✓'}
+                                      {correct === false && ' ✗'}
+                                    </td>
+                                  )
+                                })}
+                                <td style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', fontWeight: 600, color: totalPts > 0 ? '#C8102E' : '#aaa' }}>
+                                  {totalPts > 0 ? totalPts : '—'}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 
