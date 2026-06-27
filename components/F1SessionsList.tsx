@@ -677,7 +677,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                                   )
                                 })}
                                 <td style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', fontWeight: 600, color: totalPts > 0 ? '#C8102E' : '#aaa' }}>
-                                  {totalPts > 0 ? totalPts : '—'}
+                                  {totalPts}
                                 </td>
                               </tr>
                             )
