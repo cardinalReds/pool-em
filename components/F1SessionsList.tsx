@@ -423,7 +423,14 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
 
   if (loading) return <div style={{ color: '#aaa', fontSize: '12px', padding: 16 }}>loading sessions...</div>
 
-  // Group by GP, filter to only GPs with scoreable sessions
+  // Group ALL sessions by GP for lock time calculation
+  const allGpMap: Record<string, F1Session[]> = {}
+  for (const s of sessions) {
+    if (!allGpMap[s.competition_name]) allGpMap[s.competition_name] = []
+    allGpMap[s.competition_name].push(s)
+  }
+
+  // Group only scoreable sessions by GP for display
   const gpMap: Record<string, F1Session[]> = {}
   for (const s of sessions) {
     const hasCats = (SESSION_CATEGORIES[s.session_type] || []).some(c =>
@@ -470,7 +477,8 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
 
       {/* Lock deadline banner */}
       {(() => {
-        const firstSession = sorted[0]
+        const allForGP = allGpMap[currentGP] || gpSessions
+        const firstSession = allForGP.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]
         const lockTime = new Date(firstSession.date)
         const isWeekendLocked = deadlineType === 'before_weekend' && lockTime <= new Date()
         const locksSoon = !isWeekendLocked && lockTime.getTime() - Date.now() < 24 * 60 * 60 * 1000
@@ -494,7 +502,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
         const catIds = SESSION_CATEGORIES[session.session_type] || []
         const sessionRules = poolRules.filter(r => catIds.includes(r.category_id))
         if (sessionRules.length === 0) return null
-        const locked = isLocked(session, deadlineType, gpSessions)
+        const locked = isLocked(session, deadlineType, allGpMap[currentGP] || gpSessions)
 
         return (
           <div key={session.id} style={{ marginBottom: 12, border: '1px solid #e0e0db', background: 'white' }}>
