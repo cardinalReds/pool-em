@@ -694,6 +694,47 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                             )
                           })}
                       </tbody>
+                      {/* Actual results row */}
+                      {session.results && Array.isArray(session.results) && session.results.length > 0 && (() => {
+                        const results: any[] = session.results
+                        const finishers = results.filter((r: any) => r.time !== 'DNF').sort((a: any, b: any) => a.position - b.position)
+                        const dnfs = [...results.filter((r: any) => r.time === 'DNF')].sort((a: any, b: any) => a.laps - b.laps)
+                        const winner = finishers[0]?.driver_name
+                        const poleSitter = results.find((r: any) => r.grid === '1')?.driver_name
+                        const firstRetirement = dnfs[0]?.driver_name
+                        const fastestLap = results.find((r: any) => r.fastest_lap)?.driver_name
+
+                        return (
+                          <tfoot>
+                            <tr>
+                              <td style={{ padding: '6px 6px 2px', fontSize: '10px', fontWeight: 700, color: '#2d7a2d', borderTop: '2px solid #eee', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>actual</td>
+                              {sessionRules.flatMap(r => {
+                                if (r.category_id === 'f1_podium_order') {
+                                  return ([1, 2, 3] as const).map(pos => (
+                                    <td key={`actual_p${pos}`} style={{ padding: '6px 6px 2px', textAlign: 'center' as const, borderTop: '2px solid #eee', fontSize: '11px', fontWeight: 600, color: '#2d7a2d', whiteSpace: 'nowrap' as const }}>
+                                      {finishers[pos - 1]?.driver_name || '—'}
+                                    </td>
+                                  ))
+                                }
+                                let actual = '—'
+                                if (r.category_id === 'f1_race_winner') actual = winner || '—'
+                                else if (r.category_id === 'f1_pole_position') actual = poleSitter || '—'
+                                else if (r.category_id === 'f1_first_retirement') actual = firstRetirement || '—'
+                                else if (r.category_id === 'f1_fastest_lap') actual = fastestLap || '—'
+                                else if (r.category_id === 'f1_podium') actual = finishers.slice(0,3).map((f:any) => f.driver_name).join(', ') || '—'
+                                else if (r.category_id === 'f1_sprint_winner') actual = winner || '—'
+                                else if (r.category_id === 'f1_pole_to_win') actual = (poleSitter && winner) ? (poleSitter === winner ? 'yes' : 'no') : '—'
+                                return [
+                                  <td key={`actual_${r.category_id}`} style={{ padding: '6px 6px 2px', textAlign: 'center' as const, borderTop: '2px solid #eee', fontSize: '11px', fontWeight: 600, color: '#2d7a2d', whiteSpace: 'nowrap' as const }}>
+                                    {actual}
+                                  </td>
+                                ]
+                              })}
+                              <td style={{ borderTop: '2px solid #eee' }} />
+                            </tr>
+                          </tfoot>
+                        )
+                      })()}
                     </table>
                   </div>
                 </div>
