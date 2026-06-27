@@ -618,11 +618,14 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                       <thead>
                         <tr>
                           <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const }}></td>
-                          {sessionRules.map(r => (
-                            <td key={r.category_id} style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const, textAlign: 'center' as const }}>
-                              {r.name}
-                            </td>
-                          ))}
+                          {sessionRules.flatMap(r => r.category_id === 'f1_podium_order'
+                            ? [
+                                <td key="p1" style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>🥇 P1</td>,
+                                <td key="p2" style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>🥈 P2</td>,
+                                <td key="p3" style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>🥉 P3</td>,
+                              ]
+                            : [<td key={r.category_id} style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const, textAlign: 'center' as const }}>{r.name}</td>]
+                          )}
                           <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>pts</td>
                         </tr>
                       </thead>
@@ -639,10 +642,12 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                           )
                           .map(([memberId, name]) => {
                             const totalPts = sessionRules.reduce((sum, r) => {
-                              const key = r.category_id === 'f1_podium_order'
-                                ? `${memberId}:${session.id}:f1_podium_order_1`
-                                : `${memberId}:${session.id}:${r.category_id}`
-                              return sum + (memberPreds[key]?.points_earned ?? 0)
+                              if (r.category_id === 'f1_podium_order') {
+                                return sum + ([1,2,3] as const).reduce((s, pos) => {
+                                  return s + (memberPreds[`${memberId}:${session.id}:f1_podium_order_${pos}`]?.points_earned ?? 0)
+                                }, 0)
+                              }
+                              return sum + (memberPreds[`${memberId}:${session.id}:${r.category_id}`]?.points_earned ?? 0)
                             }, 0)
                             return { memberId, name, totalPts }
                           })
@@ -654,27 +659,33 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                                 <td style={{ padding: '4px 6px', fontWeight: isMe ? 700 : 400, color: isMe ? '#C8102E' : '#555', whiteSpace: 'nowrap' as const, borderTop: '1px solid #f5f5f5' }}>
                                   {name}{isMe ? ' (you)' : ''}
                                 </td>
-                                {sessionRules.map(r => {
+                                {sessionRules.flatMap(r => {
+                                  if (r.category_id === 'f1_podium_order') {
+                                    return ([1, 2, 3] as const).map(pos => {
+                                      const p = memberPreds[`${memberId}:${session.id}:f1_podium_order_${pos}`]
+                                      const correct = p?.is_correct ?? null
+                                      return (
+                                        <td key={`podium_${pos}`} style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', color: correct === true ? '#2d7a2d' : correct === false ? '#aaa' : '#555', whiteSpace: 'nowrap' as const }}>
+                                          {p?.value_text || <span style={{ color: '#ddd' }}>—</span>}
+                                          {correct === true && ' ✓'}
+                                          {correct === false && ' ✗'}
+                                        </td>
+                                      )
+                                    })
+                                  }
+                                  const p = memberPreds[`${memberId}:${session.id}:${r.category_id}`]
                                   let display: string = '—'
                                   let correct: boolean | null = null
-                                  if (r.category_id === 'f1_podium_order') {
-                                    const p1 = memberPreds[`${memberId}:${session.id}:f1_podium_order_1`]?.value_text
-                                    const p2 = memberPreds[`${memberId}:${session.id}:f1_podium_order_2`]?.value_text
-                                    const p3 = memberPreds[`${memberId}:${session.id}:f1_podium_order_3`]?.value_text
-                                    if (p1) display = [p1, p2, p3].filter(Boolean).join(' / ')
-                                  } else {
-                                    const p = memberPreds[`${memberId}:${session.id}:${r.category_id}`]
-                                    if (p?.value_text) display = p.value_text
-                                    else if (p?.value_yesno != null) display = p.value_yesno ? 'yes' : 'no'
-                                    correct = p?.is_correct ?? null
-                                  }
-                                  return (
+                                  if (p?.value_text) display = p.value_text
+                                  else if (p?.value_yesno != null) display = p.value_yesno ? 'yes' : 'no'
+                                  correct = p?.is_correct ?? null
+                                  return [
                                     <td key={r.category_id} style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', color: correct === true ? '#2d7a2d' : correct === false ? '#aaa' : '#555', whiteSpace: 'nowrap' as const }}>
                                       {display === '—' ? <span style={{ color: '#ddd' }}>—</span> : display}
                                       {correct === true && ' ✓'}
                                       {correct === false && ' ✗'}
                                     </td>
-                                  )
+                                  ]
                                 })}
                                 <td style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', fontWeight: 600, color: totalPts > 0 ? '#C8102E' : '#aaa' }}>
                                   {totalPts}
