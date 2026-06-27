@@ -157,7 +157,7 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
         <div style={{ padding: '6px 10px', background: '#fff5f5', border: '1px solid #f0d0d0', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ color: '#C8102E', fontWeight: 600 }}>{value}</span>
           {!disabled && (
-            <button type="button" onClick={() => select('')}
+            <button type="button" onMouseDown={e => { e.preventDefault(); select('') }}
               style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', fontSize: '16px', padding: '0 4px' }}>×</button>
           )}
         </div>
@@ -169,7 +169,7 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
             <div key={team} style={{ flex: 1 }}>
               <button
                 type="button"
-                onClick={() => toggle(team)}
+                onMouseDown={e => { e.preventDefault(); toggle(team) }}
                 style={{
                   width: '100%', padding: '8px 6px', border: '1px solid',
                   borderColor: openTeam === team ? '#C8102E' : '#ddd',
@@ -351,6 +351,11 @@ setScoreInputs: React.Dispatch<React.SetStateAction<Record<string, string>>>
   }
 
   // ── Soccer categories ────────────────────────────────────────────────────
+  // Hide soccer_result in knockout rounds and soccer_team_to_advance in group stage
+  const isKnockout = isKnockoutRound(fixture.round)
+  if (rule.category_id === 'soccer_result' && isKnockout) return null
+  if (rule.category_id === 'soccer_team_to_advance' && !isKnockout) return null
+
   return (
     <div style={{ marginBottom: 8 }}>
       <div style={{ fontSize: '10px', color: '#888', marginBottom: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
