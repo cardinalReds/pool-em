@@ -21,6 +21,39 @@ function getSessionFromCookie() {
   } catch { return null }
 }
 
+function ArchivePool({ poolId, userId, archived }: { poolId: string; userId: string; archived: boolean }) {
+  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [errorMsg, setErrorMsg] = useState('')
+
+  async function handle() {
+    setStatus('loading')
+    const res = await fetch('/api/pool/archive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ poolId, userId, archived: !archived }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setErrorMsg(data.error || 'Failed')
+      setStatus('error')
+      setTimeout(() => setStatus('idle'), 3000)
+    } else {
+      setStatus('done')
+      setTimeout(() => window.location.href = '/dashboard', 1000)
+    }
+  }
+
+  return (
+    <div>
+      <button onClick={handle} disabled={status === 'loading'}
+        style={{fontSize: '12px', padding: '8px 10px', width: '100%', background: 'white', color: '#888', border: '1px solid #ddd', cursor: status === 'loading' ? 'default' : 'pointer', fontFamily: 'inherit'}}>
+        {status === 'loading' ? 'archiving...' : status === 'done' ? '✓ archived' : archived ? 'unarchive pool' : 'archive pool'}
+      </button>
+      {status === 'error' && <div style={{fontSize: '11px', color: '#C8102E', marginTop: 4}}>{errorMsg}</div>}
+    </div>
+  )
+}
+
 function DeletePool({ poolId }: { poolId: string }) {
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
