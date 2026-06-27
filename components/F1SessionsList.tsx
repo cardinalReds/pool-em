@@ -300,35 +300,35 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
       const predMap: Record<string, any> = {}
       for (const p of myPredsRes.data || []) predMap[`${p.fixture_id}:${p.category_id}`] = p
       
-      // Merge localStorage backup
+      // Merge localStorage backup — push any picks not yet in DB
       try {
         const lsKey = `f1_preds_${poolId}_${userId}`
         const lsRaw = localStorage.getItem(lsKey)
         if (lsRaw) {
           const lsPreds: Record<string, any> = JSON.parse(lsRaw)
-          const rowsToUpsert: any[] = []
+          // Snapshot DB keys BEFORE mutating predMap
+          const dbKeys = new Set(Object.keys(predMap))
+          const rowsToInsert: any[] = []
           Object.entries(lsPreds).forEach(([key, lsPred]: [string, any]) => {
-            const dbPred = predMap[key]
-            const dbHasValue = dbPred && (dbPred.value_wld || dbPred.value_text || dbPred.value_yesno !== null)
-            if (!dbHasValue && lsPred?.value_text) {
-              predMap[key] = lsPred
-              // fixture_id may be in the value or extractable from the key (format: sessionId:categoryId)
-              const fixtureId = lsPred.fixture_id ?? parseInt(key.split(':')[0])
-              const categoryId = lsPred.category_id ?? key.split(':').slice(1).join(':')
-              if (!fixtureId || !categoryId) return
-              rowsToUpsert.push({
-                pool_id: poolId, user_id: userId,
-                fixture_id: fixtureId, category_id: categoryId,
-                value_text: lsPred.value_text ?? null, value_wld: null, value_yesno: null,
-                value_number: null, value_ou: null, submitted_at: new Date().toISOString(),
-              })
-            }
+            if (!lsPred?.value_text) return
+            if (dbKeys.has(key)) return // already in DB
+            predMap[key] = lsPred
+            const fixtureId = lsPred.fixture_id ?? parseInt(key.split(':')[0])
+            const categoryId = lsPred.category_id ?? key.split(':').slice(1).join(':')
+            if (!fixtureId || isNaN(fixtureId) || !categoryId) return
+            rowsToInsert.push({
+              pool_id: poolId, user_id: userId,
+              fixture_id: fixtureId, category_id: categoryId,
+              value_text: lsPred.value_text, value_wld: null, value_yesno: null,
+              value_number: null, value_ou: null, submitted_at: new Date().toISOString(),
+            })
           })
-          if (rowsToUpsert.length > 0) {
-            await supabase.from('predictions_v2').upsert(rowsToUpsert, { onConflict: 'pool_id,user_id,fixture_id,category_id' })
+          if (rowsToInsert.length > 0) {
+            const { error } = await supabase.from('predictions_v2').insert(rowsToInsert)
+            if (error) console.error('localStorage merge error:', error.message)
           }
         }
-      } catch {}
+      } catch (e) { console.error('localStorage merge error:', e) }
 
       setPreds(predMap)
 
