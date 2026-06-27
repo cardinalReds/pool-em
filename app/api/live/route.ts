@@ -9,6 +9,35 @@ const supabase = createClient(
 const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io'
 
 // Map API-Football status codes to our status values
+async function syncKnockoutFixtures() {
+  const KNOCKOUT_ROUNDS = ['Round of 32', 'Round of 16', 'Quarter-finals', 'Semi-finals', 'Final']
+  for (const round of KNOCKOUT_ROUNDS) {
+    const res = await fetch(
+      `https://v3.football.api-sports.io/fixtures?league=1&season=2026&round=${encodeURIComponent(round)}`,
+      { headers: { 'x-apisports-key': process.env.API_FOOTBALL_KEY! } }
+    )
+    if (!res.ok) continue
+    const data = await res.json()
+    for (const f of data.response || []) {
+      const homeTeam = f.teams?.home?.name
+      const awayTeam = f.teams?.away?.name
+      if (!homeTeam || !awayTeam) continue
+      const { data: existing } = await supabase
+        .from('fixtures')
+        .select('id, home_team, away_team')
+        .eq('api_fixture_id', f.fixture.id)
+        .maybeSingle()
+      if (!existing) continue
+      const updates: Record<string, string> = {}
+      if (existing.home_team !== homeTeam) updates.home_team = homeTeam
+      if (existing.away_team !== awayTeam) updates.away_team = awayTeam
+      if (Object.keys(updates).length > 0) {
+        await supabase.from('fixtures').update(updates).eq('id', existing.id)
+      }
+    }
+  }
+}
+
 async function populateTBDFixtures() {
   // Load actual standings
   const { data: rows } = await supabase
@@ -384,8 +413,9 @@ export async function GET(request: Request) {
           updated++
         }
 
-        // When a group game finishes, populate TBD knockout fixtures from actual_standings
-        if (status === 'FT' && ourFixture.status !== 'FT' && !['Round of 32','Round of 16','Quarter-finals','Semi-finals','Final'].includes(ourFixture.round || '')) {
+        // When a game finishes, sync knockout fixture team names from API
+        if (status === 'FT' && ourFixture.status !== 'FT') {
+          await syncKnockoutFixtures()
           await populateTBDFixtures()
         }
       }
