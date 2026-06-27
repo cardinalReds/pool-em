@@ -182,6 +182,13 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
       const { data: pool } = await supabase.from('pools').select('*').eq('id', params.id).single()
       if (!pool) { setNotFound(true); setLoading(false); return }
+      
+      // Fetch tournament end_date to know if competition is over
+      if (pool.tournament_id) {
+        const { data: tournament } = await supabase.from('tournaments').select('end_date').eq('id', pool.tournament_id).maybeSingle()
+        if (tournament?.end_date) pool.tournament_end_date = tournament.end_date
+      }
+      
       setPool(pool)
       setInviteUrl(`${window.location.origin}/pool/join/${pool.invite_code}`)
 
@@ -571,7 +578,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       {/* Delete */}
       {isAdmin && (
         <Section title="danger zone" defaultOpen={false}>
-          <ArchivePool poolId={pool.id} userId={user.id} archived={!!pool.archived} />
+          {pool.tournament_end_date && new Date(pool.tournament_end_date) <= new Date() && (
+            <ArchivePool poolId={pool.id} userId={user.id} archived={!!pool.archived} />
+          )}
           <div style={{marginTop: 12}}>
             <DeletePool poolId={pool.id} />
           </div>
@@ -657,9 +666,11 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                   : <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />
               )}
           </div>
-          <div style={{display: mobilePanel === 'chat' ? 'block' : 'none', height: 'calc(100vh - 41px)'}}>
-            {user && <ShitChat poolId={pool.id} userId={user.id} displayName={user.user_metadata?.display_name || user.email?.split('@')[0] || 'anon'} />}
-          </div>
+          {mobilePanel === 'chat' && user && (
+            <div style={{height: 'calc(100vh - 41px)'}}>
+              <ShitChat poolId={pool.id} userId={user.id} displayName={user.user_metadata?.display_name || user.email?.split('@')[0] || 'anon'} />
+            </div>
+          )}
         </div>
       ) : (
         // ── Desktop layout — 3 columns ───────────────────────────────────

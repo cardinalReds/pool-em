@@ -603,13 +603,33 @@ setScoreInputs: React.Dispatch<React.SetStateAction<Record<string, string>>>
 
       {/* Player dropdown */}
       {rule.input_type === 'player' && (
-        <PlayerDropdown
-          value={pred?.value_text || ''}
-          disabled={locked || finished}
-          homeTeam={fixture.home_team}
-          awayTeam={fixture.away_team}
-          onChange={v => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: v })}
-        />
+        <>
+          {(rule.category_id === 'soccer_first_goalscorer' || rule.category_id === 'soccer_anytime_goalscorer') && (
+            <div style={{ marginBottom: 4 }}>
+              <button type="button"
+                disabled={locked || finished}
+                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: '', value_wld: pred?.value_wld === 'none' ? null : 'none' })}
+                style={{
+                  width: '100%', padding: '7px', border: '1px solid',
+                  borderColor: pred?.value_wld === 'none' ? '#C8102E' : '#ddd',
+                  background: pred?.value_wld === 'none' ? '#C8102E' : locked || finished ? '#fafafa' : 'white',
+                  color: pred?.value_wld === 'none' ? 'white' : '#555',
+                  fontSize: '12px', fontFamily: 'inherit', cursor: locked || finished ? 'default' : 'pointer',
+                }}>
+                no goal
+              </button>
+            </div>
+          )}
+          {pred?.value_wld !== 'none' && (
+            <PlayerDropdown
+              value={pred?.value_text || ''}
+              disabled={locked || finished}
+              homeTeam={fixture.home_team}
+              awayTeam={fixture.away_team}
+              onChange={v => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_text: v, value_wld: null })}
+            />
+          )}
+        </>
       )}
 
       {/* Team text */}
@@ -1329,9 +1349,15 @@ export default function FixturesList({
                     <thead>
                       <tr>
                         <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const }}></td>
-                        {perGameRules.map(rule => (
+                        {perGameRules
+                          .filter(rule => {
+                            if (rule.category_id === 'soccer_result' && isKnockoutRound(fixture.round)) return false
+                            if (rule.category_id === 'soccer_team_to_advance' && !isKnockoutRound(fixture.round)) return false
+                            return true
+                          })
+                          .map(rule => (
                           <td key={rule.category_id} style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const, textAlign: 'center' as const }}>
-                            {rule.name}
+                            {rule.category_id === 'soccer_exact_score' && isKnockoutRound(fixture.round) ? 'score AET' : rule.name}
                           </td>
                         ))}
                         {(finished || isLive) && <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>pts</td>}
@@ -1360,7 +1386,13 @@ export default function FixturesList({
                             <td style={{ padding: '4px 6px', fontWeight: isMe ? 700 : 400, color: isMe ? '#C8102E' : '#555', whiteSpace: 'nowrap' as const, borderTop: '1px solid #f5f5f5' }}>
                               {displayName}{isMe ? ' (you)' : ''}
                             </td>
-                            {perGameRules.map(rule => {
+                            {perGameRules
+                              .filter(rule => {
+                                if (rule.category_id === 'soccer_result' && isKnockoutRound(fixture.round)) return false
+                                if (rule.category_id === 'soccer_team_to_advance' && !isKnockoutRound(fixture.round)) return false
+                                return true
+                              })
+                              .map(rule => {
                               const p = memberPreds[`${memberId}:${String(fixture.id)}:${rule.category_id}`]
                               const isCorrect = p?.is_correct
                               const isExact = rule.category_id === 'soccer_exact_score' || rule.category_id === 'soccer_ht_exact_score'
