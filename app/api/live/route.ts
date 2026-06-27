@@ -21,16 +21,42 @@ async function syncKnockoutFixtures() {
     for (const f of data.response || []) {
       const homeTeam = f.teams?.home?.name
       const awayTeam = f.teams?.away?.name
-      if (!homeTeam || !awayTeam) continue
-      const { data: existing } = await supabase
-        .from('fixtures')
-        .select('id, home_team, away_team')
-        .eq('api_fixture_id', f.fixture.id)
-        .maybeSingle()
+      const apiDate = f.fixture?.date
+      const apiId = f.fixture?.id
+      if (!homeTeam || !awayTeam || !apiDate) continue
+
+      // Try matching by api_fixture_id first, then by date
+      let existing: any = null
+      if (apiId) {
+        const { data: byId } = await supabase
+          .from('fixtures')
+          .select('id, home_team, away_team, api_fixture_id')
+          .eq('api_fixture_id', apiId)
+          .maybeSingle()
+        existing = byId
+      }
+      if (!existing) {
+        // Match by date (within 1 hour) and round
+        const apiDateObj = new Date(apiDate)
+        const { data: byDate } = await supabase
+          .from('fixtures')
+          .select('id, home_team, away_team, api_fixture_id')
+          .eq('tournament_id', 'wc_2026')
+          .eq('round', round)
+          .gte('date', new Date(apiDateObj.getTime() - 3600000).toISOString())
+          .lte('date', new Date(apiDateObj.getTime() + 3600000).toISOString())
+          .maybeSingle()
+        existing = byDate
+      }
       if (!existing) continue
-      const updates: Record<string, string> = {}
+
+      const updates: Record<string, any> = {}
       if (existing.home_team !== homeTeam) updates.home_team = homeTeam
       if (existing.away_team !== awayTeam) updates.away_team = awayTeam
+      if (!existing.api_fixture_id && apiId) updates.api_fixture_id = apiId
+      // Also update the date to match the API
+      updates.date = apiDate
+
       if (Object.keys(updates).length > 0) {
         await supabase.from('fixtures').update(updates).eq('id', existing.id)
       }

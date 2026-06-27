@@ -7,6 +7,49 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 )
 
+const API_KEY = process.env.API_FOOTBALL_KEY!
+const KNOCKOUT_ROUNDS = ['Round of 32', 'Round of 16', 'Quarter-finals', 'Semi-finals', 'Final']
+
+async function syncKnockoutFixturesFromAPI() {
+  for (const round of KNOCKOUT_ROUNDS) {
+    const res = await fetch(
+      `https://v3.football.api-sports.io/fixtures?league=1&season=2026&round=${encodeURIComponent(round)}`,
+      { headers: { 'x-apisports-key': API_KEY } }
+    )
+    if (!res.ok) continue
+    const data = await res.json()
+    for (const f of data.response || []) {
+      const homeTeam = f.teams?.home?.name
+      const awayTeam = f.teams?.away?.name
+      const apiDate = f.fixture?.date
+      const apiId = f.fixture?.id
+      if (!homeTeam || !awayTeam || !apiDate) continue
+
+      let existing: any = null
+      if (apiId) {
+        const { data: byId } = await supabase.from('fixtures').select('id, home_team, away_team, api_fixture_id').eq('api_fixture_id', apiId).maybeSingle()
+        existing = byId
+      }
+      if (!existing) {
+        const apiDateObj = new Date(apiDate)
+        const { data: byDate } = await supabase.from('fixtures').select('id, home_team, away_team, api_fixture_id').eq('tournament_id', 'wc_2026').eq('round', round).gte('date', new Date(apiDateObj.getTime() - 3600000).toISOString()).lte('date', new Date(apiDateObj.getTime() + 3600000).toISOString()).maybeSingle()
+        existing = byDate
+      }
+      if (!existing) continue
+
+      const updates: Record<string, any> = {}
+      if (existing.home_team !== homeTeam) updates.home_team = homeTeam
+      if (existing.away_team !== awayTeam) updates.away_team = awayTeam
+      if (!existing.api_fixture_id && apiId) updates.api_fixture_id = apiId
+      updates.date = apiDate
+      if (Object.keys(updates).length > 0) {
+        await supabase.from('fixtures').update(updates).eq('id', existing.id)
+      }
+    }
+    await new Promise(r => setTimeout(r, 200))
+  }
+}
+
 // Build a GroupPicks object from actual_standings rows
 // so we can run generateR32FromGroupPicks on the real results
 function buildActualGroupPicks(
@@ -87,6 +130,9 @@ function buildActualRoundSets(
 
 export async function POST() {
   try {
+    // Sync knockout fixture team names from API first
+    await syncKnockoutFixturesFromAPI()
+
     // ── Load actual_standings ────────────────────────────────────────────
     const { data: lockedRows } = await supabase
       .from('actual_standings')
@@ -121,13 +167,18 @@ export async function POST() {
     }
 
     // ── Populate TBD knockout fixtures with actual team names ─────────────
-    // When group standings are locked, update fixtures that still have TBD team names
     if (rows.length > 0) {
       const { data: tbdFixtures } = await supabase
         .from('fixtures')
-        .select('id, home_team, away_team')
+        .select('id, home_team, away_team, api_fixture_id')
         .eq('tournament_id', 'wc_2026')
         .or('home_team.ilike.TBD%,away_team.ilike.TBD%')
+
+      // Build the actual R32 bracket to resolve TBD (3) slots
+      // This only gives meaningful results once all 12 groups + best third are locked
+      const actualBracketForTBD = Object.keys(actualGroupPicks).length >= 12
+        ? generateR32FromGroupPicks(actualGroupPicks as any, actualBestThird)
+        : {}
 
       for (const fixture of tbdFixtures || []) {
         const updates: Record<string, string> = {}
@@ -137,7 +188,19 @@ export async function POST() {
           if (m1) return actualStandings[m1[1]]?.['1'] || null
           const m2 = placeholder.match(/TBD \(2([A-Z])\)/)
           if (m2) return actualStandings[m2[1]]?.['2'] || null
-          // TBD (3) — best 3rd place, can't resolve until all groups done
+          if (placeholder === 'TBD (3)') {
+            // Find this fixture's slot in the actual R32 bracket by api_fixture_id
+            // The bracket maps slot names to {home, away} — find the slot matching this fixture
+            for (const [slot, teams] of Object.entries(actualBracketForTBD)) {
+              // We need to match by slot position — check both sides
+              if (teams.home && teams.away) {
+                // If one side is already resolved, the other TBD (3) must be the remaining one
+                if (!fixture.home_team.startsWith('TBD') && teams.home === fixture.home_team) return teams.away || null
+                if (!fixture.away_team.startsWith('TBD') && teams.away === fixture.away_team) return teams.home || null
+              }
+            }
+            return null
+          }
           return null
         }
 
