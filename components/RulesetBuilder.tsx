@@ -188,7 +188,7 @@ function checkCorrect(categoryId: string, pick: any, result: ReturnType<typeof g
 }
 
 const CATEGORY_GROUPS = [
-  { label: 'Match Outcome', ids: ['soccer_result', 'soccer_ht_result', 'soccer_asian_handicap'] },
+  { label: 'Match Outcome', ids: ['soccer_result', 'soccer_team_to_advance', 'soccer_ht_result', 'soccer_asian_handicap'] },
   { label: 'Goals', ids: ['soccer_exact_score', 'soccer_ht_exact_score', 'soccer_btts', 'soccer_total_goals_ou', 'soccer_first_team_score', 'soccer_first_goalscorer', 'soccer_anytime_goalscorer'] },
   { label: 'Corners', ids: ['soccer_corners_winner', 'soccer_ht_corners_winner', 'soccer_total_corners_ou'] },
   { label: 'Cards', ids: ['soccer_card_points_ou', 'soccer_cards_home_away', 'soccer_cards_ht', 'soccer_first_yellow_team'] },

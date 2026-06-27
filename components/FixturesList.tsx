@@ -84,6 +84,9 @@ const FLAGS: Record<string, string> = {
   'Jamaica': '🇯🇲', 'Honduras': '🇭🇳',
 }
 
+const KNOCKOUT_ROUNDS = new Set(['Round of 32', 'Round of 16', 'Quarter-finals', 'Semi-finals', 'Final'])
+function isKnockoutRound(round: string) { return KNOCKOUT_ROUNDS.has(round) }
+
 const USER_TZ = typeof Intl !== 'undefined'
   ? Intl.DateTimeFormat().resolvedOptions().timeZone
   : 'America/Los_Angeles'
@@ -351,7 +354,11 @@ setScoreInputs: React.Dispatch<React.SetStateAction<Record<string, string>>>
   return (
     <div style={{ marginBottom: 8 }}>
       <div style={{ fontSize: '10px', color: '#888', marginBottom: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontWeight: 600 }}>{rule.name}</span>
+        <span style={{ fontWeight: 600 }}>
+          {rule.category_id === 'soccer_exact_score' && isKnockoutRound(fixture.round)
+            ? 'Score after extra time'
+            : rule.name}
+        </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {rule.requires_line && !finished && (() => {
             let line: number | null = null
@@ -366,36 +373,69 @@ setScoreInputs: React.Dispatch<React.SetStateAction<Record<string, string>>>
         </div>
       </div>
 
-      {/* WLD */}
+      {/* WLD — soccer_result for group stage, soccer_team_to_advance for knockouts */}
       {rule.input_type === 'wld' &&
         rule.category_id !== 'soccer_first_team_score' &&
-        rule.category_id !== 'soccer_first_yellow_team' && (
+        rule.category_id !== 'soccer_first_yellow_team' &&
+        rule.category_id !== 'soccer_asian_handicap' && (
+        (() => {
+          const isKnockout = isKnockoutRound(fixture.round)
+          // Hide soccer_result in knockout rounds (replaced by soccer_team_to_advance)
+          if (rule.category_id === 'soccer_result' && isKnockout) return null
+          // Hide soccer_team_to_advance in group stage
+          if (rule.category_id === 'soccer_team_to_advance' && !isKnockout) return null
+          // No draw for team_to_advance
+          const noDrawCategories = ['soccer_team_to_advance']
+          const showDraw = !noDrawCategories.includes(rule.category_id)
+          return (
+            <div style={{ display: 'flex', gap: 0 }}>
+              <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
+                disabled={locked || finished}
+                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
+                  {FLAGS[fixture.home_team]} {fixture.home_team}
+                </span>
+              </button>
+              {showDraw && (
+                <button type="button" style={{ ...btnStyle('draw'), borderRight: 'none', flexShrink: 0, flex: '0 0 60px' }}
+                  disabled={locked || finished}
+                  onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'draw' })}>
+                  draw
+                </button>
+              )}
+              <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
+                disabled={locked || finished}
+                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
+                  {fixture.away_team} {FLAGS[fixture.away_team]}
+                </span>
+              </button>
+            </div>
+          )
+        })()
+      )}
+
+      {/* Asian handicap — separate since it needs line display */}
+      {rule.category_id === 'soccer_asian_handicap' && (
         <div style={{ display: 'flex', gap: 0 }}>
           <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
               {FLAGS[fixture.home_team]} {fixture.home_team}
-              {rule.category_id === 'soccer_asian_handicap' && fixture.line_asian_handicap_home != null && (
+              {fixture.line_asian_handicap_home != null && (
                 <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: 3 }}>
                   ({fixture.line_asian_handicap_home > 0 ? '+' : ''}{fixture.line_asian_handicap_home})
                 </span>
               )}
             </span>
           </button>
-          {rule.category_id !== 'soccer_asian_handicap' && (
-            <button type="button" style={{ ...btnStyle('draw'), borderRight: 'none', flexShrink: 0, flex: '0 0 60px' }}
-              disabled={locked || finished}
-              onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'draw' })}>
-              draw
-            </button>
-          )}
           <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
               {fixture.away_team} {FLAGS[fixture.away_team]}
-              {rule.category_id === 'soccer_asian_handicap' && fixture.line_asian_handicap_away != null && (
+              {fixture.line_asian_handicap_away != null && (
                 <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: 3 }}>
                   ({fixture.line_asian_handicap_away > 0 ? '+' : ''}{fixture.line_asian_handicap_away})
                 </span>

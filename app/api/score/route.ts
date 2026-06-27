@@ -202,6 +202,20 @@ function scoreCustomPrediction(
     case 'soccer_result':
       return pred.value_wld === actual ? rule.points : 0
 
+    case 'soccer_team_to_advance': {
+      if (!pred.value_wld) return 0
+      // Determine who actually advanced — 90min result, then ET, then penalties
+      let winner: 'home' | 'away' | null = null
+      if (homeScore > awayScore) winner = 'home'
+      else if (awayScore > homeScore) winner = 'away'
+      else if (fixtureRow?.penalty_winner) {
+        // penalty_winner stores the team name
+        winner = fixtureRow.penalty_winner === facts.homeTeam ? 'home' : 'away'
+      }
+      if (!winner) return 0
+      return pred.value_wld === winner ? rule.points : 0
+    }
+
     case 'soccer_ht_result':
       return htHome !== null && pred.value_wld === htActual ? rule.points : 0
 
@@ -287,6 +301,14 @@ function scoreCustomPrediction(
     // ── Player/text ───────────────────────────────────────────────────────
     case 'soccer_first_goalscorer': {
       if (!firstScorerName || !pred.value_text) return 0
+
+      // Own goal matching — "Own Goal (Mexico)" matches "Own Goal (Mexico)"
+      if (firstScorerName.startsWith('Own Goal') && pred.value_text.startsWith('Own Goal')) {
+        return firstScorerName === pred.value_text ? rule.points : 0
+      }
+      // If actual was own goal but user picked a player (or vice versa), no match
+      if (firstScorerName.startsWith('Own Goal') || pred.value_text.startsWith('Own Goal')) return 0
+
       const normalizeScorer = (name: string) => {
         name = name.replace(/\s+/g, ' ').trim()
         // Strip accents
@@ -330,6 +352,8 @@ interface PoolRule {
 interface MatchFacts {
   homeScore: number
   awayScore: number
+  homeTeam: string
+  awayTeam: string
   htHome: number | null
   htAway: number | null
   firstScorerName: string | null
@@ -780,7 +804,7 @@ export async function POST(request: NextRequest) {
       // Find our internal fixture by api_fixture_id
       const { data: ourFixture } = await supabase
         .from('fixtures')
-        .select('id, scored, line_total_goals, line_total_corners, line_card_points, line_asian_handicap_home, line_asian_handicap_away')
+        .select('id, scored, round, line_total_goals, line_total_corners, line_card_points, line_asian_handicap_home, line_asian_handicap_away, penalty_winner')
         .eq('api_fixture_id', apiFixtureId)
         .maybeSingle()
 
@@ -812,6 +836,8 @@ export async function POST(request: NextRequest) {
 
       const facts: MatchFacts = {
         homeScore, awayScore,
+        homeTeam: homeTeamName,
+        awayTeam: awayTeamName,
         htHome: match.score?.halftime?.home ?? null,
         htAway: match.score?.halftime?.away ?? null,
         firstScorerName,

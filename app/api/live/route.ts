@@ -305,6 +305,13 @@ export async function GET(request: Request) {
           }
         }
 
+        // Determine penalty winner if match went to shootout
+        let penaltyWinner: string | null = null
+        const penScore = apiFixture.score?.penalty
+        if (penScore?.home != null && penScore?.away != null && (penScore.home > 0 || penScore.away > 0)) {
+          penaltyWinner = penScore.home > penScore.away ? ourFixture.home_team : ourFixture.away_team
+        }
+
         // Update fixture
         const { error } = await supabase
           .from('fixtures')
@@ -313,6 +320,7 @@ export async function GET(request: Request) {
             away_score: awayScore,
             first_scorer_name: firstScorer,
             status,
+            ...(penaltyWinner ? { penalty_winner: penaltyWinner } : {}),
             ...statsUpdate,
           })
           .eq('id', ourFixture.id)
