@@ -137,7 +137,7 @@ function scoreF1Prediction(categoryId: string, pred: any, results: DriverResult[
       return onPodium ? (rule.bonus_points || 0) : 0
     }
 
-
+    case 'f1_sprint_winner': {
       const sprintWinner = finishers[0]?.driver_name
       return driverMatches(pred.value_text, sprintWinner) ? rule.points : 0
     }
