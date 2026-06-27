@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { generateR32FromGroupPicks, R32_MATCHUPS, R16_MATCHUPS, QF_MATCHUPS, SF_MATCHUPS } from '@/lib/bracketEngine'
+import { generateR32FromGroupPicks } from '@/lib/bracketEngine'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -30,9 +30,8 @@ function buildBestThirdGroups(
 }
 
 // Build a flat set of all teams appearing in each round of the actual bracket
-// R32: both teams in each match (all 32 participants)
-// R16: winners of R32 matches (16 teams)
-// etc.
+// R32: teams confirmed via actual fixture appearances (not bracket generation)
+// This avoids the randomness problem in generateR32FromGroupPicks for partial data
 function buildActualRoundSets(
   actualR32Bracket: Record<string, { home: string; away: string }>,
   fixtures: any[]
@@ -41,7 +40,19 @@ function buildActualRoundSets(
     R32: new Set(), R16: new Set(), QF: new Set(), SF: new Set(), FINAL: new Set(), CHAMPION: new Set()
   }
 
-  // R32 participants come from the actual bracket built from locked standings
+  // R32 participants: use actual fixture appearances first (most reliable)
+  // Then supplement with the generated bracket for teams not yet confirmed in fixtures
+  for (const f of fixtures) {
+    if (f.status !== 'FT' && f.status !== 'live') continue
+    const r = f.round || ''
+    if (r.includes('Round of 32')) {
+      if (f.home_team) sets.R32.add(f.home_team)
+      if (f.away_team) sets.R32.add(f.away_team)
+    }
+  }
+
+  // Also add teams from the generated bracket (1st and 2nd place teams are certain
+  // once their group is locked — 3rd place teams are only added when advances=true)
   for (const { home, away } of Object.values(actualR32Bracket)) {
     if (home) sets.R32.add(home)
     if (away) sets.R32.add(away)
@@ -88,11 +99,19 @@ export async function POST() {
     const actualGroupPicks = buildActualGroupPicks(rows)
     const actualBestThird = buildBestThirdGroups(rows)
 
-    // Build the actual R32 bracket from locked standings
-    // (only works once enough groups are locked — slots with missing data stay empty)
+    // Build the actual R32 bracket from locked standings (for user R32 slot comparison)
     const actualR32Bracket = Object.keys(actualGroupPicks).length > 0
       ? generateR32FromGroupPicks(actualGroupPicks as any, actualBestThird)
       : {}
+
+    // Build the definitive set of actual R32 teams directly from actual_standings
+    // — avoids the random shuffling bug in generateR32FromGroupPicks for 3rd place teams
+    // 1st and 2nd place teams always qualify; 3rd place only if advances=true
+    const actualR32TeamsFromStandings = new Set<string>()
+    for (const row of rows) {
+      if (row.position === 1 || row.position === 2) actualR32TeamsFromStandings.add(row.team)
+      if (row.position === 3 && row.advances) actualR32TeamsFromStandings.add(row.team)
+    }
 
     // Build flat standings map for group stage scoring
     const actualStandings: Record<string, Record<string, string>> = {}
@@ -108,6 +127,8 @@ export async function POST() {
       .eq('tournament_id', 'wc_2026')
 
     const actualRounds = buildActualRoundSets(actualR32Bracket, allFixtures || [])
+    // Override R32 with our definitive standings-based set (additive with fixture data)
+    for (const team of actualR32TeamsFromStandings) actualRounds.R32.add(team)
 
     // ── Load bracket pools ───────────────────────────────────────────────
     const { data: bracketPools } = await supabase
@@ -172,31 +193,23 @@ export async function POST() {
           }
         }
 
-        // ── R32: build user's predicted bracket, compare both teams per slot ──
-        // Each user's bracket_picks stores the WINNER of each R32 match.
-        // But both teams in that slot also qualify for R32.
-        // We generate the user's full R32 bracket from their group picks,
-        // then check if each slot's participants appear in the actual R32.
-        const userBestThird = pick.best_third_groups || []
-        const userR32Bracket = Object.keys(groupPicks).length > 0
-          ? generateR32FromGroupPicks(groupPicks as any, userBestThird)
-          : {}
+        // ── R32: award points for each team user predicted in R32 that actually made R32 ──
+        // Build user's R32 teams directly from their group picks (avoid random shuffling)
+        // 1st and 2nd place from each group always qualify
+        // 3rd place teams qualify only if the user picked that group in their best_third_groups
+        const userBestThird: string[] = pick.best_third_groups || []
+        const userR32Teams = new Set<string>()
+        for (const [group, predicted] of Object.entries(groupPicks)) {
+          if (predicted[0]) userR32Teams.add(predicted[0]) // 1st always qualifies
+          if (predicted[1]) userR32Teams.add(predicted[1]) // 2nd always qualifies
+          if (predicted[2] && userBestThird.includes(group)) userR32Teams.add(predicted[2]) // 3rd only if user picked this group to advance
+        }
 
-        for (const matchup of R32_MATCHUPS) {
-          const slot = matchup.slot
-          const userMatch = userR32Bracket[slot]
-          const actualMatch = actualR32Bracket[slot]
-          if (!userMatch || !actualMatch) continue
-
-          // Award R32 points for each team the user correctly predicted in this slot
-          // (both home and away — there are 2 teams per slot, 32 total across all slots)
-          if (userMatch.home && actualMatch.home && userMatch.home === actualMatch.home) {
+        // Award R32 points for each team in user's R32 that actually made R32
+        for (const team of userR32Teams) {
+          if (actualRounds.R32.has(team)) {
             totalPts += rules.r32Pts
-            breakdown[`${slot}_home`] = rules.r32Pts
-          }
-          if (userMatch.away && actualMatch.away && userMatch.away === actualMatch.away) {
-            totalPts += rules.r32Pts
-            breakdown[`${slot}_away`] = rules.r32Pts
+            breakdown[`R32_${team}`] = rules.r32Pts
           }
         }
 
