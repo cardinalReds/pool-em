@@ -21,17 +21,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
-    // Only allow archiving if the competition is over (no live or upcoming fixtures)
+    // Only allow archiving if past the tournament end_date
     // Skip this check when unarchiving
     if (archived !== false && pool.tournament_id) {
-      const { data: activeFixtures } = await supabase
-        .from('fixtures')
-        .select('id')
-        .eq('tournament_id', pool.tournament_id)
-        .in('status', ['NS', 'live', '1H', '2H', 'HT', 'ET', 'P'])
-        .limit(1)
+      const { data: tournament } = await supabase
+        .from('tournaments')
+        .select('end_date')
+        .eq('id', pool.tournament_id)
+        .maybeSingle()
 
-      if (activeFixtures && activeFixtures.length > 0) {
+      if (tournament?.end_date && new Date(tournament.end_date) > new Date()) {
         return NextResponse.json({ error: 'Competition is not over yet' }, { status: 400 })
       }
     }

@@ -34,19 +34,21 @@ export default function DashboardPage() {
       setLivePoolIds(liveIds)
     }
 
-    // Check which tournaments are fully over (no NS/live fixtures remaining)
+    // Check which pools are over based on tournament end_date
     const allPools = [...(admin || []), ...((member || []).map(m => m.pools as any))]
     const tournamentIds = [...new Set(allPools.filter(p => p?.tournament_id).map(p => p.tournament_id))]
     if (tournamentIds.length > 0) {
-      const { data: activeFixtures } = await supabase
-        .from('fixtures')
-        .select('tournament_id')
-        .in('tournament_id', tournamentIds)
-        .in('status', ['NS', 'live', '1H', '2H', 'HT', 'ET', 'P'])
-      const activeTournaments = new Set((activeFixtures || []).map(f => f.tournament_id))
+      const { data: tournaments } = await supabase
+        .from('tournaments')
+        .select('id, end_date')
+        .in('id', tournamentIds)
+      const now = new Date()
+      const overTournaments = new Set(
+        (tournaments || []).filter(t => t.end_date && new Date(t.end_date) <= now).map(t => t.id)
+      )
       const overIds = new Set(
         allPools
-          .filter(p => p?.tournament_id && !activeTournaments.has(p.tournament_id) && !p.archived)
+          .filter(p => p?.tournament_id && overTournaments.has(p.tournament_id) && !p.archived)
           .map(p => p.id) as string[]
       )
       setOverPoolIds(overIds)
