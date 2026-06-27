@@ -312,9 +312,13 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
             const dbHasValue = dbPred && (dbPred.value_wld || dbPred.value_text || dbPred.value_yesno !== null)
             if (!dbHasValue && lsPred?.value_text) {
               predMap[key] = lsPred
+              // fixture_id may be in the value or extractable from the key (format: sessionId:categoryId)
+              const fixtureId = lsPred.fixture_id ?? parseInt(key.split(':')[0])
+              const categoryId = lsPred.category_id ?? key.split(':').slice(1).join(':')
+              if (!fixtureId || !categoryId) return
               rowsToUpsert.push({
                 pool_id: poolId, user_id: userId,
-                fixture_id: lsPred.fixture_id, category_id: lsPred.category_id,
+                fixture_id: fixtureId, category_id: categoryId,
                 value_text: lsPred.value_text ?? null, value_wld: null, value_yesno: null,
                 value_number: null, value_ou: null, submitted_at: new Date().toISOString(),
               })
@@ -637,7 +641,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                                     const p1 = memberPreds[`${memberId}:${session.id}:f1_podium_order_1`]?.value_text
                                     const p2 = memberPreds[`${memberId}:${session.id}:f1_podium_order_2`]?.value_text
                                     const p3 = memberPreds[`${memberId}:${session.id}:f1_podium_order_3`]?.value_text
-                                    if (p1) display = `${p1} / ${p2} / ${p3}`
+                                    if (p1) display = [p1, p2, p3].filter(Boolean).join(' / ')
                                   } else {
                                     const p = memberPreds[`${memberId}:${session.id}:${r.category_id}`]
                                     if (p?.value_text) display = p.value_text
