@@ -220,7 +220,7 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
 
 // CategoryInput is defined outside FixturesList to prevent remounting on parent re-renders
 // (which would close PlayerDropdown's open state). All closure vars are passed as props.
-function CategoryInput({ fixture, rule, pred, locked, finished, updateLocal, scoreInputs, setScoreInputs }: {
+function CategoryInput({ fixture, rule, pred, locked, finished, updateLocal, scoreInputs, setScoreInputs, predsRef, poolRules }: {
 fixture: Fixture
 rule: PoolRule
 pred: PredV2 | undefined
@@ -229,6 +229,8 @@ finished: boolean
 updateLocal: (fixtureId: number, categoryId: string, fields: any) => void
 scoreInputs: Record<string, string>
 setScoreInputs: React.Dispatch<React.SetStateAction<Record<string, string>>>
+predsRef: React.MutableRefObject<Record<string, PredV2>>
+poolRules: PoolRule[]
 }) {
   const key = `${fixture.id}:${rule.category_id}`
   // pred passed as prop
@@ -543,6 +545,31 @@ setScoreInputs: React.Dispatch<React.SetStateAction<Record<string, string>>>
             const a = side === 'away' ? next : (awayNum ?? null)
             if (h !== null && a !== null) {
               updateLocal(fixture.id, rule.category_id, { value_text: `${h}-${a}` })
+              // Auto-derive related predictions from the score
+              // Only set if user hasn't already made a pick for that category
+              const existingPreds = predsRef.current
+              // Match result
+              const resultKey = `${fixture.id}:soccer_result`
+              const advanceKey = `${fixture.id}:soccer_team_to_advance`
+              const resultWld = h > a ? 'home' : a > h ? 'away' : 'draw'
+              if (!existingPreds[resultKey]?.value_wld) {
+                updateLocal(fixture.id, 'soccer_result', { value_wld: resultWld })
+              }
+              if (!existingPreds[advanceKey]?.value_wld && (h !== a)) {
+                updateLocal(fixture.id, 'soccer_team_to_advance', { value_wld: h > a ? 'home' : 'away' })
+              }
+              // BTTS
+              const bttsKey = `${fixture.id}:soccer_btts`
+              if (!existingPreds[bttsKey]?.value_yesno !== undefined) {
+                updateLocal(fixture.id, 'soccer_btts', { value_yesno: h > 0 && a > 0 })
+              }
+              // Total goals O/U
+              const totalGoals = h + a
+              const goalsKey = `${fixture.id}:soccer_total_goals_ou`
+              const line = fixture.line_total_goals
+              if (line !== null && !existingPreds[goalsKey]?.value_ou) {
+                updateLocal(fixture.id, 'soccer_total_goals_ou', { value_ou: totalGoals > line ? 'over' : 'under' })
+              }
             }
             return newInputs
           })
@@ -1323,6 +1350,8 @@ export default function FixturesList({
                 updateLocal={updateLocal}
                 scoreInputs={scoreInputs}
                 setScoreInputs={setScoreInputs}
+                predsRef={predsRef}
+                poolRules={poolRules}
               />
             ))}
             {!locked && !finished && (
