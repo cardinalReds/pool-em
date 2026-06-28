@@ -10,7 +10,6 @@ export default function DashboardPage() {
   const [adminPools, setAdminPools] = useState<any[]>([])
   const [memberPools, setMemberPools] = useState<any[]>([])
   const [livePoolIds, setLivePoolIds] = useState<Set<string>>(new Set())
-  const [overPoolIds, setOverPoolIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [showArchived, setShowArchived] = useState(false)
 
@@ -26,32 +25,16 @@ export default function DashboardPage() {
     setAdminPools(admin || [])
     setMemberPools((member || []).filter(m => (m.pools as any)?.admin_id !== user.id))
 
-    const { data: liveFixtures } = await supabase.from('fixtures').select('tournament_id').eq('status', 'live')
-    if (liveFixtures && liveFixtures.length > 0) {
-      const liveTournaments = new Set(liveFixtures.map(f => f.tournament_id))
-      const allPools = [...(admin || []), ...((member || []).map(m => m.pools as any))]
-      const liveIds = new Set(allPools.filter(p => p && liveTournaments.has(p.tournament_id)).map(p => p.id) as string[])
-      setLivePoolIds(liveIds)
-    }
-
-    // Check which pools are over based on tournament end_date
     const allPools = [...(admin || []), ...((member || []).map(m => m.pools as any))]
-    const tournamentIds = [...new Set(allPools.filter(p => p?.tournament_id).map(p => p.tournament_id))]
-    if (tournamentIds.length > 0) {
-      const { data: tournaments } = await supabase
-        .from('tournaments')
-        .select('id, end_date')
-        .in('id', tournamentIds)
-      const now = new Date()
-      const overTournaments = new Set(
-        (tournaments || []).filter(t => t.end_date && new Date(t.end_date) <= now).map(t => t.id)
-      )
-      const overIds = new Set(
-        allPools
-          .filter(p => p?.tournament_id && overTournaments.has(p.tournament_id) && !p.archived)
-          .map(p => p.id) as string[]
-      )
-      setOverPoolIds(overIds)
+
+    const { data: liveFixtures } = await supabase.from('fixtures').select('tournament_id').eq('status', 'live')
+    const { data: liveF1Sessions } = await supabase.from('f1_sessions').select('tournament_id').eq('status', 'In Progress')
+    const liveSoccerTournaments = new Set((liveFixtures || []).map((f: any) => f.tournament_id))
+    const liveF1Tournaments = new Set((liveF1Sessions || []).map((s: any) => s.tournament_id))
+    const allLiveTournaments = new Set([...liveSoccerTournaments, ...liveF1Tournaments])
+    if (allLiveTournaments.size > 0) {
+      const liveIds = new Set(allPools.filter(p => p && allLiveTournaments.has(p.tournament_id)).map(p => p.id) as string[])
+      setLivePoolIds(liveIds)
     }
     setLoading(false)
   }
@@ -101,11 +84,7 @@ export default function DashboardPage() {
             <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
           </div>
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))', gap: '0.75rem'}}>
-            {activeAdmin.map(pool => (
-              <PoolCard key={pool.id} pool={pool} role="admin" isLive={livePoolIds.has(pool.id)}
-                isOver={overPoolIds.has(pool.id)}
-                onArchive={() => archivePool(pool.id, true)} />
-            ))}
+            {activeAdmin.map(pool => <PoolCard key={pool.id} pool={pool} role="admin" isLive={livePoolIds.has(pool.id)} onArchive={() => archivePool(pool.id, true)} />)}
           </div>
         </section>
       )}
@@ -117,9 +96,7 @@ export default function DashboardPage() {
             <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
           </div>
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))', gap: '0.75rem'}}>
-            {activeMember.map(m => (
-              <PoolCard key={m.id} pool={(m.pools as any)} role="member" isLive={livePoolIds.has((m.pools as any)?.id)} />
-            ))}
+            {activeMember.map(m => <PoolCard key={m.id} pool={(m.pools as any)} role="member" isLive={livePoolIds.has((m.pools as any)?.id)} />)}
           </div>
         </section>
       )}
@@ -136,20 +113,15 @@ export default function DashboardPage() {
       {hasArchived && (
         <section style={{marginBottom: '2rem'}}>
           <button onClick={() => setShowArchived(s => !s)}
-            style={{display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0, width: '100%', marginBottom: showArchived ? '0.75rem' : 0, fontFamily: 'inherit'}}>
+            style={{display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0, width: '100%', marginBottom: showArchived ? '0.75rem' : 0}}>
             <span className="section-label" style={{color: 'var(--text-faint)'}}>archived</span>
             <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
             <span style={{fontSize: '11px', color: 'var(--text-faint)'}}>{showArchived ? '▲' : '▼'}</span>
           </button>
           {showArchived && (
             <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))', gap: '0.75rem'}}>
-              {archivedAdmin.map(pool => (
-                <PoolCard key={pool.id} pool={pool} role="admin" isLive={false}
-                  onUnarchive={() => archivePool(pool.id, false)} />
-              ))}
-              {archivedMember.map(m => (
-                <PoolCard key={m.id} pool={(m.pools as any)} role="member" isLive={false} />
-              ))}
+              {archivedAdmin.map(pool => <PoolCard key={pool.id} pool={pool} role="admin" isLive={false} onUnarchive={() => archivePool(pool.id, false)} />)}
+              {archivedMember.map(m => <PoolCard key={m.id} pool={(m.pools as any)} role="member" isLive={false} />)}
             </div>
           )}
         </section>
@@ -158,11 +130,10 @@ export default function DashboardPage() {
   )
 }
 
-function PoolCard({ pool, role, isLive, isOver, onArchive, onUnarchive }: {
+function PoolCard({ pool, role, isLive, onArchive, onUnarchive }: {
   pool: any
   role: 'admin' | 'member'
   isLive?: boolean
-  isOver?: boolean
   onArchive?: () => void
   onUnarchive?: () => void
 }) {
@@ -170,7 +141,7 @@ function PoolCard({ pool, role, isLive, isOver, onArchive, onUnarchive }: {
   return (
     <div style={{position: 'relative'}}>
       <Link href={`/pool/${pool.id}`}>
-        <div className="card" style={{cursor: 'pointer', transition: 'border-color 0.1s', minHeight: 80, opacity: pool.archived ? 0.65 : 1}}
+        <div className="card" style={{cursor: 'pointer', transition: 'border-color 0.1s', minHeight: 80, opacity: pool.archived ? 0.6 : 1}}
           onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--text-dim)')}
           onMouseLeave={e => (e.currentTarget.style.borderColor = isLive ? '#2d7a2d' : 'var(--border)')}>
           <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem'}}>
@@ -182,32 +153,28 @@ function PoolCard({ pool, role, isLive, isOver, onArchive, onUnarchive }: {
                   live
                 </span>
               )}
+              {pool.archived && <span style={{fontSize: '0.65rem', color: 'var(--text-faint)', background: 'var(--border-light)', padding: '1px 6px'}}>archived</span>}
               <span style={{fontSize: '0.7rem', color: 'var(--text-faint)'}}>{pool.tournament_scope?.replace('_', ' ')}</span>
             </div>
           </div>
           <div style={{fontWeight: 600, fontSize: '1rem', marginBottom: '0.25rem'}}>{pool.name}</div>
           <div style={{fontSize: '0.75rem', color: 'var(--text-dim)'}}>{pkg?.name || pool.package_id}</div>
-          {/* Archive button sits inside card at bottom */}
-          {onArchive && isOver && (
-            <div style={{marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border-light)'}}>
-              <button
-                onClick={e => { e.preventDefault(); e.stopPropagation(); onArchive() }}
-                style={{fontSize: '10px', color: 'var(--text-faint)', background: 'none', border: '1px solid var(--border-light)', padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit'}}>
-                archive pool
-              </button>
-            </div>
-          )}
-          {onUnarchive && (
-            <div style={{marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border-light)'}}>
-              <button
-                onClick={e => { e.preventDefault(); e.stopPropagation(); onUnarchive() }}
-                style={{fontSize: '10px', color: 'var(--text-faint)', background: 'none', border: '1px solid var(--border-light)', padding: '3px 8px', cursor: 'pointer', fontFamily: 'inherit'}}>
-                unarchive
-              </button>
-            </div>
-          )}
         </div>
       </Link>
+      {onArchive && !pool.archived && (
+        <button
+          onClick={e => { e.preventDefault(); e.stopPropagation(); onArchive() }}
+          style={{position: 'absolute', bottom: 8, right: 8, fontSize: '10px', color: 'var(--text-faint)', background: 'none', border: '1px solid var(--border-light)', padding: '2px 6px', cursor: 'pointer', fontFamily: 'inherit'}}>
+          archive
+        </button>
+      )}
+      {onUnarchive && (
+        <button
+          onClick={e => { e.preventDefault(); e.stopPropagation(); onUnarchive() }}
+          style={{position: 'absolute', bottom: 8, right: 8, fontSize: '10px', color: 'var(--text-faint)', background: 'none', border: '1px solid var(--border-light)', padding: '2px 6px', cursor: 'pointer', fontFamily: 'inherit'}}>
+          unarchive
+        </button>
+      )}
     </div>
   )
 }

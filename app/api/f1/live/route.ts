@@ -1,18 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// ── F1 2026 session poller ───────────────────────────────────────────────
-// Detects when a practice/qualifying/sprint/race session has finished and
-// triggers /api/score-f1. Kept separate from /api/live/route.ts because that
-// file dispatches on `fixtures` rows; F1 sessions live in their own table.
-//
-// Unlike soccer (constant live matches most days during the tournament) or
-// even MMA (one event), F1 only has ~24 race weekends/year with a handful of
-// sessions each. Polling every minute all season (as vercel.json currently
-// does for soccer) would be wasteful against a free-tier API quota, so this
-// route only calls the API when a session is within its likely window —
-// see the date-range guard below.
-
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_KEY!
@@ -51,9 +39,6 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Only look at sessions whose date is within the last 3 days or next 6
-    // hours — i.e. an active or just-finished race weekend. Skip the API
-    // call entirely outside that window.
     const now = new Date()
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
     const sixHoursFromNow = new Date(now.getTime() + 6 * 60 * 60 * 1000)
@@ -71,7 +56,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: true, checked: 0, updated: 0, skipped: true })
     }
 
-    // Group by competition so we only call the API once per Grand Prix, not per session
+    // Group by competition
     const byCompetition = new Map<string, typeof candidateSessions>()
     for (const s of candidateSessions) {
       const key = `${s.competition_id}-${s.season}`
@@ -81,26 +66,40 @@ export async function GET(request: Request) {
 
     let updated = 0
     let justCompleted = false
+    let anyInProgress = false
 
     for (const [, sessions] of byCompetition) {
       const { competition_id, season } = sessions[0]
       const apiSessions = await fetchSessionStatus(competition_id, season)
 
-      for (const apiSession of apiSessions) {
-        const match = sessions.find(s => s.id === apiSession.id)
-        if (!match) continue
+      for (const dbSession of sessions) {
+        // Match by session_type since our internal id != API session id
+        const apiSession = apiSessions.find((s: any) =>
+          s.type?.toLowerCase().replace(/\s+/g, '_') === dbSession.session_type?.toLowerCase().replace(/\s+/g, '_') ||
+          s.type === dbSession.session_type
+        )
+        if (!apiSession) continue
 
-        if (apiSession.status === 'Completed' && match.status !== 'Completed') {
-          await supabase.from('f1_sessions').update({ status: 'Completed' }).eq('id', match.id)
+        const apiStatus = apiSession.status // 'Completed', 'In Progress', 'Scheduled', etc.
+
+        if (apiStatus === 'Completed' && dbSession.status !== 'Completed') {
+          await supabase.from('f1_sessions').update({ status: 'Completed', scored: false }).eq('id', dbSession.id)
           updated++
           justCompleted = true
-        } else if (apiSession.status !== match.status) {
-          await supabase.from('f1_sessions').update({ status: apiSession.status }).eq('id', match.id)
+        } else if (apiStatus === 'In Progress' && dbSession.status !== 'In Progress') {
+          await supabase.from('f1_sessions').update({ status: 'In Progress' }).eq('id', dbSession.id)
+          updated++
+          anyInProgress = true
+        } else if (apiStatus !== dbSession.status && apiStatus !== 'Completed') {
+          await supabase.from('f1_sessions').update({ status: apiStatus }).eq('id', dbSession.id)
         }
+
+        if (apiStatus === 'In Progress') anyInProgress = true
       }
     }
 
-    if (justCompleted) await triggerScoring()
+    // Trigger scoring when session completes OR during live race (for live updates)
+    if (justCompleted || anyInProgress) await triggerScoring()
 
     return NextResponse.json({ ok: true, checked: candidateSessions.length, updated })
   } catch (err) {

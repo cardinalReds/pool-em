@@ -166,22 +166,32 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Early exit: only do work if there's an unscored, completed session
-    const { data: pendingSessions } = await supabase
+    // Score completed (unscored) sessions AND in-progress sessions (live updates)
+    const { data: completedSessions } = await supabase
       .from('f1_sessions')
-      .select('id, api_session_id:id, session_type, competition_id')
+      .select('id, session_type, competition_id')
       .eq('tournament_id', TOURNAMENT_ID)
       .eq('status', 'Completed')
       .eq('scored', false)
       .limit(20)
 
-    if (!pendingSessions?.length) {
+    const { data: liveSessions } = await supabase
+      .from('f1_sessions')
+      .select('id, session_type, competition_id')
+      .eq('tournament_id', TOURNAMENT_ID)
+      .eq('status', 'In Progress')
+      .limit(5)
+
+    const pendingSessions = [...(completedSessions || []), ...(liveSessions || [])]
+
+    if (!pendingSessions.length) {
       return NextResponse.json({ ok: true, sessions_scored: 0, skipped: true })
     }
 
     let sessionsScored = 0
 
     for (const session of pendingSessions) {
+      const isLive = (liveSessions || []).some(s => s.id === session.id)
       const results = await fetchRankings(session.id)
       if (!results.length) continue // results not published by the API yet
 
@@ -206,7 +216,7 @@ export async function POST(request: NextRequest) {
           .from('predictions_v2')
           .select('*')
           .eq('pool_id', pool.id)
-          .eq('fixture_id', session.id) // f1_sessions.id doubles as the "fixture" reference for predictions_v2
+          .eq('fixture_id', session.id)
 
         for (const pred of preds || []) {
           const rule = ruleMap[pred.category_id]
@@ -220,7 +230,10 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      await supabase.from('f1_sessions').update({ scored: true }).eq('id', session.id)
+      // Only mark as scored when complete, not during live scoring
+      if (!isLive) {
+        await supabase.from('f1_sessions').update({ scored: true }).eq('id', session.id)
+      }
       sessionsScored++
     }
 
