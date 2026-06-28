@@ -2,180 +2,69 @@
 
 import { useState } from 'react'
 
-export default function InvitePanel({ poolId, poolName, inviteUrl, buyInAmount, payoutStructure }: {
-  poolId: string
+export default function InvitePanel({ poolName, inviteUrl, buyInAmount, inviterName }: {
   poolName: string
   inviteUrl: string
   buyInAmount?: number | null
-  payoutStructure?: string | null
+  inviterName?: string | null
 }) {
   const [copied, setCopied] = useState(false)
-  const [phone, setPhone] = useState('')
-  const [email, setEmail] = useState('')
-  const [smsSent, setSmsSent] = useState(false)
-  const [emailSent, setEmailSent] = useState(false)
-  const [sending, setSending] = useState(false)
-  const [error, setError] = useState('')
-  const [tab, setTab] = useState<'link' | 'sms' | 'email'>('link')
+
+  const shareText = [
+    `Hey! Join my "${poolName}" pool on pool'em!`,
+    buyInAmount ? `$${buyInAmount} buy-in.` : '',
+    `Make your picks here:`,
+  ].filter(Boolean).join(' ')
+
+  async function handleShare() {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Join ${poolName} on pool'em`,
+          text: shareText,
+          url: inviteUrl,
+        })
+      } catch {}
+    } else {
+      handleCopy()
+    }
+  }
 
   async function handleCopy() {
     try {
       await navigator.clipboard.writeText(inviteUrl)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
     } catch {
-      // fallback for mobile browsers that block clipboard
       const el = document.createElement('textarea')
       el.value = inviteUrl
       document.body.appendChild(el)
       el.select()
       document.execCommand('copy')
       document.body.removeChild(el)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
     }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
-
-  function handleNativeShare() {
-    const message = buyInAmount
-      ? `Join my ${poolName} prediction pool on pool'em! $${buyInAmount} buy-in. Join here: ${inviteUrl}`
-      : `Join my ${poolName} prediction pool on pool'em! Join here: ${inviteUrl}`
-    if (navigator.share) {
-      navigator.share({
-        title: `Join ${poolName} on pool'em`,
-        text: message,
-        url: inviteUrl,
-      })
-    } else {
-      handleCopy()
-    }
-  }
-
-  async function handleSMS() {
-    if (!phone.trim()) return
-    setSending(true)
-    setError('')
-    try {
-      const res = await fetch('/api/invite/sms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phone.trim(), poolName, inviteUrl }),
-      })
-      if (!res.ok) throw new Error('Failed to send')
-      setSmsSent(true)
-      setPhone('')
-      setTimeout(() => setSmsSent(false), 3000)
-    } catch {
-      setError('Failed to send SMS. Check the number and try again.')
-    }
-    setSending(false)
-  }
-
-  async function handleEmail() {
-    if (!email.trim()) return
-    setSending(true)
-    setError('')
-    try {
-      const res = await fetch('/api/invite/email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), poolName, inviteUrl, buyInAmount, payoutStructure }),
-      })
-      if (!res.ok) throw new Error('Failed to send')
-      setEmailSent(true)
-      setEmail('')
-      setTimeout(() => setEmailSent(false), 3000)
-    } catch {
-      setError('Failed to send email. Try again.')
-    }
-    setSending(false)
-  }
-
-  const tabStyle = (t: typeof tab): React.CSSProperties => ({
-    flex: 1, padding: '5px 0', fontSize: '11px', cursor: 'pointer',
-    border: 'none', borderBottom: tab === t ? '2px solid #111' : '2px solid transparent',
-    background: 'none', fontFamily: 'inherit',
-    color: tab === t ? '#111' : '#aaa', fontWeight: tab === t ? 600 : 400,
-  })
 
   return (
-    <div>
-      {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid #eee', marginBottom: '12px' }}>
-        <button style={tabStyle('link')} onClick={() => setTab('link')}>link</button>
-        <button style={{...tabStyle('sms'), cursor: 'default', opacity: 0.4}} onClick={() => {}}>
-          sms
-          <span style={{ fontSize: '8px', fontWeight: 600, color: '#aaa', background: '#f0f0f0', padding: '1px 4px', marginLeft: 4, verticalAlign: 'middle' }}>soon</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <button
+        onClick={handleShare}
+        style={{ width: '100%', padding: '9px', fontSize: '12px', fontWeight: 600, background: '#111', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+        📤 share invite
+      </button>
+      <div style={{ display: 'flex', gap: 4 }}>
+        <input
+          readOnly
+          value={inviteUrl}
+          onClick={e => (e.target as HTMLInputElement).select()}
+          style={{ fontSize: '10px', border: '1px solid #ddd', padding: '5px 6px', flex: 1, minWidth: 0, color: '#888', background: '#fafafa', fontFamily: 'inherit' }}
+        />
+        <button
+          onClick={handleCopy}
+          style={{ fontSize: '10px', padding: '5px 10px', background: 'white', color: '#111', border: '1px solid #ddd', cursor: 'pointer', whiteSpace: 'nowrap' as const, fontFamily: 'inherit' }}>
+          {copied ? '✓ copied' : 'copy link'}
         </button>
-        <button style={tabStyle('email')} onClick={() => setTab('email')}>email</button>
       </div>
-
-      {/* Link tab */}
-      {tab === 'link' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <button
-            onClick={handleNativeShare}
-            style={{ width: '100%', padding: '9px', fontSize: '12px', fontWeight: 600, background: '#111', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
-            📤 share invite
-          </button>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <input
-              readOnly
-              value={inviteUrl}
-              onClick={e => (e.target as HTMLInputElement).select()}
-              style={{ fontSize: '10px', border: '1px solid #ddd', padding: '5px 6px', flex: 1, minWidth: 0, color: '#888', background: '#fafafa', fontFamily: 'inherit' }}
-            />
-            <button
-              onClick={handleCopy}
-              style={{ fontSize: '10px', padding: '5px 10px', background: 'white', color: '#111', border: '1px solid #ddd', cursor: 'pointer', whiteSpace: 'nowrap' as const, fontFamily: 'inherit' }}>
-              {copied ? '✓ copied' : 'copy link'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* SMS tab */}
-      {tab === 'sms' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <input
-            type="tel"
-            value={phone}
-            onChange={e => setPhone(e.target.value)}
-            placeholder="+1 555 000 0000"
-            style={{ border: '1px solid #ddd', padding: '6px 8px', fontSize: '12px', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const }}
-          />
-          <button
-            onClick={handleSMS}
-            disabled={sending || !phone.trim()}
-            style={{ width: '100%', padding: '7px', fontSize: '11px', fontWeight: 600, background: phone.trim() ? '#111' : '#ddd', color: 'white', border: 'none', cursor: phone.trim() ? 'pointer' : 'default', fontFamily: 'inherit' }}>
-            {sending ? 'sending...' : smsSent ? '✓ sent!' : 'send invite via sms'}
-          </button>
-          <div style={{ fontSize: '10px', color: '#aaa', lineHeight: 1.4 }}>
-            By sending, you confirm the recipient has agreed to receive one SMS invitation from pool'em. Reply STOP to opt out. Msg & data rates may apply.
-          </div>
-          {error && <div style={{ fontSize: '10px', color: '#C8102E' }}>{error}</div>}
-        </div>
-      )}
-
-      {/* Email tab */}
-      {tab === 'email' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="friend@email.com"
-            style={{ border: '1px solid #ddd', padding: '6px 8px', fontSize: '12px', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const }}
-          />
-          <button
-            onClick={handleEmail}
-            disabled={sending || !email.trim()}
-            style={{ width: '100%', padding: '7px', fontSize: '11px', fontWeight: 600, background: email.trim() ? '#111' : '#ddd', color: 'white', border: 'none', cursor: email.trim() ? 'pointer' : 'default', fontFamily: 'inherit' }}>
-            {sending ? 'sending...' : emailSent ? '✓ sent!' : 'send invite via email'}
-          </button>
-          {error && <div style={{ fontSize: '10px', color: '#C8102E' }}>{error}</div>}
-        </div>
-      )}
     </div>
   )
 }
