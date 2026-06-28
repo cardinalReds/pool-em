@@ -1084,20 +1084,20 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
         const active = picked === team
         const placeholder = isPlaceholder(team)
         const teamPts = getTeamPts(team)
-        // A team shows green if they have points in the breakdown for this round
-        const teamCorrect = !placeholder && team ? (teamPts ?? 0) > 0 : false
-        // For R32: show result when actualR32Teams is populated
-        // For other rounds: show result when breakdown has entries for this round prefix
-        const teamHasResult = isR32
-          ? (actualR32Teams && team && !placeholder ? actualR32Teams.has(team) : false)
-          : (breakdown && team && !placeholder ? Object.keys(breakdown).some(k => {
-              if (slot.startsWith('R16_')) return k.startsWith('R16_')
-              if (slot.startsWith('QF_')) return k.startsWith('QF_')
-              if (slot.startsWith('SF_')) return k.startsWith('SF_')
-              return false
-            }) : false)
-        const showCheck = teamHasResult && teamCorrect
-        const showCross = teamHasResult && !teamCorrect && !placeholder && !!team
+        const teamConfirmed = !placeholder && team ? (teamPts ?? 0) > 0 : false
+        
+        // A team is eliminated if results exist for this round but they're not confirmed
+        const hasRoundResults = !placeholder && team && breakdown ? (
+          isR32 ? (actualR32Teams && actualR32Teams.size > 0) :
+          slot.startsWith('R16_') ? Object.keys(breakdown).some(k => k.startsWith('R16_')) :
+          slot.startsWith('R16_') ? Object.keys(breakdown).some(k => k.startsWith('R16_')) :
+          slot.startsWith('QF_') ? Object.keys(breakdown).some(k => k.startsWith('QF_')) :
+          slot.startsWith('SF_') ? Object.keys(breakdown).some(k => k.startsWith('SF_')) :
+          false
+        ) : (isR32 && actualR32Teams && actualR32Teams.size > 0)
+        
+        const teamEliminated = hasRoundResults && !teamConfirmed && !placeholder && !!team
+
         return (
           <button key={i}
             onClick={() => !locked && !placeholder && team && onPick(slot, team)}
@@ -1106,18 +1106,20 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
               display: 'flex', alignItems: 'center', gap: 4, width: '100%',
               padding: '4px 6px', border: 'none',
               borderBottom: i === 0 ? '1px solid #f0f0f0' : 'none',
-              background: showCheck ? (active ? '#2d7a2d' : '#f3fbf3') : showCross ? (active ? '#C8102E' : 'white') : active ? '#C8102E' : placeholder || !team ? '#fafafa' : 'white',
-              color: showCheck ? (active ? 'white' : '#2d7a2d') : showCross ? (active ? 'white' : '#aaa') : active ? 'white' : placeholder || !team ? '#ccc' : '#333',
+              borderLeft: active && !teamConfirmed && !teamEliminated ? '3px solid #C8102E' : '3px solid transparent',
+              background: teamConfirmed ? '#2d7a2d' : placeholder || !team ? '#fafafa' : 'white',
+              color: teamConfirmed ? 'white' : teamEliminated ? '#C8102E' : active ? '#111' : placeholder || !team ? '#ccc' : '#333',
               cursor: locked || placeholder || !team ? 'default' : 'pointer',
               fontFamily: 'inherit', fontSize: '10px', fontWeight: active ? 700 : 400,
               textAlign: 'left' as const,
+              textDecoration: teamEliminated ? 'line-through' : 'none',
             }}>
             <span style={{ fontSize: 11 }}>{team && !placeholder ? FLAGS[team] || '' : ''}</span>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 90 }}>
               {!team ? '—' : placeholder ? team.replace('winner of ', '→') : team}
             </span>
-            {showCheck && <span style={{ marginLeft: 'auto', fontSize: '9px' }}>✓{teamPts ? ` +${teamPts}` : ''}</span>}
-            {showCross && <span style={{ marginLeft: 'auto', fontSize: '9px', color: active ? 'white' : '#ccc' }}>✗</span>}
+            {teamConfirmed && <span style={{ marginLeft: 'auto', fontSize: '9px' }}>✓{teamPts ? ` +${teamPts}` : ''}</span>}
+            {teamEliminated && active && <span style={{ marginLeft: 'auto', fontSize: '9px' }}>✗</span>}
           </button>
         )
       })}
