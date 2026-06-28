@@ -147,6 +147,29 @@ function fmtShort(dateStr: string) {
 }
 
 // ── Driver Dropdown ───────────────────────────────────────────────────────────
+function PitStopLapPicker({ value, disabled, sessionResults, onChange }: {
+  value: number; disabled: boolean; sessionResults: any[]; onChange: (v: number) => void
+}) {
+  const raceLaps = sessionResults.filter((r: any) => r.position).reduce((max: number, r: any) => Math.max(max, r.laps || 0), 0)
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+        <button type="button" disabled={disabled}
+          onClick={() => !disabled && onChange(Math.max(1, value - 1))}
+          style={{ width: 40, height: 40, border: '1px solid #ddd', background: disabled ? '#fafafa' : 'white', fontSize: '20px', cursor: disabled ? 'default' : 'pointer', fontFamily: 'inherit' }}>−</button>
+        <span style={{ fontSize: '24px', fontWeight: 700, minWidth: 48, textAlign: 'center' as const }}>{value || '?'}</span>
+        <button type="button" disabled={disabled}
+          onClick={() => !disabled && onChange(raceLaps > 0 ? Math.min(raceLaps, value + 1) : value + 1)}
+          style={{ width: 40, height: 40, border: '1px solid #ddd', background: disabled ? '#fafafa' : 'white', fontSize: '20px', cursor: disabled ? 'default' : 'pointer', fontFamily: 'inherit' }}>+</button>
+        <span style={{ fontSize: '11px', color: '#aaa' }}>lap</span>
+      </div>
+      {raceLaps > 0 && (
+        <div style={{ fontSize: '10px', color: '#aaa', textAlign: 'center' as const, marginTop: 4 }}>race is {raceLaps} laps</div>
+      )}
+    </div>
+  )
+}
+
 function TeammateBattlePicker({ assignedTeam, value, disabled, onChange }: {
   assignedTeam: string | null; value: string; disabled: boolean; onChange: (v: string) => void
 }) {
@@ -640,28 +663,13 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                       <DriverDropdown value={pred?.value_text || ''} disabled={locked}
                         excludeTeams={Q3_EXCLUDED_TEAMS}
                         onChange={v => updatePred(session.id, rule.category_id, { value_text: v })} />
-                    ) : rule.category_id === 'f1_first_pit_lap' ? (() => {
-                      const sessionResults: any[] = (session as any).results || []
-                      const raceLaps = sessionResults.filter((r: any) => r.position).reduce((max: number, r: any) => Math.max(max, r.laps || 0), 0)
-                      const currentVal = pred?.value_number || 0
-                      return (
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                            <button type="button" disabled={locked}
-                              onClick={() => !locked && updatePred(session.id, rule.category_id, { value_number: Math.max(1, currentVal - 1) })}
-                              style={{ width: 40, height: 40, border: '1px solid #ddd', background: locked ? '#fafafa' : 'white', fontSize: '20px', cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit' }}>−</button>
-                            <span style={{ fontSize: '24px', fontWeight: 700, minWidth: 48, textAlign: 'center' as const }}>{currentVal || '?'}</span>
-                            <button type="button" disabled={locked}
-                              onClick={() => !locked && updatePred(session.id, rule.category_id, { value_number: raceLaps > 0 ? Math.min(raceLaps, currentVal + 1) : currentVal + 1 })}
-                              style={{ width: 40, height: 40, border: '1px solid #ddd', background: locked ? '#fafafa' : 'white', fontSize: '20px', cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit' }}>+</button>
-                            <span style={{ fontSize: '11px', color: '#aaa' }}>lap</span>
-                          </div>
-                          {raceLaps > 0 && (
-                            <div style={{ fontSize: '10px', color: '#aaa', textAlign: 'center' as const, marginTop: 4 }}>race is {raceLaps} laps</div>
-                          )}
-                        </div>
-                      )
-                    })()
+                    ) : rule.category_id === 'f1_first_pit_lap' ? (
+                      <PitStopLapPicker
+                        value={pred?.value_number || 0}
+                        disabled={locked}
+                        sessionResults={(session as any).results || []}
+                        onChange={v => updatePred(session.id, rule.category_id, { value_number: v })}
+                      />
                     ) : rule.category_id === 'f1_teammate_battle' ? (
                       <TeammateBattlePicker
                         assignedTeam={session.teammate_battle_team || 
