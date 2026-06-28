@@ -138,10 +138,42 @@ function scoreF1Prediction(categoryId: string, pred: any, results: DriverResult[
     }
 
     case 'f1_q1_eliminated': {
-      // API-Sports doesn't expose Q1/Q2/Q3 elimination splits directly in this
-      // payload — would need the '1st/2nd/3rd Qualifying' session ids combined.
-      // Left unscored for now; see note below.
+      // Q1 eliminated = drivers NOT in top 15 of qualifying results
+      // 3rd qualifying has 10 drivers (Q3), 2nd has 15 (Q2+Q3), 1st has all 20
+      // We score against the 1st qualifying session results — positions 16-20 are Q1 eliminees
+      // But we only have the session's own results, so position > 15 means eliminated in Q1
+      const q1Eliminated = results.filter(r => r.position > 15).map(r => r.driver_name)
+      return q1Eliminated.some(name => driverMatches(pred.value_text, name)) ? rule.points : 0
+    }
+
+    case 'f1_q3_qualifier': {
+      // Q3 qualifiers = top 10 of qualifying results (from 3rd qualifying session)
+      const q3Drivers = results.filter(r => r.position <= 10).map(r => r.driver_name)
+      return q3Drivers.some(name => driverMatches(pred.value_text, name)) ? rule.points : 0
+    }
+
+    case 'f1_first_pit_lap': {
+      // Closest prediction wins — scored separately after all preds are collected
+      // Individual scoring: 0 unless exact, but we handle closest-wins at pool level
+      // For now just return points if exact, 0 otherwise
+      // TODO: implement closest-wins logic at pool scoring level
       return 0
+    }
+
+    case 'f1_teammate_battle': {
+      // value_text = driver name predicted to finish ahead
+      // Find both teammates and check who finished higher position (lower number)
+      if (!pred.value_text) return 0
+      // Find which team this driver is on
+      const pickedDriver = results.find(r => driverMatches(pred.value_text, r.driver_name))
+      if (!pickedDriver) return 0
+      // Find teammate (same team, different driver)
+      const teammate = results.find(r =>
+        r.team_id === pickedDriver.team_id && r.driver_id !== pickedDriver.driver_id
+      )
+      if (!teammate) return 0
+      // Lower position = finished higher = wins the battle
+      return pickedDriver.position < teammate.position ? rule.points : 0
     }
 
     case 'f1_podium_order_1':
@@ -252,6 +284,38 @@ export async function POST(request: NextRequest) {
             .from('predictions_v2')
             .update({ points_earned: points, is_correct: points > 0 })
             .eq('id', pred.id)
+        }
+      }
+
+        // ── Closest-wins scoring for f1_first_pit_lap ──────────────────
+        // After all preds are scored, find who was closest to actual pit lap
+        // and award them points (ties all get points)
+        const pitRule = ruleMap['f1_first_pit_lap']
+        if (pitRule && session.session_type === 'Race' || session.session_type === 'Sprint') {
+          // Fetch pit stop data
+          const pitRes = await fetch(`${F1_BASE}/pitstops?race=${session.id}`, {
+            headers: { 'x-apisports-key': API_KEY },
+          })
+          if (pitRes.ok) {
+            const pitData = await pitRes.json()
+            const pits: any[] = pitData.response || []
+            if (pits.length > 0) {
+              // First pit stop = earliest lap number across all pit stops
+              const firstPitLap = Math.min(...pits.map((p: any) => p.lap || 999))
+              // Find all predictions for this category
+              const pitPreds = (preds || []).filter((p: any) => p.category_id === 'f1_first_pit_lap' && p.value_number)
+              if (pitPreds.length > 0) {
+                const minDiff = Math.min(...pitPreds.map((p: any) => Math.abs(p.value_number - firstPitLap)))
+                for (const p of pitPreds) {
+                  const diff = Math.abs(p.value_number - firstPitLap)
+                  const pts = diff === minDiff ? pitRule.points : 0
+                  await supabase.from('predictions_v2')
+                    .update({ points_earned: pts, is_correct: pts > 0 })
+                    .eq('id', p.id)
+                }
+              }
+            }
+          }
         }
       }
 
