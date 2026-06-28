@@ -218,6 +218,7 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
                 )}
                 actualR32Teams={actualR32Teams}
                 breakdown={selectedPick.bracket_scores?.breakdown || {}}
+                eliminatedTeams={new Set(selectedPick.bracket_scores?.eliminated || [])}
               />
               {selectedPick.final_home_score != null && selectedPick.final_away_score != null && (
                 <div style={{ fontSize: '12px', color: '#888', marginTop: 8 }}>

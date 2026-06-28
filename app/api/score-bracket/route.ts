@@ -127,8 +127,11 @@ function buildActualRoundSets(
     }
   }
 
+  // Also add teams not in R32 (didn't qualify from groups)
+  // Get all tournament teams from actual_standings
   return sets
 }
+
 
 export async function POST() {
   try {
@@ -227,6 +230,16 @@ export async function POST() {
     const actualRounds = buildActualRoundSets(actualR32Bracket, allFixtures || [])
     // Override R32 with our definitive standings-based set (additive with fixture data)
     for (const team of actualR32TeamsFromStandings) actualRounds.R32.add(team)
+
+    // Build eliminated: all 48 tournament teams minus those in R32, plus match losers
+    const { data: allStandingsRows } = await supabase
+      .from('actual_standings')
+      .select('team')
+      .eq('tournament_id', 'wc_2026')
+    const allTournamentTeams = new Set((allStandingsRows || []).map((r: any) => r.team))
+    for (const team of allTournamentTeams) {
+      if (!actualRounds.R32.has(team)) actualRounds.ELIMINATED.add(team)
+    }
 
     // ── Load bracket pools ───────────────────────────────────────────────
     const { data: bracketPools } = await supabase
