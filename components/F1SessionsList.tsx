@@ -107,6 +107,16 @@ const SESSION_LABEL: Record<string, string> = {
   '3rd Qualifying': 'Qualifying', 'Race': 'Race', 'Sprint': 'Sprint',
 }
 
+function driverNameMatches(pick: string, actual: string): boolean {
+  const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
+  const p = norm(pick), a = norm(actual)
+  if (p === a) return true
+  if (a.includes(p) || p.includes(a)) return true
+  const pLast = p.split(' ').pop() || ''
+  const aLast = a.split(' ').pop() || ''
+  return pLast.length > 3 && pLast === aLast
+}
+
 const USER_TZ = typeof Intl !== 'undefined'
   ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'America/Los_Angeles'
 
@@ -555,19 +565,30 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                           ))}
                         </div>
                         <div style={{ display: 'flex', gap: 4 }}>
-                          {([1, 2, 3] as const).map(pos => (
-                            <div key={pos} style={{ flex: 1 }}>
-                              <DriverDropdown
-                                value={preds[`${session.id}:f1_podium_order_${pos}`]?.value_text || ''}
-                                disabled={locked}
-                                exclude={([1,2,3] as const).filter(p => p !== pos).map(p => preds[`${session.id}:f1_podium_order_${p}`]?.value_text).filter(Boolean) as string[]}
-                                onChange={v => updatePred(session.id, `f1_podium_order_${pos}`, { value_text: v })}
-                              />
-                            </div>
-                          ))}
+                          {([1, 2, 3] as const).map(pos => {
+                            const posPred = preds[`${session.id}:f1_podium_order_${pos}`]
+                            const pts = posPred?.points_earned
+                            const isExact = pts === rule.points
+                            const isPartial = pts > 0 && pts < rule.points
+                            return (
+                              <div key={pos} style={{ flex: 1 }}>
+                                <DriverDropdown
+                                  value={posPred?.value_text || ''}
+                                  disabled={locked}
+                                  exclude={([1,2,3] as const).filter(p => p !== pos).map(p => preds[`${session.id}:f1_podium_order_${p}`]?.value_text).filter(Boolean) as string[]}
+                                  onChange={v => updatePred(session.id, `f1_podium_order_${pos}`, { value_text: v })}
+                                />
+                                {locked && pts !== null && pts !== undefined && (
+                                  <div style={{ fontSize: '10px', marginTop: 2, textAlign: 'center' as const, color: isExact ? '#2d7a2d' : isPartial ? '#b45309' : '#aaa' }}>
+                                    {isExact ? `✓ +${pts}` : isPartial ? `~ +${pts}` : '✗'}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
                         </div>
                         <div style={{ fontSize: '10px', color: '#aaa', marginTop: 4 }}>
-                          {rule.points} pts exact · {rule.bonus_points || 2} pts correct driver wrong spot
+                          {rule.points} pts exact · {rule.bonus_points || 2} pts right driver wrong spot (~)
                         </div>
                       </div>
                     ) : rule.input_type === 'player' ? (
@@ -589,7 +610,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                       </div>
                     ) : null}
 
-                    {pred?.is_correct !== null && pred?.is_correct !== undefined && (
+                    {rule.category_id !== 'f1_podium_order' && pred?.is_correct !== null && pred?.is_correct !== undefined && (
                       <div style={{ fontSize: '10px', marginTop: 3, color: pred.is_correct ? '#2d7a2d' : '#aaa' }}>
                         {pred.is_correct ? `✓ +${pred.points_earned} pts` : '✗ no points'}
                       </div>
@@ -663,12 +684,24 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                                   if (r.category_id === 'f1_podium_order') {
                                     return ([1, 2, 3] as const).map(pos => {
                                       const p = memberPreds[`${memberId}:${session.id}:f1_podium_order_${pos}`]
-                                      const correct = p?.is_correct ?? null
+                                      const pick = p?.value_text
+                                      // Determine result from session results stored in DB
+                                      const sessionResults: any[] = (session as any).results || []
+                                      const finishers = [...sessionResults].sort((a: any, b: any) => a.position - b.position)
+                                      const actualAtPos = finishers[pos - 1]?.driver_name
+                                      const podiumDrivers = finishers.slice(0, 3).map((f: any) => f.driver_name)
+                                      let indicator = ''
+                                      let color = '#555'
+                                      if (pick && actualAtPos) {
+                                        const exactMatch = driverNameMatches(pick, actualAtPos)
+                                        const onPodium = podiumDrivers.some((n: string) => driverNameMatches(pick, n))
+                                        if (exactMatch) { indicator = ' ✓'; color = '#2d7a2d' }
+                                        else if (onPodium) { indicator = ' ~'; color = '#b45309' }
+                                        else { indicator = ' ✗'; color = '#aaa' }
+                                      }
                                       return (
-                                        <td key={`podium_${pos}`} style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', color: correct === true ? '#2d7a2d' : correct === false ? '#aaa' : '#555', whiteSpace: 'nowrap' as const }}>
-                                          {p?.value_text || <span style={{ color: '#ddd' }}>—</span>}
-                                          {correct === true && ' ✓'}
-                                          {correct === false && ' ✗'}
+                                        <td key={`podium_${pos}`} style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', color, whiteSpace: 'nowrap' as const }}>
+                                          {pick ? `${pick}${indicator}` : <span style={{ color: '#ddd' }}>—</span>}
                                         </td>
                                       )
                                     })
@@ -721,7 +754,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                                 if (r.category_id === 'f1_race_winner') actual = winner || '—'
                                 else if (r.category_id === 'f1_pole_position') actual = poleSitter || '—'
                                 else if (r.category_id === 'f1_first_retirement') actual = firstRetirement || '—'
-                                else if (r.category_id === 'f1_fastest_lap') actual = fastestLap || '—'
+                                else if (r.category_id === 'f1_fastest_lap') actual = (session as any).fastest_lap_driver || '—'
                                 else if (r.category_id === 'f1_podium') actual = finishers.slice(0,3).map((f:any) => f.driver_name).join(', ') || '—'
                                 else if (r.category_id === 'f1_sprint_winner') actual = winner || '—'
                                 else if (r.category_id === 'f1_pole_to_win') actual = (poleSitter && winner) ? (poleSitter === winner ? 'yes' : 'no') : '—'
