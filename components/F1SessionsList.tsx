@@ -119,13 +119,13 @@ function driverNameMatches(pick: string, actual: string): boolean {
   return pLast.length > 3 && pLast === aLast
 }
 
-// Excluded from Q1 pick (expected to make Q2)
-const Q1_EXCLUDED_TEAMS = ['Cadillac Formula 1 Team', 'Aston Martin F1 Team']
-// Excluded from Q3 pick (expected to make Q3 anyway)
-const Q3_EXCLUDED_TEAMS = ['Ferrari', 'McLaren Racing', 'Red Bull Racing', 'Mercedes-AMG Petronas']
+// Excluded from Q1 pick (expected to make Q2 — everyone else has a shot)
+const Q1_EXCLUDED_TEAMS = ['Cadillac', 'Aston Martin']
+// Excluded from Q3 pick (expected to be there — no value in picking them)
+const Q3_EXCLUDED_TEAMS = ['Ferrari', 'McLaren', 'Red Bull', 'Mercedes']
 
 // Teammate battle teams — one assigned per race weekend randomly
-const TEAMMATE_BATTLE_TEAMS = ['Alpine F1 Team', 'Audi Revolut F1 Team', 'Williams F1 Team', 'Haas F1 Team', 'Racing Bulls']
+const TEAMMATE_BATTLE_TEAMS = ['Alpine', 'Audi', 'Williams', 'Haas', 'Racing Bulls']
 
 const USER_TZ = typeof Intl !== 'undefined'
   ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'America/Los_Angeles'
@@ -151,7 +151,7 @@ function TeammateBattlePicker({ assignedTeam, value, disabled, onChange }: {
   assignedTeam: string | null; value: string; disabled: boolean; onChange: (v: string) => void
 }) {
   if (!assignedTeam) return <div style={{ fontSize: '11px', color: '#aaa' }}>team assigned before qualifying</div>
-  const teamDrivers = F1_GRID.find(t => t.team === assignedTeam)?.drivers || []
+  const teamDrivers = F1_GRID.find(t => t.name === assignedTeam)?.drivers || []
   return (
     <div>
       <div style={{ fontSize: '10px', color: '#888', marginBottom: 6 }}>{assignedTeam}</div>
@@ -178,7 +178,7 @@ function DriverDropdown({ value, onChange, disabled, exclude = [], excludeTeams 
   const [open, setOpen] = useState(false)
   const driver = F1_GRID.flatMap(t => t.drivers).find(d => d.name === value)
   const team = F1_GRID.find(t => t.drivers.some(d => d.name === value))
-  const filteredGrid = excludeTeams.length > 0 ? F1_GRID.filter(t => !excludeTeams.includes(t.team)) : F1_GRID
+  const filteredGrid = excludeTeams.length > 0 ? F1_GRID.filter(t => !excludeTeams.includes(t.name)) : F1_GRID
 
   function select(name: string) {
     const scrollY = window.scrollY
@@ -640,17 +640,28 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                       <DriverDropdown value={pred?.value_text || ''} disabled={locked}
                         excludeTeams={Q3_EXCLUDED_TEAMS}
                         onChange={v => updatePred(session.id, rule.category_id, { value_text: v })} />
-                    ) : rule.category_id === 'f1_first_pit_lap' ? (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-                        <button type="button" disabled={locked}
-                          onClick={() => !locked && updatePred(session.id, rule.category_id, { value_number: Math.max(1, (pred?.value_number || 0) - 1) })}
-                          style={{ width: 40, height: 40, border: '1px solid #ddd', background: locked ? '#fafafa' : 'white', fontSize: '20px', cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit' }}>−</button>
-                        <span style={{ fontSize: '24px', fontWeight: 700, minWidth: 48, textAlign: 'center' as const }}>{pred?.value_number || '?'}</span>
-                        <button type="button" disabled={locked}
-                          onClick={() => !locked && updatePred(session.id, rule.category_id, { value_number: (pred?.value_number || 0) + 1 })}
-                          style={{ width: 40, height: 40, border: '1px solid #ddd', background: locked ? '#fafafa' : 'white', fontSize: '20px', cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit' }}>+</button>
-                        <span style={{ fontSize: '11px', color: '#aaa' }}>lap</span>
-                      </div>
+                    ) : rule.category_id === 'f1_first_pit_lap' ? (() => {
+                      const sessionResults: any[] = (session as any).results || []
+                      const raceLaps = sessionResults.filter((r: any) => r.position).reduce((max: number, r: any) => Math.max(max, r.laps || 0), 0)
+                      const currentVal = pred?.value_number || 0
+                      return (
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                            <button type="button" disabled={locked}
+                              onClick={() => !locked && updatePred(session.id, rule.category_id, { value_number: Math.max(1, currentVal - 1) })}
+                              style={{ width: 40, height: 40, border: '1px solid #ddd', background: locked ? '#fafafa' : 'white', fontSize: '20px', cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit' }}>−</button>
+                            <span style={{ fontSize: '24px', fontWeight: 700, minWidth: 48, textAlign: 'center' as const }}>{currentVal || '?'}</span>
+                            <button type="button" disabled={locked}
+                              onClick={() => !locked && updatePred(session.id, rule.category_id, { value_number: raceLaps > 0 ? Math.min(raceLaps, currentVal + 1) : currentVal + 1 })}
+                              style={{ width: 40, height: 40, border: '1px solid #ddd', background: locked ? '#fafafa' : 'white', fontSize: '20px', cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit' }}>+</button>
+                            <span style={{ fontSize: '11px', color: '#aaa' }}>lap</span>
+                          </div>
+                          {raceLaps > 0 && (
+                            <div style={{ fontSize: '10px', color: '#aaa', textAlign: 'center' as const, marginTop: 4 }}>race is {raceLaps} laps</div>
+                          )}
+                        </div>
+                      )
+                    })()
                     ) : rule.category_id === 'f1_teammate_battle' ? (
                       <TeammateBattlePicker
                         assignedTeam={session.teammate_battle_team || 
