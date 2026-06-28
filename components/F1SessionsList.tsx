@@ -98,8 +98,8 @@ const F1_GRID = [
 // ── Session config ────────────────────────────────────────────────────────────
 // Only show Q3 qualifying (pole) and Race sessions — simplified UX
 const SESSION_CATEGORIES: Record<string, string[]> = {
-  'Race':           ['f1_race_winner', 'f1_podium_order', 'f1_podium', 'f1_points_finish', 'f1_fastest_lap', 'f1_first_retirement', 'f1_pole_to_win', 'f1_top6_teammate'],
-  '3rd Qualifying': ['f1_pole_position', 'f1_top3_quali'],
+  'Race':           ['f1_race_winner', 'f1_podium_order', 'f1_podium', 'f1_points_finish', 'f1_fastest_lap', 'f1_first_retirement', 'f1_pole_to_win', 'f1_first_pit_lap', 'f1_teammate_battle'],
+  '3rd Qualifying': ['f1_pole_position', 'f1_top3_quali', 'f1_q1_eliminated', 'f1_q3_qualifier'],
   'Sprint':         ['f1_sprint_winner', 'f1_sprint_podium'],
 }
 
@@ -116,6 +116,14 @@ function driverNameMatches(pick: string, actual: string): boolean {
   const aLast = a.split(' ').pop() || ''
   return pLast.length > 3 && pLast === aLast
 }
+
+// Excluded from Q1 pick (expected to make Q2)
+const Q1_EXCLUDED_TEAMS = ['Cadillac Formula 1 Team', 'Aston Martin F1 Team']
+// Excluded from Q3 pick (expected to make Q3 anyway)
+const Q3_EXCLUDED_TEAMS = ['Ferrari', 'McLaren Racing', 'Red Bull Racing', 'Mercedes-AMG Petronas']
+
+// Teammate battle teams — one assigned per race weekend randomly
+const TEAMMATE_BATTLE_TEAMS = ['Alpine F1 Team', 'Audi Revolut F1 Team', 'Williams F1 Team', 'Haas F1 Team', 'Racing Bulls']
 
 const USER_TZ = typeof Intl !== 'undefined'
   ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'America/Los_Angeles'
@@ -137,12 +145,13 @@ function fmtShort(dateStr: string) {
 }
 
 // ── Driver Dropdown ───────────────────────────────────────────────────────────
-function DriverDropdown({ value, onChange, disabled, exclude = [] }: {
-  value: string; onChange: (v: string) => void; disabled: boolean; exclude?: string[]
+function DriverDropdown({ value, onChange, disabled, exclude = [], excludeTeams = [] }: {
+  value: string; onChange: (v: string) => void; disabled: boolean; exclude?: string[]; excludeTeams?: string[]
 }) {
   const [open, setOpen] = useState(false)
   const driver = F1_GRID.flatMap(t => t.drivers).find(d => d.name === value)
   const team = F1_GRID.find(t => t.drivers.some(d => d.name === value))
+  const filteredGrid = excludeTeams.length > 0 ? F1_GRID.filter(t => !excludeTeams.includes(t.team)) : F1_GRID
 
   function select(name: string) {
     const scrollY = window.scrollY
@@ -191,7 +200,7 @@ function DriverDropdown({ value, onChange, disabled, exclude = [] }: {
               — clear
             </button>
           )}
-          {F1_GRID.map(t => (
+          {filteredGrid.map(t => (
             <div key={t.name}>
               <div style={{ padding: '5px 12px 4px', background: '#f8f8f8', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <img src={t.logo} alt="" height={14} style={{ objectFit: 'contain' as const }}
@@ -252,7 +261,7 @@ function PodiumOrderPicker({ p1, p2, p3, onChange, disabled }: {
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-interface F1Session { id: number; competition_id: number; competition_name: string; season: number; session_type: string; date: string; status: string; results: any; scored: boolean }
+interface F1Session { id: number; competition_id: number; competition_name: string; season: number; session_type: string; date: string; status: string; results: any; scored: boolean; teammate_battle_team?: string | null }
 interface PoolRule { category_id: string; points: number; bonus_points: number; name: string; input_type: string }
 
 function isLocked(session: F1Session, deadlineType: string, gpSessions: F1Session[]) {
@@ -413,13 +422,13 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
         continue
       }
       const pred = currentPreds[`${sessionId}:${r.category_id}`]
-      if (pred?.value_text || pred?.value_yesno !== null && pred?.value_yesno !== undefined)
+      if (pred?.value_text || pred?.value_yesno !== null && pred?.value_yesno !== undefined || pred?.value_number !== null && pred?.value_number !== undefined)
         rows.push({
           pool_id: poolId, user_id: userId, fixture_id: sessionId,
           category_id: r.category_id,
           value_text: pred.value_text ?? null, value_wld: null,
           value_yesno: pred.value_yesno ?? null,
-          value_number: null, value_ou: null,
+          value_number: pred.value_number ?? null, value_ou: null,
           submitted_at: new Date().toISOString(),
         })
     }
@@ -591,6 +600,49 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                           {rule.points} pts exact · {rule.bonus_points || 2} pts right driver wrong spot (~)
                         </div>
                       </div>
+                    ) : rule.category_id === 'f1_q1_eliminated' ? (
+                      <DriverDropdown value={pred?.value_text || ''} disabled={locked}
+                        excludeTeams={Q1_EXCLUDED_TEAMS}
+                        onChange={v => updatePred(session.id, rule.category_id, { value_text: v })} />
+                    ) : rule.category_id === 'f1_q3_qualifier' ? (
+                      <DriverDropdown value={pred?.value_text || ''} disabled={locked}
+                        excludeTeams={Q3_EXCLUDED_TEAMS}
+                        onChange={v => updatePred(session.id, rule.category_id, { value_text: v })} />
+                    ) : rule.category_id === 'f1_first_pit_lap' ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <button type="button" disabled={locked}
+                          onClick={() => !locked && updatePred(session.id, rule.category_id, { value_number: Math.max(1, (pred?.value_number || 0) - 1) })}
+                          style={{ width: 36, height: 36, border: '1px solid #ddd', background: locked ? '#fafafa' : 'white', fontSize: '18px', cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit' }}>−</button>
+                        <span style={{ fontSize: '20px', fontWeight: 700, minWidth: 40, textAlign: 'center' as const }}>{pred?.value_number || '?'}</span>
+                        <button type="button" disabled={locked}
+                          onClick={() => !locked && updatePred(session.id, rule.category_id, { value_number: (pred?.value_number || 0) + 1 })}
+                          style={{ width: 36, height: 36, border: '1px solid #ddd', background: locked ? '#fafafa' : 'white', fontSize: '18px', cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit' }}>+</button>
+                        <span style={{ fontSize: '11px', color: '#aaa' }}>lap</span>
+                      </div>
+                    ) : rule.category_id === 'f1_teammate_battle' ? (() => {
+                      // Get the assigned team for this GP weekend
+                      const assignedTeam = (session as any).teammate_battle_team || null
+                      if (!assignedTeam) return <div style={{ fontSize: '11px', color: '#aaa' }}>team assigned before qualifying</div>
+                      const teamDrivers = F1_GRID.find(t => t.team === assignedTeam)?.drivers || []
+                      return (
+                        <div>
+                          <div style={{ fontSize: '10px', color: '#888', marginBottom: 6 }}>{assignedTeam}</div>
+                          <div style={{ display: 'flex', gap: 0 }}>
+                            {teamDrivers.map((driver, i) => {
+                              const active = pred?.value_text === driver.name
+                              return (
+                                <button key={driver.name} type="button" disabled={locked}
+                                  onClick={() => !locked && updatePred(session.id, rule.category_id, { value_text: driver.name })}
+                                  style={{ flex: 1, padding: '8px 4px', border: '1px solid', borderRight: i === 0 ? 'none' : undefined, borderColor: active ? '#C8102E' : '#ddd', background: active ? '#C8102E' : locked ? '#fafafa' : 'white', color: active ? 'white' : '#555', fontSize: '11px', fontFamily: 'inherit', cursor: locked ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                                  <img src={driver.photo} style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' as const }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                                  {driver.name.split(' ').pop()}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })()
                     ) : rule.input_type === 'player' ? (
                       <DriverDropdown value={pred?.value_text || ''} disabled={locked}
                         onChange={v => updatePred(session.id, rule.category_id, { value_text: v })} />
