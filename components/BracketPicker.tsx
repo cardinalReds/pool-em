@@ -138,6 +138,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
   const [bestThirdGroups, setBestThirdGroups] = useState<string[]>([])
   const [bracketPicks, setBracketPicks] = useState<BracketPicks>({})
   const [bracketScores, setBracketScores] = useState<Record<string, string>>({})
+  const [scoringBreakdown, setScoringBreakdown] = useState<Record<string, number>>({})
   const [r32Bracket, setR32Bracket] = useState<Record<string, { home: string; away: string }>>({})
   const [saving, setSaving] = useState(false)
   const [autoSaved, setAutoSaved] = useState(false)
@@ -166,6 +167,10 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
         setGroupPicks(loadedGroupPicks)
         setBestThirdGroups(loadedThirds)
         setBracketPicks(data.bracket_picks || {})
+        // Load scoring breakdown
+        if (data.bracket_scores?.breakdown) {
+          setScoringBreakdown(data.bracket_scores.breakdown)
+        }
         // Restore final score from dedicated columns
         if (data.final_home_score != null && data.final_away_score != null) {
           setBracketScores({ FINAL: `${data.final_home_score}-${data.final_away_score}` })
@@ -441,6 +446,23 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
               locked={true}
               onPick={() => {}}
               onScore={() => {}}
+              breakdown={scoringBreakdown}
+              r32Teams={new Set(Object.keys(scoringBreakdown).filter(k => k.startsWith('R16_')).map(k => k.replace('R16_', '')))}
+              correctSlots={new Set(Object.entries(bracketPicks).filter(([slot, team]) => {
+                if (slot.startsWith('R32_')) return scoringBreakdown[`R16_${team}`] > 0
+                if (slot.startsWith('R16_')) return scoringBreakdown[`QF_${team}`] > 0
+                if (slot.startsWith('QF_')) return scoringBreakdown[`SF_${team}`] > 0
+                if (slot.startsWith('SF_')) return scoringBreakdown[`FINAL_${team}`] > 0
+                if (slot === 'FINAL') return scoringBreakdown['CHAMPION'] > 0
+                return false
+              }).map(([slot]) => slot))}
+              scoredSlots={new Set(Object.keys(bracketPicks).filter(slot => {
+                if (slot.startsWith('R32_')) return Object.keys(scoringBreakdown).some(k => k.startsWith('R16_'))
+                if (slot.startsWith('R16_')) return Object.keys(scoringBreakdown).some(k => k.startsWith('QF_'))
+                if (slot.startsWith('QF_')) return Object.keys(scoringBreakdown).some(k => k.startsWith('SF_'))
+                if (slot.startsWith('SF_')) return Object.keys(scoringBreakdown).some(k => k.startsWith('FINAL_'))
+                return false
+              }))}
             />
           </div>
         </div>
@@ -641,6 +663,23 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
               locked={locked}
               onPick={pickBracket}
               onScore={(slot, score) => setBracketScores(prev => ({ ...prev, [slot]: score }))}
+              breakdown={scoringBreakdown}
+              r32Teams={new Set(Object.keys(scoringBreakdown).filter(k => k.startsWith('R16_')).map(k => k.replace('R16_', '')))}
+              correctSlots={new Set(Object.entries(bracketPicks).filter(([slot, team]) => {
+                if (slot.startsWith('R32_')) return scoringBreakdown[`R16_${team}`] > 0
+                if (slot.startsWith('R16_')) return scoringBreakdown[`QF_${team}`] > 0
+                if (slot.startsWith('QF_')) return scoringBreakdown[`SF_${team}`] > 0
+                if (slot.startsWith('SF_')) return scoringBreakdown[`FINAL_${team}`] > 0
+                if (slot === 'FINAL') return scoringBreakdown['CHAMPION'] > 0
+                return false
+              }).map(([slot]) => slot))}
+              scoredSlots={new Set(Object.keys(bracketPicks).filter(slot => {
+                if (slot.startsWith('R32_')) return Object.keys(scoringBreakdown).some(k => k.startsWith('R16_'))
+                if (slot.startsWith('R16_')) return Object.keys(scoringBreakdown).some(k => k.startsWith('QF_'))
+                if (slot.startsWith('QF_')) return Object.keys(scoringBreakdown).some(k => k.startsWith('SF_'))
+                if (slot.startsWith('SF_')) return Object.keys(scoringBreakdown).some(k => k.startsWith('FINAL_'))
+                return false
+              }))}
             />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #eee', flexWrap: 'wrap' as const, gap: 8 }}>
