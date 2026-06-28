@@ -145,6 +145,31 @@ function fmtShort(dateStr: string) {
 }
 
 // ── Driver Dropdown ───────────────────────────────────────────────────────────
+function TeammateBattlePicker({ assignedTeam, value, disabled, onChange }: {
+  assignedTeam: string | null; value: string; disabled: boolean; onChange: (v: string) => void
+}) {
+  if (!assignedTeam) return <div style={{ fontSize: '11px', color: '#aaa' }}>team assigned before qualifying</div>
+  const teamDrivers = F1_GRID.find(t => t.team === assignedTeam)?.drivers || []
+  return (
+    <div>
+      <div style={{ fontSize: '10px', color: '#888', marginBottom: 6 }}>{assignedTeam}</div>
+      <div style={{ display: 'flex', gap: 0 }}>
+        {teamDrivers.map((driver, i) => {
+          const active = value === driver.name
+          return (
+            <button key={driver.name} type="button" disabled={disabled}
+              onClick={() => !disabled && onChange(driver.name)}
+              style={{ flex: 1, padding: '8px 4px', border: '1px solid', borderRight: i === 0 ? 'none' : undefined, borderColor: active ? '#C8102E' : '#ddd', background: active ? '#C8102E' : disabled ? '#fafafa' : 'white', color: active ? 'white' : '#555', fontSize: '11px', fontFamily: 'inherit', cursor: disabled ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' as const }}>
+              <img src={driver.photo} style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' as const }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+              {driver.name.split(' ').pop()}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function DriverDropdown({ value, onChange, disabled, exclude = [], excludeTeams = [] }: {
   value: string; onChange: (v: string) => void; disabled: boolean; exclude?: string[]; excludeTeams?: string[]
 }) {
@@ -619,30 +644,13 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                           style={{ width: 36, height: 36, border: '1px solid #ddd', background: locked ? '#fafafa' : 'white', fontSize: '18px', cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit' }}>+</button>
                         <span style={{ fontSize: '11px', color: '#aaa' }}>lap</span>
                       </div>
-                    ) : rule.category_id === 'f1_teammate_battle' ? (() => {
-                      // Get the assigned team for this GP weekend
-                      const assignedTeam = (session as any).teammate_battle_team || null
-                      if (!assignedTeam) return <div style={{ fontSize: '11px', color: '#aaa' }}>team assigned before qualifying</div>
-                      const teamDrivers = F1_GRID.find(t => t.team === assignedTeam)?.drivers || []
-                      return (
-                        <div>
-                          <div style={{ fontSize: '10px', color: '#888', marginBottom: 6 }}>{assignedTeam}</div>
-                          <div style={{ display: 'flex', gap: 0 }}>
-                            {teamDrivers.map((driver, i) => {
-                              const active = pred?.value_text === driver.name
-                              return (
-                                <button key={driver.name} type="button" disabled={locked}
-                                  onClick={() => !locked && updatePred(session.id, rule.category_id, { value_text: driver.name })}
-                                  style={{ flex: 1, padding: '8px 4px', border: '1px solid', borderRight: i === 0 ? 'none' : undefined, borderColor: active ? '#C8102E' : '#ddd', background: active ? '#C8102E' : locked ? '#fafafa' : 'white', color: active ? 'white' : '#555', fontSize: '11px', fontFamily: 'inherit', cursor: locked ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
-                                  <img src={driver.photo} style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' as const }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-                                  {driver.name.split(' ').pop()}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )
-                    })()
+                    ) : rule.category_id === 'f1_teammate_battle' ? (
+                      <TeammateBattlePicker
+                        assignedTeam={session.teammate_battle_team || null}
+                        value={pred?.value_text || ''}
+                        disabled={locked}
+                        onChange={v => updatePred(session.id, rule.category_id, { value_text: v })}
+                      />
                     ) : rule.input_type === 'player' ? (
                       <DriverDropdown value={pred?.value_text || ''} disabled={locked}
                         onChange={v => updatePred(session.id, rule.category_id, { value_text: v })} />
