@@ -285,14 +285,10 @@ export async function POST(request: NextRequest) {
             .update({ points_earned: points, is_correct: points > 0 })
             .eq('id', pred.id)
         }
-      }
 
         // ── Closest-wins scoring for f1_first_pit_lap ──────────────────
-        // After all preds are scored, find who was closest to actual pit lap
-        // and award them points (ties all get points)
         const pitRule = ruleMap['f1_first_pit_lap']
-        if (pitRule && session.session_type === 'Race' || session.session_type === 'Sprint') {
-          // Fetch pit stop data
+        if (pitRule && (session.session_type === 'Race' || session.session_type === 'Sprint')) {
           const pitRes = await fetch(`${F1_BASE}/pitstops?race=${session.id}`, {
             headers: { 'x-apisports-key': API_KEY },
           })
@@ -300,9 +296,7 @@ export async function POST(request: NextRequest) {
             const pitData = await pitRes.json()
             const pits: any[] = pitData.response || []
             if (pits.length > 0) {
-              // First pit stop = earliest lap number across all pit stops
               const firstPitLap = Math.min(...pits.map((p: any) => p.lap || 999))
-              // Find all predictions for this category
               const pitPreds = (preds || []).filter((p: any) => p.category_id === 'f1_first_pit_lap' && p.value_number)
               if (pitPreds.length > 0) {
                 const minDiff = Math.min(...pitPreds.map((p: any) => Math.abs(p.value_number - firstPitLap)))
