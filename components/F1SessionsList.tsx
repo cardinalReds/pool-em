@@ -100,11 +100,13 @@ const F1_GRID = [
 const SESSION_CATEGORIES: Record<string, string[]> = {
   'Race':           ['f1_race_winner', 'f1_podium_order', 'f1_podium', 'f1_points_finish', 'f1_fastest_lap', 'f1_first_retirement', 'f1_pole_to_win', 'f1_first_pit_lap', 'f1_teammate_battle'],
   '3rd Qualifying': ['f1_pole_position', 'f1_top3_quali', 'f1_q1_eliminated', 'f1_q3_qualifier'],
-  'Sprint':         ['f1_sprint_winner', 'f1_sprint_podium'],
+  '3rd Sprint Shootout': ['f1_pole_position', 'f1_top3_quali', 'f1_q1_eliminated', 'f1_q3_qualifier'],
+  'Sprint':         ['f1_race_winner', 'f1_podium_order', 'f1_podium', 'f1_points_finish', 'f1_fastest_lap', 'f1_first_retirement', 'f1_pole_to_win', 'f1_first_pit_lap', 'f1_teammate_battle'],
 }
 
 const SESSION_LABEL: Record<string, string> = {
   '3rd Qualifying': 'Qualifying', 'Race': 'Race', 'Sprint': 'Sprint',
+  '1st Sprint Shootout': 'Sprint Q1', '2nd Sprint Shootout': 'Sprint Q2', '3rd Sprint Shootout': 'Sprint Q3',
 }
 
 function driverNameMatches(pick: string, actual: string): boolean {
@@ -587,7 +589,12 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                 return (
                   <div key={rule.category_id} style={{ marginBottom: 12 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#555' }}>{rule.name}</span>
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#555' }}>
+                        {rule.category_id === 'f1_q1_eliminated' ? 'pick a driver out in Q1'
+                          : rule.category_id === 'f1_q3_qualifier' ? 'pick a driver who will make it to Q3'
+                          : rule.category_id === 'f1_first_pit_lap' ? 'lap of the first pit stop (closest wins)'
+                          : rule.name}
+                      </span>
                       <span style={{ fontSize: '11px', color: '#C8102E' }}>{rule.points} pt{rule.points !== 1 ? 's' : ''}</span>
                     </div>
 
@@ -634,19 +641,20 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                         excludeTeams={Q3_EXCLUDED_TEAMS}
                         onChange={v => updatePred(session.id, rule.category_id, { value_text: v })} />
                     ) : rule.category_id === 'f1_first_pit_lap' ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
                         <button type="button" disabled={locked}
                           onClick={() => !locked && updatePred(session.id, rule.category_id, { value_number: Math.max(1, (pred?.value_number || 0) - 1) })}
-                          style={{ width: 36, height: 36, border: '1px solid #ddd', background: locked ? '#fafafa' : 'white', fontSize: '18px', cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit' }}>−</button>
-                        <span style={{ fontSize: '20px', fontWeight: 700, minWidth: 40, textAlign: 'center' as const }}>{pred?.value_number || '?'}</span>
+                          style={{ width: 40, height: 40, border: '1px solid #ddd', background: locked ? '#fafafa' : 'white', fontSize: '20px', cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit' }}>−</button>
+                        <span style={{ fontSize: '24px', fontWeight: 700, minWidth: 48, textAlign: 'center' as const }}>{pred?.value_number || '?'}</span>
                         <button type="button" disabled={locked}
                           onClick={() => !locked && updatePred(session.id, rule.category_id, { value_number: (pred?.value_number || 0) + 1 })}
-                          style={{ width: 36, height: 36, border: '1px solid #ddd', background: locked ? '#fafafa' : 'white', fontSize: '18px', cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit' }}>+</button>
+                          style={{ width: 40, height: 40, border: '1px solid #ddd', background: locked ? '#fafafa' : 'white', fontSize: '20px', cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit' }}>+</button>
                         <span style={{ fontSize: '11px', color: '#aaa' }}>lap</span>
                       </div>
                     ) : rule.category_id === 'f1_teammate_battle' ? (
                       <TeammateBattlePicker
-                        assignedTeam={session.teammate_battle_team || null}
+                        assignedTeam={session.teammate_battle_team || 
+                          sorted.find(s => s.session_type === 'Race')?.teammate_battle_team || null}
                         value={pred?.value_text || ''}
                         disabled={locked}
                         onChange={v => updatePred(session.id, rule.category_id, { value_text: v })}

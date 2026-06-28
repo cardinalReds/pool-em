@@ -20,7 +20,7 @@ const SEASON = 2026
 const TOURNAMENT_ID = 'f1_2026'
 
 // Session types we care about — skip practice sessions since users don't pick on those
-const SCORED_SESSION_TYPES = ['Race', '1st Qualifying', '2nd Qualifying', '3rd Qualifying', 'Sprint', 'Sprint Qualifying']
+const SCORED_SESSION_TYPES = ['Race', '1st Qualifying', '2nd Qualifying', '3rd Qualifying', 'Sprint', '1st Sprint Shootout', '2nd Sprint Shootout', '3rd Sprint Shootout']
 
 // All 2026 F1 competition IDs from /competitions endpoint
 // Verified from your earlier API call — excludes historical/defunct venues
