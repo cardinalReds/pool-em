@@ -1085,18 +1085,15 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
         const placeholder = isPlaceholder(team)
         const teamPts = getTeamPts(team)
         const teamConfirmed = !placeholder && team ? (teamPts ?? 0) > 0 : false
-        
-        // A team is eliminated if results exist for this round but they're not confirmed
-        const hasRoundResults = !placeholder && team && breakdown ? (
-          isR32 ? (actualR32Teams && actualR32Teams.size > 0) :
-          slot.startsWith('R16_') ? Object.keys(breakdown).some(k => k.startsWith('R16_')) :
-          slot.startsWith('R16_') ? Object.keys(breakdown).some(k => k.startsWith('R16_')) :
-          slot.startsWith('QF_') ? Object.keys(breakdown).some(k => k.startsWith('QF_')) :
-          slot.startsWith('SF_') ? Object.keys(breakdown).some(k => k.startsWith('SF_')) :
-          false
-        ) : (isR32 && actualR32Teams && actualR32Teams.size > 0)
-        
-        const teamEliminated = hasRoundResults && !teamConfirmed && !placeholder && !!team
+
+        // A team is eliminated only if their OPPONENT is confirmed in this round
+        // i.e. the other team in this specific matchup has points
+        const opponent = i === 0 ? away : home
+        const opponentConfirmed = !isPlaceholder(opponent) && opponent && breakdown
+          ? (getTeamPts(opponent) ?? 0) > 0
+          : false
+        // For R32: eliminated if opponent is in actualR32Teams (actually: if team itself is NOT in actualR32Teams but opponent IS confirmed in R16)
+        const teamEliminated = !placeholder && !!team && !teamConfirmed && opponentConfirmed
 
         return (
           <button key={i}
@@ -1108,7 +1105,7 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
               borderBottom: i === 0 ? '1px solid #f0f0f0' : 'none',
               borderLeft: active && !teamConfirmed && !teamEliminated ? '3px solid #C8102E' : '3px solid transparent',
               background: teamConfirmed ? '#2d7a2d' : placeholder || !team ? '#fafafa' : 'white',
-              color: teamConfirmed ? 'white' : teamEliminated ? '#C8102E' : active ? '#111' : placeholder || !team ? '#ccc' : '#333',
+              color: teamConfirmed ? 'white' : teamEliminated ? '#bbb' : active ? '#111' : placeholder || !team ? '#ccc' : '#333',
               cursor: locked || placeholder || !team ? 'default' : 'pointer',
               fontFamily: 'inherit', fontSize: '10px', fontWeight: active ? 700 : 400,
               textAlign: 'left' as const,
@@ -1119,7 +1116,7 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
               {!team ? '—' : placeholder ? team.replace('winner of ', '→') : team}
             </span>
             {teamConfirmed && <span style={{ marginLeft: 'auto', fontSize: '9px' }}>✓{teamPts ? ` +${teamPts}` : ''}</span>}
-            {teamEliminated && active && <span style={{ marginLeft: 'auto', fontSize: '9px' }}>✗</span>}
+            {teamEliminated && active && <span style={{ marginLeft: 'auto', fontSize: '9px', color: '#bbb' }}>✗</span>}
           </button>
         )
       })}
