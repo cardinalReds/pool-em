@@ -80,7 +80,8 @@ function buildActualRoundSets(
   fixtures: any[]
 ): Record<string, Set<string>> {
   const sets: Record<string, Set<string>> = {
-    R32: new Set(), R16: new Set(), QF: new Set(), SF: new Set(), FINAL: new Set(), CHAMPION: new Set()
+    R32: new Set(), R16: new Set(), QF: new Set(), SF: new Set(), FINAL: new Set(), CHAMPION: new Set(),
+    ELIMINATED: new Set() // teams that have lost a match
   }
 
   // R32 participants: use actual fixture appearances first (most reliable)
@@ -106,22 +107,23 @@ function buildActualRoundSets(
     if (f.status !== 'FT' || f.home_score === null || f.away_score === null) continue
     const r = f.round || ''
     const w = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
-    if (r.includes('Round of 32') && w) sets.R16.add(w)
+    const l = f.home_score > f.away_score ? f.away_team : f.away_score > f.home_score ? f.home_team : null
+    if (r.includes('Round of 32') && w) { sets.R16.add(w); if (l) sets.ELIMINATED.add(l) }
     if (r.includes('Round of 16')) {
       sets.R16.add(f.home_team); sets.R16.add(f.away_team)
-      if (w) sets.QF.add(w)
+      if (w) { sets.QF.add(w); if (l) sets.ELIMINATED.add(l) }
     }
     if (r.includes('Quarter-finals')) {
       sets.QF.add(f.home_team); sets.QF.add(f.away_team)
-      if (w) sets.SF.add(w)
+      if (w) { sets.SF.add(w); if (l) sets.ELIMINATED.add(l) }
     }
     if (r.includes('Semi-finals')) {
       sets.SF.add(f.home_team); sets.SF.add(f.away_team)
-      if (w) sets.FINAL.add(w)
+      if (w) { sets.FINAL.add(w); if (l) sets.ELIMINATED.add(l) }
     }
     if (r === 'Final') {
       sets.FINAL.add(f.home_team); sets.FINAL.add(f.away_team)
-      if (w) sets.CHAMPION.add(w)
+      if (w) { sets.CHAMPION.add(w); if (l) sets.ELIMINATED.add(l) }
     }
   }
 
@@ -342,7 +344,7 @@ export async function POST() {
         if (totalPts > 0 || Object.keys(breakdown).length > 0) {
           await supabase
             .from('bracket_picks')
-            .update({ bracket_scores: { total: totalPts, breakdown } })
+            .update({ bracket_scores: { total: totalPts, breakdown, eliminated: [...actualRounds.ELIMINATED] } })
             .eq('id', pick.id)
         }
       }

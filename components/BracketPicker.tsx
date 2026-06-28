@@ -139,6 +139,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
   const [bracketPicks, setBracketPicks] = useState<BracketPicks>({})
   const [bracketScores, setBracketScores] = useState<Record<string, string>>({})
   const [scoringBreakdown, setScoringBreakdown] = useState<Record<string, number>>({})
+  const [eliminatedTeams, setEliminatedTeams] = useState<Set<string>>(new Set())
   const [r32Bracket, setR32Bracket] = useState<Record<string, { home: string; away: string }>>({})
   const [saving, setSaving] = useState(false)
   const [autoSaved, setAutoSaved] = useState(false)
@@ -170,6 +171,9 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
         // Load scoring breakdown
         if (data.bracket_scores?.breakdown) {
           setScoringBreakdown(data.bracket_scores.breakdown)
+        }
+        if (data.bracket_scores?.eliminated) {
+          setEliminatedTeams(new Set(data.bracket_scores.eliminated))
         }
         // Restore final score from dedicated columns
         if (data.final_home_score != null && data.final_away_score != null) {
@@ -447,6 +451,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
               onPick={() => {}}
               onScore={() => {}}
               breakdown={scoringBreakdown}
+              eliminatedTeams={eliminatedTeams}
               r32Teams={new Set(Object.keys(scoringBreakdown).filter(k => k.startsWith('R16_')).map(k => k.replace('R16_', '')))}
               correctSlots={new Set(Object.entries(bracketPicks).filter(([slot, team]) => {
                 if (slot.startsWith('R32_')) return scoringBreakdown[`R16_${team}`] > 0
@@ -664,6 +669,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
               onPick={pickBracket}
               onScore={(slot, score) => setBracketScores(prev => ({ ...prev, [slot]: score }))}
               breakdown={scoringBreakdown}
+              eliminatedTeams={eliminatedTeams}
               r32Teams={new Set(Object.keys(scoringBreakdown).filter(k => k.startsWith('R16_')).map(k => k.replace('R16_', '')))}
               correctSlots={new Set(Object.entries(bracketPicks).filter(([slot, team]) => {
                 if (slot.startsWith('R32_')) return (scoringBreakdown[`R32_${team}`] ?? 0) > 0
@@ -850,6 +856,7 @@ export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRu
   r32Teams?: Set<string>       // teams that SCORED in R32 (correct picks)
   actualR32Teams?: Set<string> // ALL teams confirmed in R32 (for hasResult)
   breakdown?: Record<string, number> // points breakdown for display
+  eliminatedTeams?: Set<string> // teams that have been knocked out
 }) {
   // Visual order matches fotmob official bracket exactly
   // Left: M74+M77→R16_1, M73+M75→R16_2, M84+M88→R16_3, M83+M81→R16_4
@@ -928,6 +935,7 @@ export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRu
                         hasResult={slot.startsWith('R32_') ? (r32Teams && r32Teams.size > 0) : scoredSlots?.has(slot)}
                         isCorrect={slot.startsWith('R32_') ? (r32Teams?.has(bracketPicks[slot] ?? '') ?? false) : correctSlots?.has(slot)}
                         breakdown={breakdown}
+                        eliminatedTeams={eliminatedTeams}
                         r32Teams={r32Teams}
                         actualR32Teams={actualR32Teams}
                       />
@@ -1048,7 +1056,7 @@ export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRu
 }
 
 // ── Single match card ─────────────────────────────────────────────────────
-function MatchCard({ slot, home, away, picked, score, showExactScore, locked, onPick, onScore, hasResult, isCorrect, r32Teams, actualR32Teams, breakdown }: {
+function MatchCard({ slot, home, away, picked, score, showExactScore, locked, onPick, onScore, hasResult, isCorrect, r32Teams, actualR32Teams, breakdown, eliminatedTeams }: {
   slot: string
   home: string
   away: string
@@ -1063,10 +1071,11 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
   r32Teams?: Set<string>
   actualR32Teams?: Set<string>
   breakdown?: Record<string, number>
+  eliminatedTeams?: Set<string>
+  eliminatedTeams?: Set<string>
 }) {
   if (!home && !away) return <div style={{ height: showExactScore ? 80 : 54, border: '1px solid transparent' }} />
   const isPlaceholder = (t: string) => !t || t.startsWith('winner of')
-  const isR32 = slot.startsWith('R32_')
 
   function getTeamPts(team: string): number | undefined {
     if (!breakdown || !team) return undefined
@@ -1085,16 +1094,7 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
         const placeholder = isPlaceholder(team)
         const teamPts = getTeamPts(team)
         const teamConfirmed = !placeholder && team ? (teamPts ?? 0) > 0 : false
-
-        // A team is only eliminated if this specific match has been played
-        // = one team is confirmed AND both teams are known (not placeholders)
-        const opponent = i === 0 ? away : home
-        const bothTeamsKnown = !isPlaceholder(team) && !isPlaceholder(opponent) && !!team && !!opponent
-        const opponentConfirmed = bothTeamsKnown && breakdown
-          ? (getTeamPts(opponent) ?? 0) > 0
-          : false
-        // Only mark eliminated if the match is complete (opponent won it)
-        const teamEliminated = bothTeamsKnown && !teamConfirmed && opponentConfirmed
+        const teamEliminated = !placeholder && !!team && !teamConfirmed && (eliminatedTeams?.has(team) ?? false)
 
         return (
           <button key={i}
@@ -1104,7 +1104,7 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
               display: 'flex', alignItems: 'center', gap: 4, width: '100%',
               padding: '4px 6px', border: 'none',
               borderBottom: i === 0 ? '1px solid #f0f0f0' : 'none',
-              borderLeft: active && !teamConfirmed && !teamEliminated ? '3px solid #C8102E' : '3px solid transparent',
+              borderLeft: active && !teamConfirmed ? '3px solid #C8102E' : '3px solid transparent',
               background: teamConfirmed ? '#2d7a2d' : placeholder || !team ? '#fafafa' : 'white',
               color: teamConfirmed ? 'white' : teamEliminated ? '#bbb' : active ? '#111' : placeholder || !team ? '#ccc' : '#333',
               cursor: locked || placeholder || !team ? 'default' : 'pointer',
@@ -1117,7 +1117,7 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
               {!team ? '—' : placeholder ? team.replace('winner of ', '→') : team}
             </span>
             {teamConfirmed && <span style={{ marginLeft: 'auto', fontSize: '9px' }}>✓{teamPts ? ` +${teamPts}` : ''}</span>}
-            {teamEliminated && active && <span style={{ marginLeft: 'auto', fontSize: '9px', color: '#bbb' }}>✗</span>}
+            {teamEliminated && <span style={{ marginLeft: 'auto', fontSize: '9px', color: '#bbb' }}>✗</span>}
           </button>
         )
       })}
