@@ -843,7 +843,7 @@ function GroupPicker({ group, teams, picks, locked, onChange }: {
 }
 
 // ── Bracket View — mirrored left/right meeting at Final in center ─────────
-export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRules, locked, onPick, onScore, correctSlots, scoredSlots, r32Teams, actualR32Teams, breakdown }: {
+export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRules, locked, onPick, onScore, correctSlots, scoredSlots, r32Teams, actualR32Teams, breakdown, eliminatedTeams }: {
   r32Bracket: Record<string, { home: string; away: string }>
   bracketPicks: BracketPicks
   bracketScores: Record<string, string>
