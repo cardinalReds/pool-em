@@ -272,77 +272,71 @@ export async function POST() {
         for (const [group, predicted] of Object.entries(groupPicks)) {
           const locked = actualStandings[group]
           if (!locked) continue
-
           if (rules.groupFormat === 'standings') {
-            if (locked['1'] && predicted[0] === locked['1']) {
-              totalPts += rules.standingsFirst
-              breakdown[`group_${group}_1st`] = rules.standingsFirst
-            }
-            if (locked['2'] && predicted[1] === locked['2']) {
-              totalPts += rules.standingsSecond
-              breakdown[`group_${group}_2nd`] = rules.standingsSecond
-            }
-            if (locked['3'] && predicted[2] === locked['3']) {
-              totalPts += rules.standingsThird
-              breakdown[`group_${group}_3rd`] = rules.standingsThird
-            }
+            if (locked['1'] && predicted[0] === locked['1']) { totalPts += rules.standingsFirst; breakdown[`group_${group}_1st`] = rules.standingsFirst }
+            if (locked['2'] && predicted[1] === locked['2']) { totalPts += rules.standingsSecond; breakdown[`group_${group}_2nd`] = rules.standingsSecond }
+            if (locked['3'] && predicted[2] === locked['3']) { totalPts += rules.standingsThird; breakdown[`group_${group}_3rd`] = rules.standingsThird }
           }
         }
 
-        // ── R32: award points for each team user predicted in R32 that actually made R32 ──
-        // Build user's R32 teams directly from their group picks (avoid random shuffling)
-        // 1st and 2nd place from each group always qualify
-        // 3rd place teams qualify only if the user picked that group in their best_third_groups
-        const userBestThird: string[] = pick.best_third_groups || []
-        const userR32Teams = new Set<string>()
-        for (const [group, predicted] of Object.entries(groupPicks)) {
-          if (predicted[0]) userR32Teams.add(predicted[0]) // 1st always qualifies
-          if (predicted[1]) userR32Teams.add(predicted[1]) // 2nd always qualifies
-          if (predicted[2] && userBestThird.includes(group)) userR32Teams.add(predicted[2]) // 3rd only if user picked this group to advance
-        }
-
-        // Award R32 points for each team in user's R32 that actually made R32
-        for (const team of userR32Teams) {
-          if (actualRounds.R32.has(team)) {
-            totalPts += rules.r32Pts
-            breakdown[`R32_${team}`] = rules.r32Pts
-          }
-        }
-
-        // ── R16 onward: user picks the WINNER of each match ─────────────
-        // bracket_picks stores R16_1, R16_2 etc. as the predicted winner.
-        // actualRounds.R16 is the set of teams that actually made R16.
         const bracketPicksData: Record<string, string> = pick.bracket_picks || {}
 
-        for (const slot of Object.keys(bracketPicksData).filter(k => k.startsWith('R16_'))) {
-          const team = bracketPicksData[slot]
-          if (team && actualRounds.R16.has(team)) {
-            totalPts += rules.r16Pts
-            breakdown[slot] = rules.r16Pts
-          }
+        // ── Build user arrays from bracket_picks ─────────────────────────
+        // userR32 = teams user picked to win each R32 match (values of R32_Mxx keys)
+        // userR16 = teams user picked to win each R16 match (values of R16_x keys)
+        // userQF  = teams user picked to win each QF match  (values of QF_x keys)
+        // userSF  = teams user picked to win each SF match  (values of SF_x keys)
+        // userFINAL = team user picked to win the Final
+        const userR32 = Object.entries(bracketPicksData).filter(([k]) => k.startsWith('R32_')).map(([, v]) => v).filter(Boolean)
+        const userR16 = Object.entries(bracketPicksData).filter(([k]) => k.startsWith('R16_')).map(([, v]) => v).filter(Boolean)
+        const userQF  = Object.entries(bracketPicksData).filter(([k]) => k.startsWith('QF_')).map(([, v]) => v).filter(Boolean)
+        const userSF  = Object.entries(bracketPicksData).filter(([k]) => k.startsWith('SF_')).map(([, v]) => v).filter(Boolean)
+        const userFINAL = bracketPicksData['FINAL']
+
+        // ── Build actual arrays from confirmed results ────────────────────
+        // actualR32 = 32 teams who actually played in R32 (from standings)
+        // actualR16 = teams who won their R32 game (confirmed in R16)
+        // actualQF  = teams who won their R16 game
+        // actualSF  = teams who won their QF game
+        // actualFINAL = teams who won their SF game
+        // actualChampion = tournament winner
+
+        // ── Score each round ─────────────────────────────────────────────
+        // R32 participation (1pt each): user predicted them in R32 from group picks
+        const userBestThird: string[] = pick.best_third_groups || []
+        const userR32FromGroups = new Set<string>()
+        for (const [group, predicted] of Object.entries(groupPicks)) {
+          if (predicted[0]) userR32FromGroups.add(predicted[0])
+          if (predicted[1]) userR32FromGroups.add(predicted[1])
+          if (predicted[2] && userBestThird.includes(group)) userR32FromGroups.add(predicted[2])
         }
-        for (const slot of Object.keys(bracketPicksData).filter(k => k.startsWith('QF_'))) {
-          const team = bracketPicksData[slot]
-          if (team && actualRounds.QF.has(team)) {
-            totalPts += rules.qfPts
-            breakdown[slot] = rules.qfPts
-          }
+        for (const team of userR32FromGroups) {
+          if (actualRounds.R32.has(team)) { totalPts += rules.r32Pts; breakdown[`R32_${team}`] = rules.r32Pts }
         }
-        for (const slot of Object.keys(bracketPicksData).filter(k => k.startsWith('SF_'))) {
-          const team = bracketPicksData[slot]
-          if (team && actualRounds.SF.has(team)) {
-            totalPts += rules.sfPts
-            breakdown[slot] = rules.sfPts
-          }
+
+        // R16 (2pts each): user predicted them to WIN their R32 match → team is now in R16
+        for (const team of userR32) {
+          if (actualRounds.R16.has(team)) { totalPts += rules.r16Pts; breakdown[`R16_${team}`] = rules.r16Pts }
         }
-        const finalPick = bracketPicksData['FINAL']
-        if (finalPick && actualRounds.FINAL.has(finalPick)) {
-          totalPts += rules.finalPts
-          breakdown['FINAL'] = rules.finalPts
+
+        // QF (4pts each): user predicted them to WIN their R16 match → team is now in QF
+        for (const team of userR16) {
+          if (actualRounds.QF.has(team)) { totalPts += rules.qfPts; breakdown[`QF_${team}`] = rules.qfPts }
         }
-        if (finalPick && actualRounds.CHAMPION.has(finalPick)) {
-          totalPts += rules.finalPts
-          breakdown['CHAMPION'] = rules.finalPts
+
+        // SF (6pts each): user predicted them to WIN their QF match → team is now in SF
+        for (const team of userQF) {
+          if (actualRounds.SF.has(team)) { totalPts += rules.sfPts; breakdown[`SF_${team}`] = rules.sfPts }
+        }
+
+        // Final (12pts each): user predicted them to WIN their SF match → team is in Final
+        for (const team of userSF) {
+          if (actualRounds.FINAL.has(team)) { totalPts += rules.finalPts; breakdown[`FINAL_${team}`] = rules.finalPts }
+        }
+
+        // Champion: user predicted the winner of the Final
+        if (userFINAL && actualRounds.CHAMPION.has(userFINAL)) {
+          totalPts += rules.finalPts; breakdown['CHAMPION'] = rules.finalPts
         }
 
         if (totalPts > 0 || Object.keys(breakdown).length > 0) {
