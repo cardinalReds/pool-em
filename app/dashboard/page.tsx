@@ -10,6 +10,7 @@ export default function DashboardPage() {
   const [adminPools, setAdminPools] = useState<any[]>([])
   const [memberPools, setMemberPools] = useState<any[]>([])
   const [livePoolIds, setLivePoolIds] = useState<Set<string>>(new Set())
+  const [overPoolIds, setOverPoolIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [showArchived, setShowArchived] = useState(false)
 
@@ -36,6 +37,26 @@ export default function DashboardPage() {
       const liveIds = new Set(allPools.filter(p => p && allLiveTournaments.has(p.tournament_id)).map(p => p.id) as string[])
       setLivePoolIds(liveIds)
     }
+
+    // Check which pools are over based on tournament end_date
+    const tournamentIds = [...new Set(allPools.filter(p => p?.tournament_id).map(p => p.tournament_id))]
+    if (tournamentIds.length > 0) {
+      const { data: tournaments } = await supabase
+        .from('tournaments')
+        .select('id, end_date')
+        .in('id', tournamentIds)
+      const now = new Date()
+      const overTournaments = new Set(
+        (tournaments || []).filter(t => t.end_date && new Date(t.end_date) <= now).map(t => t.id)
+      )
+      const overIds = new Set(
+        allPools
+          .filter(p => p?.tournament_id && overTournaments.has(p.tournament_id) && !p.archived)
+          .map(p => p.id) as string[]
+      )
+      setOverPoolIds(overIds)
+    }
+
     setLoading(false)
   }
 
@@ -84,7 +105,7 @@ export default function DashboardPage() {
             <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
           </div>
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))', gap: '0.75rem'}}>
-            {activeAdmin.map(pool => <PoolCard key={pool.id} pool={pool} role="admin" isLive={livePoolIds.has(pool.id)} onArchive={() => archivePool(pool.id, true)} />)}
+            {activeAdmin.map(pool => <PoolCard key={pool.id} pool={pool} role="admin" isLive={livePoolIds.has(pool.id)} isOver={overPoolIds.has(pool.id)} onArchive={() => archivePool(pool.id, true)} />)}
           </div>
         </section>
       )}
@@ -130,10 +151,11 @@ export default function DashboardPage() {
   )
 }
 
-function PoolCard({ pool, role, isLive, onArchive, onUnarchive }: {
+function PoolCard({ pool, role, isLive, isOver, onArchive, onUnarchive }: {
   pool: any
   role: 'admin' | 'member'
   isLive?: boolean
+  isOver?: boolean
   onArchive?: () => void
   onUnarchive?: () => void
 }) {
@@ -161,7 +183,7 @@ function PoolCard({ pool, role, isLive, onArchive, onUnarchive }: {
           <div style={{fontSize: '0.75rem', color: 'var(--text-dim)'}}>{pkg?.name || pool.package_id}</div>
         </div>
       </Link>
-      {onArchive && !pool.archived && (
+      {onArchive && !pool.archived && isOver && (
         <button
           onClick={e => { e.preventDefault(); e.stopPropagation(); onArchive() }}
           style={{position: 'absolute', bottom: 8, right: 8, fontSize: '10px', color: 'var(--text-faint)', background: 'none', border: '1px solid var(--border-light)', padding: '2px 6px', cursor: 'pointer', fontFamily: 'inherit'}}>
