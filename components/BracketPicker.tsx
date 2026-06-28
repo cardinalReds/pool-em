@@ -1086,14 +1086,15 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
         const teamPts = getTeamPts(team)
         const teamConfirmed = !placeholder && team ? (teamPts ?? 0) > 0 : false
 
-        // A team is eliminated only if their OPPONENT is confirmed in this round
-        // i.e. the other team in this specific matchup has points
+        // A team is only eliminated if this specific match has been played
+        // = one team is confirmed AND both teams are known (not placeholders)
         const opponent = i === 0 ? away : home
-        const opponentConfirmed = !isPlaceholder(opponent) && opponent && breakdown
+        const bothTeamsKnown = !isPlaceholder(team) && !isPlaceholder(opponent) && !!team && !!opponent
+        const opponentConfirmed = bothTeamsKnown && breakdown
           ? (getTeamPts(opponent) ?? 0) > 0
           : false
-        // For R32: eliminated if opponent is in actualR32Teams (actually: if team itself is NOT in actualR32Teams but opponent IS confirmed in R16)
-        const teamEliminated = !placeholder && !!team && !teamConfirmed && opponentConfirmed
+        // Only mark eliminated if the match is complete (opponent won it)
+        const teamEliminated = bothTeamsKnown && !teamConfirmed && opponentConfirmed
 
         return (
           <button key={i}
