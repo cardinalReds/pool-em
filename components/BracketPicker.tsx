@@ -666,18 +666,18 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
               breakdown={scoringBreakdown}
               r32Teams={new Set(Object.keys(scoringBreakdown).filter(k => k.startsWith('R16_')).map(k => k.replace('R16_', '')))}
               correctSlots={new Set(Object.entries(bracketPicks).filter(([slot, team]) => {
-                if (slot.startsWith('R32_')) return scoringBreakdown[`R16_${team}`] > 0
-                if (slot.startsWith('R16_')) return scoringBreakdown[`QF_${team}`] > 0
-                if (slot.startsWith('QF_')) return scoringBreakdown[`SF_${team}`] > 0
-                if (slot.startsWith('SF_')) return scoringBreakdown[`FINAL_${team}`] > 0
-                if (slot === 'FINAL') return scoringBreakdown['CHAMPION'] > 0
+                if (slot.startsWith('R32_')) return (scoringBreakdown[`R32_${team}`] ?? 0) > 0
+                if (slot.startsWith('R16_')) return (scoringBreakdown[`R16_${team}`] ?? 0) > 0
+                if (slot.startsWith('QF_')) return (scoringBreakdown[`QF_${team}`] ?? 0) > 0
+                if (slot.startsWith('SF_')) return (scoringBreakdown[`SF_${team}`] ?? 0) > 0
+                if (slot === 'FINAL') return (scoringBreakdown['CHAMPION'] ?? 0) > 0
                 return false
               }).map(([slot]) => slot))}
               scoredSlots={new Set(Object.keys(bracketPicks).filter(slot => {
-                if (slot.startsWith('R32_')) return Object.keys(scoringBreakdown).some(k => k.startsWith('R16_'))
-                if (slot.startsWith('R16_')) return Object.keys(scoringBreakdown).some(k => k.startsWith('QF_'))
-                if (slot.startsWith('QF_')) return Object.keys(scoringBreakdown).some(k => k.startsWith('SF_'))
-                if (slot.startsWith('SF_')) return Object.keys(scoringBreakdown).some(k => k.startsWith('FINAL_'))
+                if (slot.startsWith('R32_')) return Object.keys(scoringBreakdown).some(k => k.startsWith('R32_'))
+                if (slot.startsWith('R16_')) return Object.keys(scoringBreakdown).some(k => k.startsWith('R16_'))
+                if (slot.startsWith('QF_')) return Object.keys(scoringBreakdown).some(k => k.startsWith('QF_'))
+                if (slot.startsWith('SF_')) return Object.keys(scoringBreakdown).some(k => k.startsWith('SF_'))
                 return false
               }))}
             />
@@ -927,17 +927,7 @@ export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRu
                         onScore={onScore}
                         hasResult={slot.startsWith('R32_') ? (r32Teams && r32Teams.size > 0) : scoredSlots?.has(slot)}
                         isCorrect={slot.startsWith('R32_') ? (r32Teams?.has(bracketPicks[slot] ?? '') ?? false) : correctSlots?.has(slot)}
-                        slotPts={(() => {
-                          if (!breakdown) return undefined
-                          const team = bracketPicks[slot]
-                          if (!team) return undefined
-                          if (slot.startsWith('R32_')) return breakdown[`R16_${team}`]
-                          if (slot.startsWith('R16_')) return breakdown[`QF_${team}`]
-                          if (slot.startsWith('QF_')) return breakdown[`SF_${team}`]
-                          if (slot.startsWith('SF_')) return breakdown[`FINAL_${team}`]
-                          if (slot === 'FINAL') return breakdown['CHAMPION']
-                          return undefined
-                        })()}
+                        breakdown={breakdown}
                         r32Teams={r32Teams}
                         actualR32Teams={actualR32Teams}
                       />
@@ -1058,7 +1048,7 @@ export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRu
 }
 
 // ── Single match card ─────────────────────────────────────────────────────
-function MatchCard({ slot, home, away, picked, score, showExactScore, locked, onPick, onScore, hasResult, isCorrect, r32Teams, actualR32Teams, slotPts }: {
+function MatchCard({ slot, home, away, picked, score, showExactScore, locked, onPick, onScore, hasResult, isCorrect, r32Teams, actualR32Teams, breakdown }: {
   slot: string
   home: string
   away: string
@@ -1072,22 +1062,42 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
   isCorrect?: boolean
   r32Teams?: Set<string>
   actualR32Teams?: Set<string>
-  slotPts?: number
+  breakdown?: Record<string, number>
 }) {
   if (!home && !away) return <div style={{ height: showExactScore ? 80 : 54, border: '1px solid transparent' }} />
   const isPlaceholder = (t: string) => !t || t.startsWith('winner of')
   const isR32 = slot.startsWith('R32_')
+
+  function getTeamPts(team: string): number | undefined {
+    if (!breakdown || !team) return undefined
+    if (slot.startsWith('R32_')) return breakdown[`R32_${team}`]
+    if (slot.startsWith('R16_')) return breakdown[`R16_${team}`]
+    if (slot.startsWith('QF_')) return breakdown[`QF_${team}`]
+    if (slot.startsWith('SF_')) return breakdown[`SF_${team}`]
+    if (slot === 'FINAL') return breakdown['CHAMPION']
+    return undefined
+  }
 
   return (
     <div style={{ border: '1px solid #e0e0db', background: 'white', overflow: 'hidden' }}>
       {[home, away].map((team, i) => {
         const active = picked === team
         const placeholder = isPlaceholder(team)
-        const teamKnown = isR32 && actualR32Teams && team && !placeholder ? actualR32Teams.has(team) : false
-        const teamScored = isR32 ? teamKnown : (active && hasResult)
-        const teamCorrect = isR32 ? (teamKnown ? true : null) : (active ? isCorrect : null)
-        const showCheck = teamScored && teamCorrect === true
-        const showCross = teamScored && teamCorrect === false
+        const teamPts = getTeamPts(team)
+        // A team shows green if they have points in the breakdown for this round
+        const teamCorrect = !placeholder && team ? (teamPts ?? 0) > 0 : false
+        // For R32: show result when actualR32Teams is populated
+        // For other rounds: show result when breakdown has entries for this round prefix
+        const teamHasResult = isR32
+          ? (actualR32Teams && team && !placeholder ? actualR32Teams.has(team) : false)
+          : (breakdown && team && !placeholder ? Object.keys(breakdown).some(k => {
+              if (slot.startsWith('R16_')) return k.startsWith('R16_')
+              if (slot.startsWith('QF_')) return k.startsWith('QF_')
+              if (slot.startsWith('SF_')) return k.startsWith('SF_')
+              return false
+            }) : false)
+        const showCheck = teamHasResult && teamCorrect
+        const showCross = teamHasResult && !teamCorrect && !placeholder && !!team
         return (
           <button key={i}
             onClick={() => !locked && !placeholder && team && onPick(slot, team)}
@@ -1096,8 +1106,8 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
               display: 'flex', alignItems: 'center', gap: 4, width: '100%',
               padding: '4px 6px', border: 'none',
               borderBottom: i === 0 ? '1px solid #f0f0f0' : 'none',
-              background: active ? (showCross ? '#C8102E' : showCheck ? '#2d7a2d' : '#C8102E') : showCheck ? '#f3fbf3' : showCross ? '#fff5f5' : placeholder || !team ? '#fafafa' : 'white',
-              color: active ? 'white' : showCheck ? '#2d7a2d' : showCross ? '#C8102E' : placeholder || !team ? '#ccc' : '#333',
+              background: showCheck ? (active ? '#2d7a2d' : '#f3fbf3') : showCross ? (active ? '#C8102E' : 'white') : active ? '#C8102E' : placeholder || !team ? '#fafafa' : 'white',
+              color: showCheck ? (active ? 'white' : '#2d7a2d') : showCross ? (active ? 'white' : '#aaa') : active ? 'white' : placeholder || !team ? '#ccc' : '#333',
               cursor: locked || placeholder || !team ? 'default' : 'pointer',
               fontFamily: 'inherit', fontSize: '10px', fontWeight: active ? 700 : 400,
               textAlign: 'left' as const,
@@ -1106,8 +1116,8 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 90 }}>
               {!team ? '—' : placeholder ? team.replace('winner of ', '→') : team}
             </span>
-            {showCheck && <span style={{ marginLeft: 'auto', fontSize: '9px' }}>✓{slotPts ? ` +${slotPts}` : ''}</span>}
-            {showCross && <span style={{ marginLeft: 'auto', fontSize: '9px' }}>✗</span>}
+            {showCheck && <span style={{ marginLeft: 'auto', fontSize: '9px' }}>✓{teamPts ? ` +${teamPts}` : ''}</span>}
+            {showCross && <span style={{ marginLeft: 'auto', fontSize: '9px', color: active ? 'white' : '#ccc' }}>✗</span>}
           </button>
         )
       })}
