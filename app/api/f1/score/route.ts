@@ -26,8 +26,9 @@ interface DriverResult {
   team_name: string
   position: number
   grid: string | null
-  time: string | null // "DNF" literal when retired, otherwise a time/gap string
+  time: string | null
   laps: number
+  gap: string | null
 }
 
 async function fetchRankings(apiSessionId: number): Promise<DriverResult[]> {
@@ -47,7 +48,19 @@ async function fetchRankings(apiSessionId: number): Promise<DriverResult[]> {
     grid: r.grid ?? null,
     time: r.time ?? null,
     laps: r.laps ?? 0,
-  })).filter(r => r.driver_id && r.position) // drop unclassified/withdrawn rows with no position
+    gap: r.gap ?? null,
+  })).filter(r => r.driver_id && r.position)
+}
+
+async function fetchFastestLap(apiSessionId: number): Promise<string | null> {
+  const res = await fetch(`${F1_BASE}/rankings/fastestlaps?race=${apiSessionId}`, {
+    headers: { 'x-apisports-key': API_KEY },
+  })
+  if (!res.ok) return null
+  const data = await res.json()
+  // Position 1 in fastestlaps = the driver who set the fastest lap
+  const top = data.response?.[0]
+  return top?.driver?.name ?? null
 }
 
 // Normalizes a driver name for loose matching against picks, same spirit as
@@ -82,17 +95,16 @@ interface PoolRule {
 // Returns points earned for a single predictions_v2 row given a session's
 // driver classification. Picks are stored in value_text (driver name) or
 // value_yesno, matching the input_type values seeded in ruleset_categories.
-function scoreF1Prediction(categoryId: string, pred: any, results: DriverResult[], rule: PoolRule): number {
-  const finishers = results.filter(r => r.time !== 'DNF').sort((a, b) => a.position - b.position)
-  const dnfs = results.filter(r => r.time === 'DNF').sort((a, b) => b.laps - a.laps) // most laps = retired latest
+function scoreF1Prediction(categoryId: string, pred: any, results: DriverResult[], rule: PoolRule, fastestLapDriver?: string | null): number {
+  // Sort by position — all classified finishers
+  const sorted = [...results].sort((a, b) => a.position - b.position)
+  const retirements = sorted.filter(r => r.time === 'DNF').sort((a, b) => a.laps - b.laps)
+  const finishers = sorted.filter(r => r.time !== 'DNF')
   const winner = finishers[0]?.driver_name
   const podium = finishers.slice(0, 3).map(r => r.driver_name)
   const pointsFinishers = finishers.slice(0, 10).map(r => r.driver_name)
-  const poleSitter = results.find(r => r.grid === '1')?.driver_name // grid pos 1 = pole, from the RACE session's grid field
-  const firstRetirement = dnfs[0]?.driver_name // first car out = fewest laps among DNFs... actually highest laps means retired last
-  // NOTE: dnfs sorted descending by laps puts the car that went furthest first;
-  // the FIRST retirement is the one with the FEWEST laps completed.
-  const firstRetirementCorrected = [...dnfs].sort((a, b) => a.laps - b.laps)[0]?.driver_name
+  const poleSitter = results.find(r => r.grid === '1')?.driver_name
+  const firstRetirementCorrected = retirements[0]?.driver_name
 
   switch (categoryId) {
     case 'f1_race_winner':
@@ -105,10 +117,8 @@ function scoreF1Prediction(categoryId: string, pred: any, results: DriverResult[
       return pointsFinishers.some(name => driverMatches(pred.value_text, name)) ? rule.points : 0
 
     case 'f1_fastest_lap': {
-      // Fastest lap isn't in the rankings/races payload reliably for every driver row;
-      // it comes from the session's own fastest_lap.driver field (see /races endpoint).
-      // This is intentionally left as a TODO — see note below.
-      return 0
+      if (!fastestLapDriver || !pred.value_text) return 0
+      return driverMatches(pred.value_text, fastestLapDriver) ? rule.points : 0
     }
 
     case 'f1_first_retirement':
@@ -195,6 +205,11 @@ export async function POST(request: NextRequest) {
       const results = await fetchRankings(session.id)
       if (!results.length) continue // results not published by the API yet
 
+      // Fetch fastest lap driver separately
+      const fastestLapDriver = session.session_type === 'Race' || session.session_type === 'Sprint'
+        ? await fetchFastestLap(session.id)
+        : null
+
       await supabase.from('f1_sessions').update({ results }).eq('id', session.id)
 
       // Get all pools running this tournament
@@ -230,7 +245,7 @@ export async function POST(request: NextRequest) {
           const rule = ruleMap[pred.category_id]
           if (!rule) continue
 
-          const points = scoreF1Prediction(pred.category_id, pred, results, rule)
+          const points = scoreF1Prediction(pred.category_id, pred, results, rule, fastestLapDriver)
           await supabase
             .from('predictions_v2')
             .update({ points_earned: points, is_correct: points > 0 })
