@@ -204,6 +204,10 @@ function scoreCustomPrediction(
 
     case 'soccer_team_to_advance': {
       if (!pred.value_wld) return 0
+      // Only applies to knockout rounds
+      const round = fixtureRow?.round || ''
+      const knockoutRounds = ['Round of 32', 'Round of 16', 'Quarter-finals', 'Semi-finals', 'Final']
+      if (!knockoutRounds.some(r => round.includes(r))) return 0
       // Determine who actually advanced — 90min result, then ET, then penalties
       let winner: 'home' | 'away' | null = null
       if (homeScore > awayScore) winner = 'home'
@@ -459,6 +463,17 @@ async function scoreRoundSpecials(allFixtures: any[]) {
 
       await new Promise(r => setTimeout(r, 200)) // rate limit
     }
+
+    // Store round facts for display in UI
+    await supabase.from('round_facts').upsert({
+      tournament_id: 'wc_2026',
+      round_id: round.id,
+      clean_sheet_teams: [...cleanSheetTeams],
+      penalty_teams: [...penaltyTeams],
+      red_card_teams: [...redCardTeams],
+      brace_players: [...bracePlayers],
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'tournament_id,round_id' })
 
     // Now score all round special predictions for this round across all pools
     for (const pool of pools) {

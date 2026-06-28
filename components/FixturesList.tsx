@@ -555,7 +555,8 @@ poolRules: PoolRule[]
               if (!existingPreds[resultKey]?.value_wld) {
                 updateLocal(fixture.id, 'soccer_result', { value_wld: resultWld })
               }
-              if (!existingPreds[advanceKey]?.value_wld && (h !== a)) {
+              // Team to advance — only for knockout rounds
+              if (!existingPreds[advanceKey]?.value_wld && (h !== a) && isKnockoutRound(fixture.round)) {
                 updateLocal(fixture.id, 'soccer_team_to_advance', { value_wld: h > a ? 'home' : 'away' })
               }
               // BTTS
@@ -706,6 +707,7 @@ export default function FixturesList({
   const [saved, setSaved] = useState<Record<number, boolean>>({})
   const autoSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
   const [roundSpecialPicks, setRoundSpecialPicks] = useState<Record<string, Record<string, string>>>({})
+  const [roundFacts, setRoundFacts] = useState<Record<string, any>>({}) // matchday → facts
   const [showMemberPicksMap, setShowMemberPicksMap] = useState<Record<number, boolean>>({})
   const [roundSpecialSaving, setRoundSpecialSaving] = useState<string | null>(null)
   const [roundSpecialSaved, setRoundSpecialSaved] = useState<Record<string, boolean>>({})
@@ -888,6 +890,15 @@ export default function FixturesList({
         })
         setMemberPreds(allPredMap)
         setMemberRoundPreds(roundPredMap)
+
+        // Load round facts for actual results display
+        const { data: factsRows } = await supabase
+          .from('round_facts')
+          .select('*')
+          .eq('tournament_id', tournamentId || 'wc_2026')
+        const factsMap: Record<string, any> = {}
+        ;(factsRows || []).forEach((f: any) => { factsMap[f.round_id] = f })
+        setRoundFacts(factsMap)
       } else {
         // Legacy: load from predictions table
         const { data: legacyPreds } = await supabase
@@ -1214,6 +1225,31 @@ export default function FixturesList({
                       )
                     })}
                   </tbody>
+                  {roundFacts[matchday] && (
+                    <tfoot>
+                      <tr>
+                        <td style={{ padding: '6px 6px 2px', fontSize: '10px', fontWeight: 700, color: '#2d7a2d', borderTop: '2px solid #eee', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>actual</td>
+                        {roundRules.map(rule => {
+                          const facts = roundFacts[matchday]
+                          let actual = '—'
+                          if (rule.category_id === 'soccer_clean_sheet_round') {
+                            actual = (facts.clean_sheet_teams || []).length > 0 ? (facts.clean_sheet_teams || []).map((t: string) => `${FLAGS[t] || ''} ${t}`).join(', ') : '✗ none'
+                          } else if (rule.category_id === 'soccer_penalty_round') {
+                            actual = (facts.penalty_teams || []).length > 0 ? (facts.penalty_teams || []).map((t: string) => `${FLAGS[t] || ''} ${t}`).join(', ') : '✗ none'
+                          } else if (rule.category_id === 'soccer_red_card_round') {
+                            actual = (facts.red_card_teams || []).length > 0 ? (facts.red_card_teams || []).map((t: string) => `${FLAGS[t] || ''} ${t}`).join(', ') : '✗ none'
+                          } else if (rule.category_id === 'soccer_brace_round') {
+                            actual = (facts.brace_players || []).length > 0 ? (facts.brace_players || []).join(', ') : '✗ none'
+                          }
+                          return (
+                            <td key={rule.category_id} style={{ padding: '6px 6px 2px', textAlign: 'center' as const, borderTop: '2px solid #eee', fontSize: '11px', fontWeight: 600, color: '#2d7a2d', whiteSpace: 'nowrap' as const }}>
+                              {actual}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
             </div>
