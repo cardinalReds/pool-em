@@ -37,10 +37,13 @@ export default function InvitePanel({ poolId, poolName, inviteUrl, buyInAmount, 
   }
 
   function handleNativeShare() {
+    const message = buyInAmount
+      ? `Join my ${poolName} prediction pool on pool'em! $${buyInAmount} buy-in. Join here: ${inviteUrl}`
+      : `Join my ${poolName} prediction pool on pool'em! Join here: ${inviteUrl}`
     if (navigator.share) {
       navigator.share({
         title: `Join ${poolName} on pool'em`,
-        text: `You've been invited to join ${poolName}!`,
+        text: message,
         url: inviteUrl,
       })
     } else {
@@ -110,6 +113,11 @@ export default function InvitePanel({ poolId, poolName, inviteUrl, buyInAmount, 
       {/* Link tab */}
       {tab === 'link' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <button
+            onClick={handleNativeShare}
+            style={{ width: '100%', padding: '9px', fontSize: '12px', fontWeight: 600, background: '#111', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+            📤 share invite
+          </button>
           <div style={{ display: 'flex', gap: 4 }}>
             <input
               readOnly
@@ -119,17 +127,10 @@ export default function InvitePanel({ poolId, poolName, inviteUrl, buyInAmount, 
             />
             <button
               onClick={handleCopy}
-              style={{ fontSize: '10px', padding: '5px 10px', background: '#111', color: 'white', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap' as const, fontFamily: 'inherit' }}>
-              {copied ? '✓ copied' : 'copy'}
+              style={{ fontSize: '10px', padding: '5px 10px', background: 'white', color: '#111', border: '1px solid #ddd', cursor: 'pointer', whiteSpace: 'nowrap' as const, fontFamily: 'inherit' }}>
+              {copied ? '✓ copied' : 'copy link'}
             </button>
           </div>
-          {'share' in navigator && (
-            <button
-              onClick={handleNativeShare}
-              style={{ width: '100%', padding: '7px', fontSize: '11px', fontWeight: 600, background: 'white', color: '#111', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit' }}>
-              share via...
-            </button>
-          )}
         </div>
       )}
 
