@@ -233,7 +233,10 @@ function scoreCustomPrediction(
     }
 
     case 'soccer_first_team_score':
-      if (!pred.value_wld || facts.firstTeamScore === 'none') return 0
+      if (!pred.value_wld) return 0
+      // 'none' means user predicted no goal — award points if no team scored first
+      if (pred.value_wld === 'none') return facts.firstTeamScore === 'none' ? rule.points : 0
+      if (facts.firstTeamScore === 'none') return 0
       return pred.value_wld === facts.firstTeamScore ? rule.points : 0
 
     case 'soccer_corners_winner': {
@@ -304,6 +307,10 @@ function scoreCustomPrediction(
 
     // ── Player/text ───────────────────────────────────────────────────────
     case 'soccer_first_goalscorer': {
+      // Handle 'no goal' pick (value_wld = 'none')
+      if (pred.value_wld === 'none') {
+        return (!firstScorerName || firstScorerName === 'no goal') ? rule.points : 0
+      }
       if (!firstScorerName || !pred.value_text) return 0
 
       // Own goal matching — "Own Goal (Mexico)" matches "Own Goal (Mexico)"
