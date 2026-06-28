@@ -60,7 +60,17 @@ function normalizeDriver(name: string): string {
 
 function driverMatches(pick: string | null, actual: string | null | undefined): boolean {
   if (!pick || !actual) return false
-  return normalizeDriver(pick) === normalizeDriver(actual)
+  const normPick = normalizeDriver(pick)
+  const normActual = normalizeDriver(actual)
+  if (normPick === normActual) return true
+  // Partial match: pick is contained in actual name or vice versa
+  // e.g. "Kimi Antonelli" matches "Andrea Kimi Antonelli"
+  if (normActual.includes(normPick) || normPick.includes(normActual)) return true
+  // Last name match: last word of pick matches last word of actual
+  const pickLast = normPick.split(' ').pop() || ''
+  const actualLast = normActual.split(' ').pop() || ''
+  if (pickLast.length > 3 && pickLast === actualLast) return true
+  return false
 }
 
 interface PoolRule {
@@ -166,32 +176,22 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Score completed (unscored) sessions AND in-progress sessions (live updates)
-    const { data: completedSessions } = await supabase
+    // Early exit: only do work if there's an unscored, completed session
+    const { data: pendingSessions } = await supabase
       .from('f1_sessions')
-      .select('id, session_type, competition_id')
+      .select('id, api_session_id:id, session_type, competition_id')
       .eq('tournament_id', TOURNAMENT_ID)
       .eq('status', 'Completed')
       .eq('scored', false)
       .limit(20)
 
-    const { data: liveSessions } = await supabase
-      .from('f1_sessions')
-      .select('id, session_type, competition_id')
-      .eq('tournament_id', TOURNAMENT_ID)
-      .eq('status', 'In Progress')
-      .limit(5)
-
-    const pendingSessions = [...(completedSessions || []), ...(liveSessions || [])]
-
-    if (!pendingSessions.length) {
+    if (!pendingSessions?.length) {
       return NextResponse.json({ ok: true, sessions_scored: 0, skipped: true })
     }
 
     let sessionsScored = 0
 
     for (const session of pendingSessions) {
-      const isLive = (liveSessions || []).some(s => s.id === session.id)
       const results = await fetchRankings(session.id)
       if (!results.length) continue // results not published by the API yet
 
@@ -210,13 +210,21 @@ export async function POST(request: NextRequest) {
           .eq('pool_id', pool.id)
 
         const ruleMap: Record<string, PoolRule> = {}
-        ;(rulesData || []).forEach((r: any) => { ruleMap[r.category_id] = r })
+        ;(rulesData || []).forEach((r: any) => {
+          ruleMap[r.category_id] = r
+          // Map podium_order_1/2/3 to the parent podium_order rule
+          if (r.category_id === 'f1_podium_order') {
+            ruleMap['f1_podium_order_1'] = r
+            ruleMap['f1_podium_order_2'] = r
+            ruleMap['f1_podium_order_3'] = r
+          }
+        })
 
         const { data: preds } = await supabase
           .from('predictions_v2')
           .select('*')
           .eq('pool_id', pool.id)
-          .eq('fixture_id', session.id)
+          .eq('fixture_id', session.id) // f1_sessions.id doubles as the "fixture" reference for predictions_v2
 
         for (const pred of preds || []) {
           const rule = ruleMap[pred.category_id]
@@ -230,10 +238,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Only mark as scored when complete, not during live scoring
-      if (!isLive) {
-        await supabase.from('f1_sessions').update({ scored: true }).eq('id', session.id)
-      }
+      await supabase.from('f1_sessions').update({ scored: true }).eq('id', session.id)
       sessionsScored++
     }
 
