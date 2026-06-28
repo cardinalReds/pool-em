@@ -306,6 +306,10 @@ export async function GET(request: Request) {
   }
 
   try {
+    // Always sync knockout fixtures from API
+    await syncKnockoutFixtures()
+    await populateTBDFixtures()
+
     // Get all active tournaments that have live or upcoming fixtures today
     const { data: activeTournaments } = await supabase
       .from('tournaments')
@@ -468,16 +472,4 @@ export async function GET(request: Request) {
     console.error('Live route error:', err)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
-}
-
-export async function GET(request: NextRequest) {
-  // Allow manual sync trigger via GET
-  const { searchParams } = new URL(request.url)
-  const secret = searchParams.get('secret')
-  if (secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-  await syncKnockoutFixtures()
-  await populateTBDFixtures()
-  return NextResponse.json({ ok: true, synced: true })
 }
