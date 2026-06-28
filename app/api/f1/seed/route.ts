@@ -91,6 +91,7 @@ export async function POST(request: NextRequest) {
           tournament_id: TOURNAMENT_ID,
           results: null,
           scored: false,
+          total_laps: s.laps?.total ?? null,
         }))
 
       if (!rows.length) {

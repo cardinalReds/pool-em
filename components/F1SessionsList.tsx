@@ -147,10 +147,9 @@ function fmtShort(dateStr: string) {
 }
 
 // ── Driver Dropdown ───────────────────────────────────────────────────────────
-function PitStopLapPicker({ value, disabled, sessionResults, onChange }: {
-  value: number; disabled: boolean; sessionResults: any[]; onChange: (v: number) => void
+function PitStopLapPicker({ value, disabled, totalLaps, onChange }: {
+  value: number; disabled: boolean; totalLaps?: number | null; onChange: (v: number) => void
 }) {
-  const raceLaps = sessionResults.filter((r: any) => r.position).reduce((max: number, r: any) => Math.max(max, r.laps || 0), 0)
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
@@ -159,12 +158,12 @@ function PitStopLapPicker({ value, disabled, sessionResults, onChange }: {
           style={{ width: 40, height: 40, border: '1px solid #ddd', background: disabled ? '#fafafa' : 'white', fontSize: '20px', cursor: disabled ? 'default' : 'pointer', fontFamily: 'inherit' }}>−</button>
         <span style={{ fontSize: '24px', fontWeight: 700, minWidth: 48, textAlign: 'center' as const }}>{value || '?'}</span>
         <button type="button" disabled={disabled}
-          onClick={() => !disabled && onChange(raceLaps > 0 ? Math.min(raceLaps, value + 1) : value + 1)}
+          onClick={() => !disabled && onChange(totalLaps ? Math.min(totalLaps, value + 1) : value + 1)}
           style={{ width: 40, height: 40, border: '1px solid #ddd', background: disabled ? '#fafafa' : 'white', fontSize: '20px', cursor: disabled ? 'default' : 'pointer', fontFamily: 'inherit' }}>+</button>
         <span style={{ fontSize: '11px', color: '#aaa' }}>lap</span>
       </div>
-      {raceLaps > 0 && (
-        <div style={{ fontSize: '10px', color: '#aaa', textAlign: 'center' as const, marginTop: 4 }}>race is {raceLaps} laps</div>
+      {totalLaps && (
+        <div style={{ fontSize: '10px', color: '#aaa', textAlign: 'center' as const, marginTop: 4 }}>race is {totalLaps} laps</div>
       )}
     </div>
   )
@@ -311,7 +310,7 @@ function PodiumOrderPicker({ p1, p2, p3, onChange, disabled }: {
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-interface F1Session { id: number; competition_id: number; competition_name: string; season: number; session_type: string; date: string; status: string; results: any; scored: boolean; teammate_battle_team?: string | null }
+interface F1Session { id: number; competition_id: number; competition_name: string; season: number; session_type: string; date: string; status: string; results: any; scored: boolean; teammate_battle_team?: string | null; total_laps?: number | null }
 interface PoolRule { category_id: string; points: number; bonus_points: number; name: string; input_type: string }
 
 function isLocked(session: F1Session, deadlineType: string, gpSessions: F1Session[]) {
@@ -615,7 +614,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                       <span style={{ fontSize: '11px', fontWeight: 600, color: '#555' }}>
                         {rule.category_id === 'f1_q1_eliminated' ? 'pick a driver out in Q1'
                           : rule.category_id === 'f1_q3_qualifier' ? 'pick a driver who will make it to Q3'
-                          : rule.category_id === 'f1_first_pit_lap' ? 'lap of the first pit stop (closest wins)'
+                          : rule.category_id === 'f1_first_pit_lap' ? `lap of the first pit stop (closest wins)${(sorted.find(s => s.session_type === 'Race')?.total_laps || session.total_laps) ? ` — ${sorted.find(s => s.session_type === 'Race')?.total_laps || session.total_laps} laps` : ''}`
                           : rule.name}
                       </span>
                       <span style={{ fontSize: '11px', color: '#C8102E' }}>{rule.points} pt{rule.points !== 1 ? 's' : ''}</span>
@@ -667,7 +666,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                       <PitStopLapPicker
                         value={pred?.value_number || 0}
                         disabled={locked}
-                        sessionResults={(session as any).results || []}
+                        totalLaps={sorted.find(s => s.session_type === 'Race')?.total_laps || session.total_laps}
                         onChange={v => updatePred(session.id, rule.category_id, { value_number: v })}
                       />
                     ) : rule.category_id === 'f1_teammate_battle' ? (
