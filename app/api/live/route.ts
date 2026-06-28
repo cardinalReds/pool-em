@@ -29,9 +29,8 @@ async function syncKnockoutFixtures() {
       .eq('tournament_id', 'wc_2026')
       .eq('round', round)
 
-    if (!dbFixtures?.length) continue
-
-    const unmatchedDbFixtures = [...dbFixtures.filter(f => !f.api_fixture_id)]
+    const dbByApiId = new Map((dbFixtures || []).filter(f => f.api_fixture_id).map(f => [f.api_fixture_id, f]))
+    const apiIds = new Set(apiFixtures.map(f => f.fixture?.id))
 
     for (const apiF of apiFixtures) {
       const apiId = apiF.fixture?.id
@@ -40,39 +39,39 @@ async function syncKnockoutFixtures() {
       const apiDate = apiF.fixture?.date
       if (!apiId || !homeTeam || !awayTeam || !apiDate) continue
 
-      // Already matched by api_fixture_id — update team names/date if changed
-      const existingMatch = dbFixtures.find(f => f.api_fixture_id === apiId)
-      if (existingMatch) {
+      const existing = dbByApiId.get(apiId)
+      if (existing) {
+        // Update if changed
         const updates: Record<string, any> = {}
-        if (existingMatch.home_team !== homeTeam) updates.home_team = homeTeam
-        if (existingMatch.away_team !== awayTeam) updates.away_team = awayTeam
-        if (existingMatch.date !== apiDate) updates.date = apiDate
+        if (existing.home_team !== homeTeam) updates.home_team = homeTeam
+        if (existing.away_team !== awayTeam) updates.away_team = awayTeam
+        if (existing.date !== apiDate) updates.date = apiDate
         if (Object.keys(updates).length > 0) {
-          await supabase.from('fixtures').update(updates).eq('id', existingMatch.id)
+          await supabase.from('fixtures').update(updates).eq('id', existing.id)
         }
-        continue
-      }
-
-      // Not matched — find closest unmatched DB row by date (within 24 hours)
-      if (!unmatchedDbFixtures.length) continue
-      const apiDateMs = new Date(apiDate).getTime()
-      const closest = unmatchedDbFixtures.reduce((best, f) => {
-        const diff = Math.abs(new Date(f.date).getTime() - apiDateMs)
-        const bestDiff = Math.abs(new Date(best.date).getTime() - apiDateMs)
-        return diff < bestDiff ? f : best
-      })
-      const diffHrs = Math.abs(new Date(closest.date).getTime() - apiDateMs) / 3600000
-      if (diffHrs <= 24) {
-        await supabase.from('fixtures').update({
-          home_team: homeTeam, away_team: awayTeam, date: apiDate, api_fixture_id: apiId,
-        }).eq('id', closest.id)
-        unmatchedDbFixtures.splice(unmatchedDbFixtures.indexOf(closest), 1)
+      } else {
+        // Find an unmatched TBD row to claim, or insert new
+        const tbdRow = (dbFixtures || []).find(f => !f.api_fixture_id)
+        if (tbdRow) {
+          await supabase.from('fixtures').update({
+            home_team: homeTeam, away_team: awayTeam, date: apiDate, api_fixture_id: apiId,
+          }).eq('id', tbdRow.id)
+          // Mark as matched so we don't reuse it
+          tbdRow.api_fixture_id = apiId
+        } else {
+          // Insert new fixture row
+          await supabase.from('fixtures').insert({
+            tournament_id: 'wc_2026', round, home_team: homeTeam, away_team: awayTeam,
+            date: apiDate, api_fixture_id: apiId, status: 'NS',
+          })
+        }
       }
     }
 
-    // Delete extra DB rows that have no API counterpart
-    if (unmatchedDbFixtures.length > 0) {
-      await supabase.from('fixtures').delete().in('id', unmatchedDbFixtures.map(f => f.id))
+    // Delete DB rows that have no API counterpart (stale placeholders)
+    const stale = (dbFixtures || []).filter(f => f.api_fixture_id && !apiIds.has(f.api_fixture_id))
+    if (stale.length > 0) {
+      await supabase.from('fixtures').delete().in('id', stale.map(f => f.id))
     }
 
     await new Promise(r => setTimeout(r, 200))
