@@ -11,6 +11,7 @@ const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io'
 // Map API-Football status codes to our status values
 async function syncKnockoutFixtures() {
   const KNOCKOUT_ROUNDS = ['Round of 32', 'Round of 16', 'Quarter-finals', 'Semi-finals', 'Final']
+  
   for (const round of KNOCKOUT_ROUNDS) {
     const res = await fetch(
       `https://v3.football.api-sports.io/fixtures?league=1&season=2026&round=${encodeURIComponent(round)}`,
@@ -18,49 +19,63 @@ async function syncKnockoutFixtures() {
     )
     if (!res.ok) continue
     const data = await res.json()
-    for (const f of data.response || []) {
-      const homeTeam = f.teams?.home?.name
-      const awayTeam = f.teams?.away?.name
-      const apiDate = f.fixture?.date
-      const apiId = f.fixture?.id
-      if (!homeTeam || !awayTeam || !apiDate) continue
+    const apiFixtures: any[] = data.response || []
+    if (!apiFixtures.length) continue
 
-      // Try matching by api_fixture_id first, then by date
-      let existing: any = null
-      if (apiId) {
-        const { data: byId } = await supabase
-          .from('fixtures')
-          .select('id, home_team, away_team, api_fixture_id')
-          .eq('api_fixture_id', apiId)
-          .maybeSingle()
-        existing = byId
+    // Get all our DB fixtures for this round
+    const { data: dbFixtures } = await supabase
+      .from('fixtures')
+      .select('id, home_team, away_team, date, api_fixture_id')
+      .eq('tournament_id', 'wc_2026')
+      .eq('round', round)
+
+    if (!dbFixtures?.length) continue
+
+    const unmatchedDbFixtures = [...dbFixtures.filter(f => !f.api_fixture_id)]
+
+    for (const apiF of apiFixtures) {
+      const apiId = apiF.fixture?.id
+      const homeTeam = apiF.teams?.home?.name
+      const awayTeam = apiF.teams?.away?.name
+      const apiDate = apiF.fixture?.date
+      if (!apiId || !homeTeam || !awayTeam || !apiDate) continue
+
+      // Already matched by api_fixture_id — update team names/date if changed
+      const existingMatch = dbFixtures.find(f => f.api_fixture_id === apiId)
+      if (existingMatch) {
+        const updates: Record<string, any> = {}
+        if (existingMatch.home_team !== homeTeam) updates.home_team = homeTeam
+        if (existingMatch.away_team !== awayTeam) updates.away_team = awayTeam
+        if (existingMatch.date !== apiDate) updates.date = apiDate
+        if (Object.keys(updates).length > 0) {
+          await supabase.from('fixtures').update(updates).eq('id', existingMatch.id)
+        }
+        continue
       }
-      if (!existing) {
-        // Match by date (within 1 hour) and round
-        const apiDateObj = new Date(apiDate)
-        const { data: byDate } = await supabase
-          .from('fixtures')
-          .select('id, home_team, away_team, api_fixture_id')
-          .eq('tournament_id', 'wc_2026')
-          .eq('round', round)
-          .gte('date', new Date(apiDateObj.getTime() - 3600000).toISOString())
-          .lte('date', new Date(apiDateObj.getTime() + 3600000).toISOString())
-          .maybeSingle()
-        existing = byDate
-      }
-      if (!existing) continue
 
-      const updates: Record<string, any> = {}
-      if (existing.home_team !== homeTeam) updates.home_team = homeTeam
-      if (existing.away_team !== awayTeam) updates.away_team = awayTeam
-      if (!existing.api_fixture_id && apiId) updates.api_fixture_id = apiId
-      // Also update the date to match the API
-      updates.date = apiDate
-
-      if (Object.keys(updates).length > 0) {
-        await supabase.from('fixtures').update(updates).eq('id', existing.id)
+      // Not matched — find closest unmatched DB row by date (within 24 hours)
+      if (!unmatchedDbFixtures.length) continue
+      const apiDateMs = new Date(apiDate).getTime()
+      const closest = unmatchedDbFixtures.reduce((best, f) => {
+        const diff = Math.abs(new Date(f.date).getTime() - apiDateMs)
+        const bestDiff = Math.abs(new Date(best.date).getTime() - apiDateMs)
+        return diff < bestDiff ? f : best
+      })
+      const diffHrs = Math.abs(new Date(closest.date).getTime() - apiDateMs) / 3600000
+      if (diffHrs <= 24) {
+        await supabase.from('fixtures').update({
+          home_team: homeTeam, away_team: awayTeam, date: apiDate, api_fixture_id: apiId,
+        }).eq('id', closest.id)
+        unmatchedDbFixtures.splice(unmatchedDbFixtures.indexOf(closest), 1)
       }
     }
+
+    // Delete extra DB rows that have no API counterpart
+    if (unmatchedDbFixtures.length > 0) {
+      await supabase.from('fixtures').delete().in('id', unmatchedDbFixtures.map(f => f.id))
+    }
+
+    await new Promise(r => setTimeout(r, 200))
   }
 }
 
