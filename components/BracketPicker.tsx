@@ -47,8 +47,6 @@ interface Props {
 }
 
 export default function BracketPicker({ poolId, userId, scoringRules, locked = false, isAdmin = false, tournamentId = 'wc_2026' }: Props) {
-  // Only the site owner can lock actual standings — not per-pool admins
-  const canLockStandings = userId === '5559329e-d20e-47ae-b612-503b9b2f09d0'
   const [step, setStepState] = useState<Step>('groups')
   const [showSummary, setShowSummary] = useState(false)
   const [showAdminStandings, setShowAdminStandings] = useState(false)
@@ -92,7 +90,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       [groupName]: { ...(prev[groupName] || {}), [String(position)]: team }
     }))
     // Rescore bracket pools immediately so points reflect the new locked standing
-    fetch('/api/score-bracket', { method: 'POST' }).then(() => window.dispatchEvent(new Event('bracket-scores-updated'))).catch(() => {})
+    fetch('/api/score-bracket', { method: 'POST' }).catch(() => {})
   }
 
   async function unlockStanding(groupName: string, position: number) {
@@ -112,7 +110,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       return updated
     })
     // Rescore to remove points for the unlocked position
-    fetch('/api/score-bracket', { method: 'POST' }).then(() => window.dispatchEvent(new Event('bracket-scores-updated'))).catch(() => {})
+    fetch('/api/score-bracket', { method: 'POST' }).catch(() => {})
   }
 
   async function toggleAdvances(groupName: string, checked: boolean) {
@@ -123,7 +121,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
       .eq('group_name', groupName)
       .eq('position', 3)
     setAdvances(prev => ({ ...prev, [`${groupName}_3`]: checked }))
-    fetch('/api/score-bracket', { method: 'POST' }).then(() => window.dispatchEvent(new Event('bracket-scores-updated'))).catch(() => {})
+    fetch('/api/score-bracket', { method: 'POST' }).catch(() => {})
   }
 
   function setStep(s: Step) {
@@ -339,7 +337,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
     return (
       <div style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '13px' }}>
         {/* Admin: lock in actual group standings */}
-        {canLockStandings && (
+        {isAdmin && (
           <div style={{ marginBottom: '20px', border: '1px solid #f0d0d0', background: '#fffafa' }}>
             <button type="button" onClick={() => setShowAdminStandings(p => !p)}
               style={{
@@ -465,7 +463,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: '13px' }}>
       {/* Admin: lock in actual group standings */}
-      {canLockStandings && (
+      {isAdmin && (
         <div style={{ marginBottom: '20px', border: '1px solid #f0d0d0', background: '#fffafa' }}>
           <button type="button" onClick={() => setShowAdminStandings(p => !p)}
             style={{
@@ -800,7 +798,7 @@ function GroupPicker({ group, teams, picks, locked, onChange }: {
 }
 
 // ── Bracket View — mirrored left/right meeting at Final in center ─────────
-export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRules, locked, onPick, onScore, correctSlots, scoredSlots, r32Teams, actualR32Teams }: {
+export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRules, locked, onPick, onScore, correctSlots, scoredSlots, r32Teams, actualR32Teams, breakdown }: {
   r32Bracket: Record<string, { home: string; away: string }>
   bracketPicks: BracketPicks
   bracketScores: Record<string, string>
@@ -812,6 +810,7 @@ export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRu
   scoredSlots?: Set<string>
   r32Teams?: Set<string>       // teams that SCORED in R32 (correct picks)
   actualR32Teams?: Set<string> // ALL teams confirmed in R32 (for hasResult)
+  breakdown?: Record<string, number> // points breakdown for display
 }) {
   // Visual order matches fotmob official bracket exactly
   // Left: M74+M77→R16_1, M73+M75→R16_2, M84+M88→R16_3, M83+M81→R16_4
@@ -889,6 +888,17 @@ export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRu
                         onScore={onScore}
                         hasResult={slot.startsWith('R32_') ? (r32Teams && r32Teams.size > 0) : scoredSlots?.has(slot)}
                         isCorrect={slot.startsWith('R32_') ? (r32Teams?.has(bracketPicks[slot] ?? '') ?? false) : correctSlots?.has(slot)}
+                        slotPts={(() => {
+                          if (!breakdown) return undefined
+                          const team = bracketPicks[slot]
+                          if (!team) return undefined
+                          if (slot.startsWith('R32_')) return breakdown[`R16_${team}`]
+                          if (slot.startsWith('R16_')) return breakdown[`QF_${team}`]
+                          if (slot.startsWith('QF_')) return breakdown[`SF_${team}`]
+                          if (slot.startsWith('SF_')) return breakdown[`FINAL_${team}`]
+                          if (slot === 'FINAL') return breakdown['CHAMPION']
+                          return undefined
+                        })()}
                         r32Teams={r32Teams}
                         actualR32Teams={actualR32Teams}
                       />
@@ -1009,7 +1019,7 @@ export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRu
 }
 
 // ── Single match card ─────────────────────────────────────────────────────
-function MatchCard({ slot, home, away, picked, score, showExactScore, locked, onPick, onScore, hasResult, isCorrect, r32Teams, actualR32Teams }: {
+function MatchCard({ slot, home, away, picked, score, showExactScore, locked, onPick, onScore, hasResult, isCorrect, r32Teams, actualR32Teams, slotPts }: {
   slot: string
   home: string
   away: string
@@ -1023,6 +1033,7 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
   isCorrect?: boolean
   r32Teams?: Set<string>
   actualR32Teams?: Set<string>
+  slotPts?: number
 }) {
   if (!home && !away) return <div style={{ height: showExactScore ? 80 : 54, border: '1px solid transparent' }} />
   const isPlaceholder = (t: string) => !t || t.startsWith('winner of')
@@ -1056,7 +1067,7 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 90 }}>
               {!team ? '—' : placeholder ? team.replace('winner of ', '→') : team}
             </span>
-            {showCheck && <span style={{ marginLeft: 'auto', fontSize: '9px' }}>✓</span>}
+            {showCheck && <span style={{ marginLeft: 'auto', fontSize: '9px' }}>✓{slotPts ? ` +${slotPts}` : ''}</span>}
             {showCross && <span style={{ marginLeft: 'auto', fontSize: '9px' }}>✗</span>}
           </button>
         )

@@ -75,14 +75,10 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
 
       combined.sort((a, b) => (b.bracket_scores?.total ?? 0) - (a.bracket_scores?.total ?? 0))
       setPicks(combined)
-      setSelectedMember(prev => prev || (combined[0]?.user_id ?? ''))
+      if (combined.length > 0) setSelectedMember(combined[0].user_id)
       setLoading(false)
     }
     load()
-    // Refresh when BracketPicker signals scoring completed after a lock
-    const onScoresUpdated = () => load()
-    window.addEventListener('bracket-scores-updated', onScoresUpdated)
-    return () => window.removeEventListener('bracket-scores-updated', onScoresUpdated)
   }, [poolId])
 
   if (loading) return <div style={{ color: '#aaa', fontSize: '12px' }}>loading picks...</div>
@@ -179,10 +175,20 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
                 onScore={() => {}}
                 correctSlots={(() => {
                   const breakdown = selectedPick.bracket_scores?.breakdown || {}
+                  const bracketPicksData = selectedPick.bracket_picks || {}
                   const slots = new Set<string>()
-                  // R16+ are slot-keyed directly
-                  for (const key of Object.keys(breakdown)) {
-                    if (!key.startsWith('R32_')) slots.add(key)
+                  // For each bracket slot, check if the team picked there appears in breakdown
+                  // R32_Mxx slots: team in breakdown as R16_<team> means they won their R32 game
+                  // R16_x slots: team in breakdown as QF_<team> means they won their R16 game
+                  // QF_x slots: team in breakdown as SF_<team>
+                  // SF_x slots: team in breakdown as FINAL_<team>
+                  for (const [slot, team] of Object.entries(bracketPicksData)) {
+                    if (!team) continue
+                    if (slot.startsWith('R32_') && breakdown[`R16_${team}`]) slots.add(slot)
+                    if (slot.startsWith('R16_') && breakdown[`QF_${team}`]) slots.add(slot)
+                    if (slot.startsWith('QF_') && breakdown[`SF_${team}`]) slots.add(slot)
+                    if (slot.startsWith('SF_') && breakdown[`FINAL_${team}`]) slots.add(slot)
+                    if (slot === 'FINAL' && breakdown['CHAMPION']) slots.add(slot)
                   }
                   return slots
                 })()}
@@ -190,23 +196,28 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
                   const breakdown = selectedPick.bracket_scores?.breakdown || {}
                   const bracketPicksData = selectedPick.bracket_picks || {}
                   const slots = new Set<string>()
-                  const hasAnyR32Result = Object.keys(breakdown).some(k => k.startsWith('R32_'))
-                  if (hasAnyR32Result) {
-                    for (const key of Object.keys(bracketPicksData)) {
-                      if (key.startsWith('R32_')) slots.add(key)
-                    }
-                  }
-                  for (const key of Object.keys(breakdown)) {
-                    if (!key.startsWith('R32_')) slots.add(key)
+                  // A slot is "scored" (shown with indicator) if the round has started
+                  // R32 slots are scored once any R16 teams are confirmed
+                  const hasR16Results = Object.keys(breakdown).some(k => k.startsWith('R16_'))
+                  const hasQFResults = Object.keys(breakdown).some(k => k.startsWith('QF_'))
+                  const hasSFResults = Object.keys(breakdown).some(k => k.startsWith('SF_'))
+                  const hasFinalResults = Object.keys(breakdown).some(k => k.startsWith('FINAL_'))
+                  for (const slot of Object.keys(bracketPicksData)) {
+                    if (slot.startsWith('R32_') && hasR16Results) slots.add(slot)
+                    if (slot.startsWith('R16_') && hasQFResults) slots.add(slot)
+                    if (slot.startsWith('QF_') && hasSFResults) slots.add(slot)
+                    if (slot.startsWith('SF_') && hasFinalResults) slots.add(slot)
+                    if (slot === 'FINAL' && breakdown['CHAMPION'] !== undefined) slots.add(slot)
                   }
                   return slots
                 })()}
                 r32Teams={new Set(
                   Object.keys(selectedPick.bracket_scores?.breakdown || {})
-                    .filter(k => k.startsWith('R32_'))
-                    .map(k => k.replace('R32_', ''))
+                    .filter(k => k.startsWith('R16_'))
+                    .map(k => k.replace('R16_', ''))
                 )}
                 actualR32Teams={actualR32Teams}
+                breakdown={selectedPick.bracket_scores?.breakdown || {}}
               />
               {selectedPick.final_home_score != null && selectedPick.final_away_score != null && (
                 <div style={{ fontSize: '12px', color: '#888', marginTop: 8 }}>
