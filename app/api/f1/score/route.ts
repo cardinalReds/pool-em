@@ -210,7 +210,9 @@ export async function POST(request: NextRequest) {
         ? await fetchFastestLap(session.id)
         : null
 
-      await supabase.from('f1_sessions').update({ results }).eq('id', session.id)
+      await supabase.from('f1_sessions').update({ 
+        results: [...results, { fastest_lap_driver: fastestLapDriver }],
+      }).eq('id', session.id)
 
       // Get all pools running this tournament
       const { data: pools } = await supabase

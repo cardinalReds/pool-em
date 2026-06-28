@@ -730,13 +730,15 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                       {/* Actual results row */}
                       {session.results && Array.isArray(session.results) && session.results.length > 0 && (() => {
                         const results: any[] = session.results
-                        const finishers = results.filter((r: any) => r.time !== 'DNF').sort((a: any, b: any) => a.position - b.position)
-                        const dnfs = [...results.filter((r: any) => r.time === 'DNF')].sort((a: any, b: any) => a.laps - b.laps)
+                        const fastestLapEntry = results.find((r: any) => r.fastest_lap_driver !== undefined)
+                        const fastestLapDriver = fastestLapEntry?.fastest_lap_driver || null
+                        const finishers = results.filter((r: any) => r.position && r.time !== 'DNF').sort((a: any, b: any) => a.position - b.position)
+                        const dnfs = results.filter((r: any) => r.position && r.time === 'DNF').sort((a: any, b: any) => a.laps - b.laps)
+                        const dnfs = results.filter((r: any) => r.position && r.time === 'DNF').sort((a: any, b: any) => a.laps - b.laps)
                         const winner = finishers[0]?.driver_name
                         const poleSitter = results.find((r: any) => r.grid === '1')?.driver_name 
                           || finishers.find((r: any) => r.position === 1)?.driver_name
                         const firstRetirement = dnfs[0]?.driver_name
-                        const fastestLap = results.find((r: any) => r.fastest_lap)?.driver_name
 
                         return (
                           <tfoot>
@@ -754,7 +756,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                                 if (r.category_id === 'f1_race_winner') actual = winner || '—'
                                 else if (r.category_id === 'f1_pole_position') actual = poleSitter || '—'
                                 else if (r.category_id === 'f1_first_retirement') actual = firstRetirement || '—'
-                                else if (r.category_id === 'f1_fastest_lap') actual = (session as any).fastest_lap_driver || '—'
+                                else if (r.category_id === 'f1_fastest_lap') actual = fastestLapDriver || '—'
                                 else if (r.category_id === 'f1_podium') actual = finishers.slice(0,3).map((f:any) => f.driver_name).join(', ') || '—'
                                 else if (r.category_id === 'f1_sprint_winner') actual = winner || '—'
                                 else if (r.category_id === 'f1_pole_to_win') actual = (poleSitter && winner) ? (poleSitter === winner ? 'yes' : 'no') : '—'
