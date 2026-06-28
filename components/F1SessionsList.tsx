@@ -614,7 +614,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                       <span style={{ fontSize: '11px', fontWeight: 600, color: '#555' }}>
                         {rule.category_id === 'f1_q1_eliminated' ? 'pick a driver out in Q1'
                           : rule.category_id === 'f1_q3_qualifier' ? 'pick a driver who will make it to Q3'
-                          : rule.category_id === 'f1_first_pit_lap' ? `lap of the first pit stop (closest wins)${(sorted.find(s => s.session_type === 'Race')?.total_laps || session.total_laps) ? ` — ${sorted.find(s => s.session_type === 'Race')?.total_laps || session.total_laps} laps` : ''}`
+                          : rule.category_id === 'f1_first_pit_lap' ? 'lap of the first pit stop (closest wins)'
                           : rule.name}
                       </span>
                       <span style={{ fontSize: '11px', color: '#C8102E' }}>{rule.points} pt{rule.points !== 1 ? 's' : ''}</span>
