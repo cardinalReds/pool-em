@@ -734,7 +734,6 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                         const fastestLapDriver = fastestLapEntry?.fastest_lap_driver || null
                         const finishers = results.filter((r: any) => r.position && r.time !== 'DNF').sort((a: any, b: any) => a.position - b.position)
                         const dnfs = results.filter((r: any) => r.position && r.time === 'DNF').sort((a: any, b: any) => a.laps - b.laps)
-                        const dnfs = results.filter((r: any) => r.position && r.time === 'DNF').sort((a: any, b: any) => a.laps - b.laps)
                         const winner = finishers[0]?.driver_name
                         const poleSitter = results.find((r: any) => r.grid === '1')?.driver_name 
                           || finishers.find((r: any) => r.position === 1)?.driver_name
