@@ -1265,6 +1265,8 @@ export default function FixturesList({
 
   function formatPickValue(pred: PredV2 | undefined, rule: PoolRule, fixture: Fixture): string {
     if (!pred) return '—'
+    // Handle 'no goal' / 'no card' picks stored as value_wld = 'none'
+    if (pred.value_wld === 'none') return rule.category_id === 'soccer_first_yellow_team' ? 'no card' : 'no goal'
     if (rule.input_type === 'wld' || rule.category_id === 'soccer_first_team_score' || rule.category_id === 'soccer_first_yellow_team') {
       if (!pred.value_wld) return '—'
       if (pred.value_wld === 'home') return `${FLAGS[fixture.home_team] || ''} ${fixture.home_team}`
