@@ -1072,7 +1072,6 @@ function MatchCard({ slot, home, away, picked, score, showExactScore, locked, on
   actualR32Teams?: Set<string>
   breakdown?: Record<string, number>
   eliminatedTeams?: Set<string>
-  eliminatedTeams?: Set<string>
 }) {
   if (!home && !away) return <div style={{ height: showExactScore ? 80 : 54, border: '1px solid transparent' }} />
   const isPlaceholder = (t: string) => !t || t.startsWith('winner of')
