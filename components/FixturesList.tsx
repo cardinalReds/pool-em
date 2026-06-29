@@ -1525,7 +1525,13 @@ export default function FixturesList({
                       <tfoot>
                         <tr>
                           <td style={{ padding: '6px 6px 2px', fontSize: '10px', fontWeight: 700, color: isLive ? '#e67e00' : '#2d7a2d', borderTop: '2px solid #eee', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>{isLive ? '🔴 live' : 'actual'}</td>
-                          {perGameRules.map(rule => {
+                          {perGameRules
+                            .filter(rule => {
+                              if (rule.category_id === 'soccer_result' && isKnockoutRound(fixture.round)) return false
+                              if (rule.category_id === 'soccer_team_to_advance' && !isKnockoutRound(fixture.round)) return false
+                              return true
+                            })
+                            .map(rule => {
                             let actual = '—'
                             const h = fixture.home_score ?? 0
                             const a = fixture.away_score ?? 0
@@ -1542,6 +1548,11 @@ export default function FixturesList({
                             const cornResult = homeCorn > awayCorn ? 'home' : awayCorn > homeCorn ? 'away' : 'draw'
                             switch (rule.category_id) {
                               case 'soccer_result': actual = result === 'home' ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : result === 'away' ? `${FLAGS[fixture.away_team]} ${fixture.away_team}` : 'draw'; break
+                              case 'soccer_team_to_advance': {
+                                const winner = h > a ? fixture.home_team : a > h ? fixture.away_team : fixture.penalty_winner || null
+                                actual = winner ? `${FLAGS[winner] || ''} ${winner}` : '—'
+                                break
+                              }
                               case 'soccer_ht_result': actual = htResult ? (htResult === 'home' ? `${FLAGS[fixture.home_team]} HT` : htResult === 'away' ? `${FLAGS[fixture.away_team]} HT` : 'draw HT') : '—'; break
                               case 'soccer_exact_score': actual = `${h}–${a}`; break
                               case 'soccer_ht_exact_score': actual = htH != null && htA != null ? `${htH}–${htA} HT` : '—'; break
