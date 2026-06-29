@@ -68,10 +68,28 @@ export default async function Home() {
                 )}
               </div>
             ))}
+          </div>
+
+          <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', marginBottom: '1rem', marginTop: '1.5rem' }}>coming soon</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {[
+              { emoji: '⚽', name: 'Premier League' },
+              { emoji: '⚾', name: 'MLB Playoffs' },
+              { emoji: '🏈', name: 'NCAA Football' },
+              { emoji: '🏈', name: 'NFL' },
+              { emoji: '🚴', name: 'Tour de France' },
+              { emoji: '🎾', name: 'Tennis' },
+            ].map(s => (
+              <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <span style={{ fontSize: '1.1rem' }}>{s.emoji}</span>
+                <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>{s.name}</span>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#aaa', background: '#f5f5f5', padding: '2px 8px', borderRadius: 4 }}>coming</span>
+              </div>
+            ))}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
               <span style={{ fontSize: '1.1rem' }}>➕</span>
               <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>
-                Want another competition?{' '}
+                Don't see your sport?{' '}
                 <a href="mailto:fred@pool-em.com?subject=Competition request" style={{ color: 'var(--red)', textDecoration: 'none' }}>
                   request it here
                 </a>
