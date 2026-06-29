@@ -91,7 +91,7 @@ export default function DashboardPage() {
       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', gap: '1rem'}}>
         <div>
           <h1 style={{fontWeight: 700, fontSize: '1.25rem'}}>your pools</h1>
-          <p style={{color: 'var(--text-dim)', fontSize: '0.8rem', marginTop: '0.2rem'}}>FIFA World Cup 2026</p>
+
         </div>
         <Link href="/pool/create">
           <button className="btn-primary" style={{padding: '10px 18px', fontSize: '13px', minHeight: 44, whiteSpace: 'nowrap'}}>+ new pool</button>
