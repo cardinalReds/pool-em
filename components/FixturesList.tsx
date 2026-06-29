@@ -363,7 +363,7 @@ poolRules: PoolRule[]
       <div style={{ fontSize: '10px', color: '#888', marginBottom: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontWeight: 600 }}>
           {rule.category_id === 'soccer_exact_score' && isKnockoutRound(fixture.round)
-            ? 'Score after extra time'
+            ? 'Score at the end of regulation/extra time'
             : rule.name}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
