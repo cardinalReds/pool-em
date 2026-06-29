@@ -199,8 +199,12 @@ function scoreCustomPrediction(
   switch (categoryId) {
 
     // ── Win/Loss/Draw style ──────────────────────────────────────────────
-    case 'soccer_result':
+    case 'soccer_result': {
+      const round = fixtureRow?.round || ''
+      const knockoutRounds = ['Round of 32', 'Round of 16', 'Quarter-finals', 'Semi-finals', 'Final']
+      if (knockoutRounds.some(r => round.includes(r))) return 0
       return pred.value_wld === actual ? rule.points : 0
+    }
 
     case 'soccer_team_to_advance': {
       if (!pred.value_wld) return 0
