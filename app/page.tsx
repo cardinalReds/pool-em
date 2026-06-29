@@ -11,7 +11,7 @@ export default async function Home() {
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       {/* Nav */}
       <div style={{ borderBottom: '1px solid var(--border)', background: 'white', padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--red)' }}>pool'em</span>
+        <img src="/logo.svg" alt="pool'em" style={{ height: 28 }} />
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <Link href="/auth/login"><button className="btn-ghost" style={{ minHeight: 40, padding: '0 14px' }}>log in</button></Link>
           <Link href="/auth/signup"><button className="btn-primary" style={{ minHeight: 40, padding: '0 14px' }}>sign up</button></Link>
@@ -56,16 +56,14 @@ export default async function Home() {
           <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', marginBottom: '1rem' }}>available now</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {[
-              { emoji: '🏆', name: 'FIFA World Cup 2026', status: 'live now', live: true },
-              { emoji: '🏎️', name: 'Formula 1 2026', status: 'live now', live: true },
-              { emoji: '🥊', name: 'MMA', status: 'live now', live: true },
+              { emoji: '🏆', name: 'FIFA World Cup 2026', live: true },
+              { emoji: '🏎️', name: 'Formula 1 2026', live: true },
+              { emoji: '🥊', name: 'MMA', live: true },
             ].map(s => (
               <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <span style={{ fontSize: '1.1rem' }}>{s.emoji}</span>
                 <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>{s.name}</span>
-                {s.live && (
-                  <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#2d7a2d', background: '#f0faf0', padding: '2px 8px', borderRadius: 4 }}>live</span>
-                )}
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#2d7a2d', background: '#f0faf0', padding: '2px 8px', borderRadius: 4 }}>live</span>
               </div>
             ))}
           </div>

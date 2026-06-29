@@ -594,7 +594,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
       {/* Nav */}
       <div style={{background: '#111', color: 'white', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 50}}>
-        <a href="/dashboard" style={{fontWeight: 700, fontSize: '13px', color: 'white', textDecoration: 'none'}}>pool'em</a>
+        <a href="/dashboard"><img src="/logo.svg" alt="pool'em" style={{height: 22, filter: 'brightness(0) invert(1)'}} /></a>
         <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
           {isMobile && (
             <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
