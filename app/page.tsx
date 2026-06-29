@@ -42,7 +42,7 @@ export default async function Home() {
           {[
             { title: 'your rules', desc: 'Exact scores, first scorer, podium order, team to advance — pick what matters to your group.' },
             { title: 'invite only', desc: 'One link. Private pool. No strangers, no noise.' },
-            { title: 'live scoring', desc: 'Results come in, points update automatically. The leaderboard never lies.' },
+            { title: 'live scoring', desc: 'Results come in, points update automatically. The leaderboard don\'t lie.' },
           ].map(f => (
             <div key={f.title}>
               <div style={{ fontWeight: 600, marginBottom: '0.3rem', color: 'var(--red)' }}>{f.title}</div>
