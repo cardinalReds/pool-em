@@ -8,49 +8,83 @@ export default async function Home() {
   if (user) redirect('/dashboard')
 
   return (
-    <div style={{minHeight: '100vh', background: 'var(--bg)'}}>
-      <div style={{borderBottom: '1px solid var(--border)', background: 'white', padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
-        <span style={{fontWeight: 700, fontSize: '1.1rem', color: 'var(--red)'}}>pool'em</span>
-        <div style={{display: 'flex', gap: '0.5rem'}}>
-          <Link href="/auth/login"><button className="btn-ghost" style={{minHeight: 40, padding: '0 14px'}}>log in</button></Link>
-          <Link href="/auth/signup"><button className="btn-primary" style={{minHeight: 40, padding: '0 14px'}}>sign up</button></Link>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+      {/* Nav */}
+      <div style={{ borderBottom: '1px solid var(--border)', background: 'white', padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--red)' }}>pool'em</span>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <Link href="/auth/login"><button className="btn-ghost" style={{ minHeight: 40, padding: '0 14px' }}>log in</button></Link>
+          <Link href="/auth/signup"><button className="btn-primary" style={{ minHeight: 40, padding: '0 14px' }}>sign up</button></Link>
         </div>
       </div>
 
-      <div style={{maxWidth: 600, margin: '0 auto', padding: '48px 1.25rem 2rem'}}>
-        <h1 style={{fontSize: 'clamp(1.5rem, 5vw, 2rem)', fontWeight: 700, marginBottom: '0.5rem', lineHeight: 1.2}}>
-          Private prediction pools for the World Cup.
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: '56px 1.25rem 3rem' }}>
+
+        {/* Hero */}
+        <h1 style={{ fontSize: 'clamp(1.75rem, 5vw, 2.25rem)', fontWeight: 700, marginBottom: '0.75rem', lineHeight: 1.2 }}>
+          Your group chat's prediction pool.
         </h1>
-        <p style={{color: 'var(--text-dim)', marginBottom: '2rem', fontSize: '1rem', lineHeight: 1.6}}>
-          Create a pool, set your rules, invite your friends. Picks lock at kickoff.
-          Leaderboard updates as goals go in. Free, no ads, no nonsense.
+        <p style={{ color: 'var(--text-dim)', marginBottom: '2rem', fontSize: '1rem', lineHeight: 1.7, maxWidth: 480 }}>
+          Set your own rules, invite your crew, score live. World Cup, F1, and more — all in one place. Free, no ads, no nonsense.
         </p>
 
-        <div style={{display: 'flex', gap: '0.75rem', marginBottom: '3rem', flexWrap: 'wrap'}}>
+        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '3.5rem', flexWrap: 'wrap' }}>
           <Link href="/auth/signup">
-            <button className="btn-primary" style={{padding: '12px 24px', fontSize: '1rem', minHeight: 48}}>create a pool</button>
+            <button className="btn-primary" style={{ padding: '12px 28px', fontSize: '1rem', minHeight: 48 }}>create a pool</button>
           </Link>
           <Link href="/auth/login">
-            <button className="btn-secondary" style={{padding: '12px 24px', fontSize: '1rem', minHeight: 48}}>join a pool</button>
+            <button className="btn-secondary" style={{ padding: '12px 28px', fontSize: '1rem', minHeight: 48 }}>join a pool</button>
           </Link>
         </div>
 
-        <div style={{borderTop: '1px solid var(--border)', paddingTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 160px), 1fr))', gap: '1.5rem'}}>
+        {/* Features */}
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 160px), 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
           {[
-            { title: 'pick your rules', desc: 'Win/loss/draw, exact scores, first scorer — or build your own.' },
-            { title: 'invite only', desc: 'Share a link. No spam, no public pools.' },
-            { title: 'auto-scoring', desc: 'Results pulled from API. Points update live.' },
+            { title: 'your rules', desc: 'Exact scores, first scorer, podium order, team to advance — pick what matters to your group.' },
+            { title: 'invite only', desc: 'One link. Private pool. No strangers, no noise.' },
+            { title: 'live scoring', desc: 'Results come in, points update automatically. The leaderboard never lies.' },
           ].map(f => (
             <div key={f.title}>
-              <div style={{fontWeight: 600, marginBottom: '0.3rem', color: 'var(--red)'}}>{f.title}</div>
-              <div style={{color: 'var(--text-dim)', fontSize: '0.85rem', lineHeight: 1.5}}>{f.desc}</div>
+              <div style={{ fontWeight: 600, marginBottom: '0.3rem', color: 'var(--red)' }}>{f.title}</div>
+              <div style={{ color: 'var(--text-dim)', fontSize: '0.85rem', lineHeight: 1.5 }}>{f.desc}</div>
             </div>
           ))}
         </div>
 
-        <div style={{borderTop: '1px solid var(--border)', marginTop: '2rem', paddingTop: '1rem'}}>
-          <span style={{fontSize: '0.75rem', color: 'var(--text-faint)'}}>FIFA World Cup 2026 · June 11 – July 19</span>
+        {/* Sports */}
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem', marginBottom: '3rem' }}>
+          <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', marginBottom: '1rem' }}>available now</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {[
+              { emoji: '🏆', name: 'FIFA World Cup 2026', status: 'live now', live: true },
+              { emoji: '🏎️', name: 'Formula 1 2026', status: 'live now', live: true },
+              { emoji: '🥊', name: 'MMA', status: 'live now', live: true },
+            ].map(s => (
+              <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <span style={{ fontSize: '1.1rem' }}>{s.emoji}</span>
+                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>{s.name}</span>
+                {s.live && (
+                  <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#2d7a2d', background: '#f0faf0', padding: '2px 8px', borderRadius: 4 }}>live</span>
+                )}
+              </div>
+            ))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
+              <span style={{ fontSize: '1.1rem' }}>➕</span>
+              <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>
+                Want another competition?{' '}
+                <a href="mailto:fred@pool-em.com?subject=Competition request" style={{ color: 'var(--red)', textDecoration: 'none' }}>
+                  request it here
+                </a>
+              </span>
+            </div>
+          </div>
         </div>
+
+        {/* Footer */}
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-faint)' }}>Free forever · No ads · No spam</span>
+        </div>
+
       </div>
     </div>
   )
