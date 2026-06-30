@@ -1044,8 +1044,8 @@ export function BracketView({ r32Bracket, bracketPicks, bracketScores, scoringRu
         {/* Champion — derived from score */}
         <div style={{ border: '1px solid #e0e0db', background: 'white', width: '100%', padding: '10px 8px', textAlign: 'center' as const }}>
           <div style={{ fontSize: '9px', fontWeight: 600, color: '#bbb', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>champion</div>
-          <div style={{ fontSize: 22 }}>{champion ? FLAGS[champion] || '🏆' : '🏆'}</div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#111', marginTop: 4 }}>{champion || 'TBD'}</div>
+          <div style={{ fontSize: 22, opacity: champion && eliminatedTeams?.has(champion) ? 0.3 : 1 }}>{champion ? FLAGS[champion] || '🏆' : '🏆'}</div>
+          <div style={{ fontSize: 12, fontWeight: 700, marginTop: 4, color: champion && eliminatedTeams?.has(champion) ? '#bbb' : '#111', textDecoration: champion && eliminatedTeams?.has(champion) ? 'line-through' : 'none' }}>{champion || 'TBD'}</div>
         </div>
       </div>
 
