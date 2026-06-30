@@ -224,7 +224,7 @@ export async function POST() {
     // ── Load fixtures for knockout round results ─────────────────────────
     const { data: allFixtures } = await supabase
       .from('fixtures')
-      .select('round, home_team, away_team, home_score, away_score, status')
+      .select('round, home_team, away_team, home_score, away_score, status, penalty_winner')
       .eq('tournament_id', 'wc_2026')
 
     const actualRounds = buildActualRoundSets(actualR32Bracket, allFixtures || [])
