@@ -423,15 +423,14 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         </div>
       )}
       <Section title="leaderboard" defaultOpen={true}>
-        {isAdmin && pool.buy_in_amount && (
-          <div style={{fontSize: '10px', color: '#aaa', marginBottom: '8px', display: 'flex', justifyContent: 'space-between'}}>
-            <span>player</span>
-            <div style={{display: 'flex', gap: 20}}>
-              <span>paid</span>
-              <span>pts</span>
-            </div>
+        <div style={{fontSize: '10px', color: '#aaa', marginBottom: '8px', display: 'flex', justifyContent: 'space-between'}}>
+          <span>player</span>
+          <div style={{display: 'flex', gap: 16, alignItems: 'center'}}>
+            {isAdmin && pool.buy_in_amount && <span style={{minWidth: 22, textAlign: 'center' as const}}>paid</span>}
+            <span style={{minWidth: 24, textAlign: 'right' as const}}>pts</span>
+            {pool.deadline_type === 'before_tournament' && <span style={{minWidth: 75, textAlign: 'right' as const}}>max possible</span>}
           </div>
-        )}
+        </div>
         {leaderboard.map((member, i) => (
           <div key={member.id} style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -459,16 +458,16 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 </button>
               )}
               {!isAdmin && pool.buy_in_amount && (
-                <span style={{fontSize: '11px', color: member.is_paid ? '#2d7a2d' : '#ddd'}}>
+                <span style={{fontSize: '11px', color: member.is_paid ? '#2d7a2d' : '#ddd', minWidth: 22, textAlign: 'center' as const}}>
                   {member.is_paid ? '✓' : '○'}
                 </span>
               )}
               <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', minWidth: 24, textAlign: 'right' as const}}>
                 {member.points}
               </span>
-              {member.maxPossible != null && (
-                <span style={{fontSize: '11px', color: '#bbb', minWidth: 50, textAlign: 'right' as const}}>
-                  max {member.maxPossible}
+              {pool.deadline_type === 'before_tournament' && (
+                <span style={{fontSize: '11px', color: '#bbb', minWidth: 75, textAlign: 'right' as const}}>
+                  {member.maxPossible != null ? `max ${member.maxPossible}` : ''}
                 </span>
               )}
             </div>
