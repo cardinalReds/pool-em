@@ -106,8 +106,8 @@ function buildActualRoundSets(
   for (const f of fixtures) {
     if (f.status !== 'FT' || f.home_score === null || f.away_score === null) continue
     const r = f.round || ''
-    const w = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : null
-    const l = f.home_score > f.away_score ? f.away_team : f.away_score > f.home_score ? f.home_team : null
+    const w = f.home_score > f.away_score ? f.home_team : f.away_score > f.home_score ? f.away_team : f.penalty_winner || null
+    const l = w ? (w === f.home_team ? f.away_team : f.home_team) : null
     if (r.includes('Round of 32') && w) { sets.R16.add(w); if (l) sets.ELIMINATED.add(l) }
     if (r.includes('Round of 16')) {
       sets.R16.add(f.home_team); sets.R16.add(f.away_team)
