@@ -423,51 +423,52 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         </div>
       )}
       <Section title="leaderboard" defaultOpen={true}>
-        <div style={{fontSize: '10px', color: '#aaa', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-          <span>player</span>
+        <div style={{fontSize: '10px', color: '#aaa', marginBottom: '8px', display: 'flex', alignItems: 'center'}}>
+          <span style={{flex: 1, minWidth: 0, textAlign: 'left' as const}}>player</span>
           <div style={{display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0}}>
-            {isAdmin && pool.buy_in_amount && <span style={{width: 22, textAlign: 'center' as const, flexShrink: 0}}>paid</span>}
-            <span style={{width: 28, textAlign: 'right' as const, flexShrink: 0}}>pts</span>
-            {pool.deadline_type === 'before_tournament' && <span style={{width: 48, textAlign: 'center' as const, flexShrink: 0, whiteSpace: 'nowrap' as const}}>max</span>}
+            {isAdmin && pool.buy_in_amount && <span style={{width: 40, textAlign: 'center' as const, flexShrink: 0}}>paid</span>}
+            <span style={{width: 40, textAlign: 'center' as const, flexShrink: 0}}>pts</span>
+            {pool.deadline_type === 'before_tournament' && <span style={{width: 40, textAlign: 'center' as const, flexShrink: 0}}>max possible</span>}
           </div>
         </div>
         {leaderboard.map((member, i) => (
           <div key={member.id} style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            display: 'flex', alignItems: 'center',
             padding: '7px 8px', marginBottom: '1px',
             background: member.user_id === user?.id ? '#fff5f5' : 'transparent',
             borderLeft: `3px solid ${member.user_id === user?.id ? '#C8102E' : 'transparent'}`,
-            gap: 8,
           }}>
-            <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const}}>
+            <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, textAlign: 'left' as const}}>
               {i + 1}. {member.display_name}
             </span>
             <div style={{display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0}}>
               {isAdmin && pool.buy_in_amount && (
-                <button
-                  onClick={() => togglePaid(member.id, member.is_paid)}
-                  title={member.is_paid ? 'mark as unpaid' : 'mark as paid'}
-                  style={{
-                    width: 22, height: 22, borderRadius: '50%', border: '1px solid',
-                    borderColor: member.is_paid ? '#2d7a2d' : '#ddd',
-                    background: member.is_paid ? '#2d7a2d' : 'white',
-                    color: 'white', fontSize: '12px', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0,
-                  }}>
-                  {member.is_paid ? '✓' : ''}
-                </button>
+                <div style={{width: 40, display: 'flex', justifyContent: 'center', flexShrink: 0}}>
+                  <button
+                    onClick={() => togglePaid(member.id, member.is_paid)}
+                    title={member.is_paid ? 'mark as unpaid' : 'mark as paid'}
+                    style={{
+                      width: 22, height: 22, borderRadius: '50%', border: '1px solid',
+                      borderColor: member.is_paid ? '#2d7a2d' : '#ddd',
+                      background: member.is_paid ? '#2d7a2d' : 'white',
+                      color: 'white', fontSize: '12px', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                    {member.is_paid ? '✓' : ''}
+                  </button>
+                </div>
               )}
               {!isAdmin && pool.buy_in_amount && (
-                <span style={{fontSize: '11px', color: member.is_paid ? '#2d7a2d' : '#ddd', width: 22, textAlign: 'center' as const, flexShrink: 0}}>
+                <span style={{fontSize: '11px', color: member.is_paid ? '#2d7a2d' : '#ddd', width: 40, textAlign: 'center' as const, flexShrink: 0}}>
                   {member.is_paid ? '✓' : '○'}
                 </span>
               )}
-              <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', width: 28, textAlign: 'right' as const, flexShrink: 0}}>
+              <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', width: 40, textAlign: 'center' as const, flexShrink: 0}}>
                 {member.points}
               </span>
               {pool.deadline_type === 'before_tournament' && (
-                <span style={{fontSize: '11px', color: '#bbb', width: 48, textAlign: 'center' as const, flexShrink: 0}}>
+                <span style={{fontSize: '11px', color: '#bbb', width: 40, textAlign: 'center' as const, flexShrink: 0}}>
                   {member.maxPossible != null ? member.maxPossible : ''}
                 </span>
               )}
