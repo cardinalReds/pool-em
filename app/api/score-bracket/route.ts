@@ -353,15 +353,67 @@ export async function POST() {
           if (actualRounds.FINAL.has(team)) { totalPts += rules.finalPts; breakdown[`FINAL_${team}`] = rules.finalPts }
         }
 
-        // Champion: user predicted the winner of the Final
+        // Champion: user predicted the winner of the Final — 10pts for correct winner
         if (userFINAL && actualRounds.CHAMPION.has(userFINAL)) {
-          totalPts += rules.finalPts; breakdown['CHAMPION'] = rules.finalPts
+          totalPts += 10; breakdown['CHAMPION'] = 10
+        }
+
+        // ── Final exact score ─────────────────────────────────────────────
+        // 2pts per correct team goal + 3pt exact bonus (per pool's posted rules)
+        const finalFixture = allFixtures?.find(f => f.round === 'Final' && f.status === 'FT')
+        if (finalFixture && pick.final_home_score != null && pick.final_away_score != null) {
+          const actualHomeGoals = finalFixture.home_score
+          const actualAwayGoals = finalFixture.away_score
+          let finalScorePts = 0
+          if (pick.final_home_score === actualHomeGoals) finalScorePts += 2
+          if (pick.final_away_score === actualAwayGoals) finalScorePts += 2
+          if (pick.final_home_score === actualHomeGoals && pick.final_away_score === actualAwayGoals) {
+            finalScorePts += 3
+          }
+          if (finalScorePts > 0) {
+            totalPts += finalScorePts
+            breakdown['FINAL_SCORE'] = finalScorePts
+          }
+        }
+
+        // ── Max possible score ────────────────────────────────────────────
+        // Start from confirmed points, then add points for any pick that's
+        // still alive (not eliminated) and not yet confirmed for that round
+        let maxPossible = totalPts
+
+        // R32 group picks not yet confirmed but team still alive
+        for (const team of userR32FromGroups) {
+          if (!actualRounds.R32.has(team) && !actualRounds.ELIMINATED.has(team)) maxPossible += rules.r32Pts
+        }
+        // R16: pick alive and not yet confirmed in R16
+        for (const team of userR32) {
+          if (!actualRounds.R16.has(team) && !actualRounds.ELIMINATED.has(team)) maxPossible += rules.r16Pts
+        }
+        // QF: pick alive and not yet confirmed in QF
+        for (const team of userR16) {
+          if (!actualRounds.QF.has(team) && !actualRounds.ELIMINATED.has(team)) maxPossible += rules.qfPts
+        }
+        // SF: pick alive and not yet confirmed in SF
+        for (const team of userQF) {
+          if (!actualRounds.SF.has(team) && !actualRounds.ELIMINATED.has(team)) maxPossible += rules.sfPts
+        }
+        // Final: pick alive and not yet confirmed in Final
+        for (const team of userSF) {
+          if (!actualRounds.FINAL.has(team) && !actualRounds.ELIMINATED.has(team)) maxPossible += rules.finalPts
+        }
+        // Champion: pick alive and not yet confirmed champion — 10pts for correct winner
+        if (userFINAL && !actualRounds.CHAMPION.has(userFINAL) && !actualRounds.ELIMINATED.has(userFINAL)) {
+          maxPossible += 10
+        }
+        // Final exact score — 2+2+3 = 7pts max, only countable if finalist still alive and Final not yet played
+        if (!finalFixture && userFINAL && !actualRounds.ELIMINATED.has(userFINAL)) {
+          maxPossible += 7
         }
 
         if (totalPts > 0 || Object.keys(breakdown).length > 0) {
           await supabase
             .from('bracket_picks')
-            .update({ bracket_scores: { total: totalPts, breakdown, eliminated: [...actualRounds.ELIMINATED] } })
+            .update({ bracket_scores: { total: totalPts, breakdown, eliminated: [...actualRounds.ELIMINATED], max_possible: maxPossible } })
             .eq('id', pick.id)
         }
       }
