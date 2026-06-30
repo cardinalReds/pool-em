@@ -306,10 +306,6 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Always sync knockout fixtures from API
-    await syncKnockoutFixtures()
-    await populateTBDFixtures()
-
     // Get all active tournaments that have live or upcoming fixtures today
     const { data: activeTournaments } = await supabase
       .from('tournaments')
@@ -407,9 +403,9 @@ export async function GET(request: Request) {
           ourFixture.home_score !== homeScore ||
           ourFixture.away_score !== awayScore
 
-        // Fetch events to get first scorer (only if score changed or no scorer yet)
+        // Fetch events to get first scorer (only if score changed)
         let firstScorer = ourFixture.first_scorer_name
-        if (scoreChanged || (!firstScorer && homeScore + awayScore > 0)) {
+        if (scoreChanged) {
           const events = await fetchFixtureEvents(apiId)
           firstScorer = extractFirstScorer(events, ourFixture.home_team, ourFixture.away_team)
         }
