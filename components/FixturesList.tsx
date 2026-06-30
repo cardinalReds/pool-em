@@ -66,6 +66,31 @@ interface PoolRule {
   prediction_type: string  // 'per_game' | 'per_round'
 }
 
+const FLAG_CODES: Record<string, string> = {
+  'Mexico': 'mx', 'South Africa': 'za', 'South Korea': 'kr', 'Czechia': 'cz',
+  'Canada': 'ca', 'Bosnia and Herzegovina': 'ba', 'Bosnia & Herzegovina': 'ba', 'Qatar': 'qa', 'Switzerland': 'ch',
+  'USA': 'us', 'Paraguay': 'py', 'Haiti': 'ht', 'Scotland': 'gb-sct',
+  'Australia': 'au', 'Türkiye': 'tr', 'Brazil': 'br', 'Morocco': 'ma',
+  'Germany': 'de', 'Curaçao': 'cw', 'Netherlands': 'nl', 'Japan': 'jp',
+  'Sweden': 'se', 'Tunisia': 'tn', 'Saudi Arabia': 'sa', 'Uruguay': 'uy',
+  'Spain': 'es', 'Cabo Verde': 'cv', 'Cape Verde Islands': 'cv', 'Iran': 'ir', 'New Zealand': 'nz',
+  'Belgium': 'be', 'Egypt': 'eg', 'France': 'fr', 'Senegal': 'sn',
+  'Iraq': 'iq', 'Norway': 'no', 'Argentina': 'ar', 'Algeria': 'dz',
+  'Austria': 'at', 'Jordan': 'jo', 'Ghana': 'gh', 'Panama': 'pa',
+  'England': 'gb-eng', 'Croatia': 'hr', 'Portugal': 'pt', 'Congo DR': 'cd',
+  'Uzbekistan': 'uz', 'Colombia': 'co', 'Denmark': 'dk', 'Serbia': 'rs',
+  'Poland': 'pl', 'Chile': 'cl', 'Venezuela': 've', 'Nigeria': 'ng',
+  'Ivory Coast': 'ci', 'Ecuador': 'ec', 'Peru': 'pe', 'Costa Rica': 'cr',
+  'Jamaica': 'jm', 'Honduras': 'hn', 'Cape Verde': 'cv',
+}
+
+function Flag({ team, size = 16 }: { team: string; size?: number }) {
+  const code = FLAG_CODES[team]
+  if (!code) return null
+  return <img src={`https://flagcdn.com/${size}x${Math.round(size * 0.75)}/${code}.png`} width={size} height={Math.round(size * 0.75)} alt={team} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 2 }} />
+}
+
+// Keep FLAGS for backward compat in bracket components
 const FLAGS: Record<string, string> = {
   'Mexico': '🇲🇽', 'South Africa': '🇿🇦', 'South Korea': '🇰🇷', 'Czechia': '🇨🇿',
   'Canada': '🇨🇦', 'Bosnia and Herzegovina': '🇧🇦', 'Qatar': '🇶🇦', 'Switzerland': '🇨🇭',
@@ -400,7 +425,7 @@ poolRules: PoolRule[]
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-                  {FLAGS[fixture.home_team]} {fixture.home_team}
+                  <Flag team={fixture.home_team} /> {fixture.home_team}
                 </span>
               </button>
               {showDraw && (
@@ -414,7 +439,7 @@ poolRules: PoolRule[]
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-                  {fixture.away_team} {FLAGS[fixture.away_team]}
+                  {fixture.away_team} <Flag team={fixture.away_team} />
                 </span>
               </button>
             </div>
@@ -429,7 +454,7 @@ poolRules: PoolRule[]
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              {FLAGS[fixture.home_team]} {fixture.home_team}
+              <Flag team={fixture.home_team} /> {fixture.home_team}
               {fixture.line_asian_handicap_home != null && (
                 <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: 3 }}>
                   ({fixture.line_asian_handicap_home > 0 ? '+' : ''}{fixture.line_asian_handicap_home})
@@ -441,7 +466,7 @@ poolRules: PoolRule[]
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              {fixture.away_team} {FLAGS[fixture.away_team]}
+              {fixture.away_team} <Flag team={fixture.away_team} />
               {fixture.line_asian_handicap_away != null && (
                 <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: 3 }}>
                   ({fixture.line_asian_handicap_away > 0 ? '+' : ''}{fixture.line_asian_handicap_away})
@@ -459,7 +484,7 @@ poolRules: PoolRule[]
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              {FLAGS[fixture.home_team]} {fixture.home_team}
+              <Flag team={fixture.home_team} /> {fixture.home_team}
             </span>
           </button>
           <button type="button" style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
@@ -471,7 +496,7 @@ poolRules: PoolRule[]
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              {fixture.away_team} {FLAGS[fixture.away_team]}
+              {fixture.away_team} <Flag team={fixture.away_team} />
             </span>
           </button>
         </div>
@@ -484,7 +509,7 @@ poolRules: PoolRule[]
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              {FLAGS[fixture.home_team]} {fixture.home_team}
+              <Flag team={fixture.home_team} /> {fixture.home_team}
             </span>
           </button>
           <button type="button" style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
@@ -496,7 +521,7 @@ poolRules: PoolRule[]
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              {fixture.away_team} {FLAGS[fixture.away_team]}
+              {fixture.away_team} <Flag team={fixture.away_team} />
             </span>
           </button>
         </div>
@@ -1366,13 +1391,13 @@ export default function FixturesList({
             <div style={{ display: 'flex', gap: 16, padding: '6px 10px', background: '#f0fff4', borderBottom: '1px solid #d0f0d8', fontSize: '11px', color: '#2d7a2d', flexWrap: 'wrap' as const, justifyContent: 'center' as const }}>
               {hasCorners && (
                 <span>
-                  🚩 corners: {FLAGS[fixture.home_team]} {fixture.live_home_corners ?? 0} – {fixture.live_away_corners ?? 0} {FLAGS[fixture.away_team]}
+                  🚩 corners: <Flag team={fixture.home_team} /> {fixture.live_home_corners ?? 0} – {fixture.live_away_corners ?? 0} <Flag team={fixture.away_team} />
                   {fixture.line_total_corners && <span style={{ color: '#aaa', marginLeft: 4 }}>(line {fixture.line_total_corners})</span>}
                 </span>
               )}
               {hasCards && (
                 <span>
-                  🟨 cards: {FLAGS[fixture.home_team]} {fixture.live_home_cards ?? 0} – {fixture.live_away_cards ?? 0} {FLAGS[fixture.away_team]}
+                  🟨 cards: <Flag team={fixture.home_team} /> {fixture.live_home_cards ?? 0} – {fixture.live_away_cards ?? 0} <Flag team={fixture.away_team} />
                   {fixture.line_card_points && <span style={{ color: '#aaa', marginLeft: 4 }}>(line {fixture.line_card_points})</span>}
                 </span>
               )}
@@ -1547,13 +1572,13 @@ export default function FixturesList({
                             const awayCards = fixture.live_away_cards ?? 0
                             const cornResult = homeCorn > awayCorn ? 'home' : awayCorn > homeCorn ? 'away' : 'draw'
                             switch (rule.category_id) {
-                              case 'soccer_result': actual = result === 'home' ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : result === 'away' ? `${FLAGS[fixture.away_team]} ${fixture.away_team}` : 'draw'; break
+                              case 'soccer_result': actual = result === 'home' ? `$<Flag team={fixture.home_team} /> ${fixture.home_team}` : result === 'away' ? `$<Flag team={fixture.away_team} /> ${fixture.away_team}` : 'draw'; break
                               case 'soccer_team_to_advance': {
                                 const winner = h > a ? fixture.home_team : a > h ? fixture.away_team : fixture.penalty_winner || null
                                 actual = winner ? `${FLAGS[winner] || ''} ${winner}` : '—'
                                 break
                               }
-                              case 'soccer_ht_result': actual = htResult ? (htResult === 'home' ? `${FLAGS[fixture.home_team]} HT` : htResult === 'away' ? `${FLAGS[fixture.away_team]} HT` : 'draw HT') : '—'; break
+                              case 'soccer_ht_result': actual = htResult ? (htResult === 'home' ? `$<Flag team={fixture.home_team} /> HT` : htResult === 'away' ? `$<Flag team={fixture.away_team} /> HT` : 'draw HT') : '—'; break
                               case 'soccer_exact_score': actual = `${h}–${a}`; break
                               case 'soccer_ht_exact_score': actual = htH != null && htA != null ? `${htH}–${htA} HT` : '—'; break
                               case 'soccer_first_goalscorer':
@@ -1562,27 +1587,27 @@ export default function FixturesList({
                                 const fts = fixture.first_team_score
                                 if (!fts) {
                                   if (isLive && h === 0 && a === 0) { actual = 'no goal'; break }
-                                  actual = h > 0 ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : a > 0 ? `${FLAGS[fixture.away_team]} ${fixture.away_team}` : '—'
+                                  actual = h > 0 ? `$<Flag team={fixture.home_team} /> ${fixture.home_team}` : a > 0 ? `$<Flag team={fixture.away_team} /> ${fixture.away_team}` : '—'
                                   break
                                 }
-                                actual = fts === 'home' ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : `${FLAGS[fixture.away_team]} ${fixture.away_team}`
+                                actual = fts === 'home' ? `$<Flag team={fixture.home_team} /> ${fixture.home_team}` : `$<Flag team={fixture.away_team} /> ${fixture.away_team}`
                                 break
                               }
                               case 'soccer_btts': actual = (h > 0 && a > 0) ? 'Yes' : 'No'; break
                               case 'soccer_total_goals_ou': actual = `${h + a} goals`; break
                               case 'soccer_total_corners_ou': actual = `${homeCorn + awayCorn} corners`; break
-                              case 'soccer_corners_winner': actual = cornResult === 'home' ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : cornResult === 'away' ? `${FLAGS[fixture.away_team]} ${fixture.away_team}` : 'draw'; break
-                              case 'soccer_ht_corners_winner': actual = htHomeCorn != null && htAwayCorn != null ? (htHomeCorn > htAwayCorn ? `${FLAGS[fixture.home_team]} HT` : htAwayCorn > htHomeCorn ? `${FLAGS[fixture.away_team]} HT` : 'draw HT') : '—'; break
+                              case 'soccer_corners_winner': actual = cornResult === 'home' ? `$<Flag team={fixture.home_team} /> ${fixture.home_team}` : cornResult === 'away' ? `$<Flag team={fixture.away_team} /> ${fixture.away_team}` : 'draw'; break
+                              case 'soccer_ht_corners_winner': actual = htHomeCorn != null && htAwayCorn != null ? (htHomeCorn > htAwayCorn ? `$<Flag team={fixture.home_team} /> HT` : htAwayCorn > htHomeCorn ? `$<Flag team={fixture.away_team} /> HT` : 'draw HT') : '—'; break
                               case 'soccer_card_points_ou': actual = `${homeCards + awayCards} card pts`; break
-                              case 'soccer_cards_home_away': actual = homeCards > awayCards ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : awayCards > homeCards ? `${FLAGS[fixture.away_team]} ${fixture.away_team}` : 'draw'; break
+                              case 'soccer_cards_home_away': actual = homeCards > awayCards ? `$<Flag team={fixture.home_team} /> ${fixture.home_team}` : awayCards > homeCards ? `$<Flag team={fixture.away_team} /> ${fixture.away_team}` : 'draw'; break
                               case 'soccer_cards_ht': {
                                 const htHC = fixture.ht_home_card_pts ?? 0
                                 const htAC = fixture.ht_away_card_pts ?? 0
-                                actual = htHC > htAC ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : htAC > htHC ? `${FLAGS[fixture.away_team]} ${fixture.away_team}` : 'draw'
+                                actual = htHC > htAC ? `$<Flag team={fixture.home_team} /> ${fixture.home_team}` : htAC > htHC ? `$<Flag team={fixture.away_team} /> ${fixture.away_team}` : 'draw'
                                 break
                               }
-                              case 'soccer_first_yellow_team': actual = fixture.first_yellow_team ? (fixture.first_yellow_team === 'home' ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : `${FLAGS[fixture.away_team]} ${fixture.away_team}`) : '—'; break
-                              case 'soccer_asian_handicap': actual = result === 'home' ? `${FLAGS[fixture.home_team]} ${fixture.home_team}` : result === 'away' ? `${FLAGS[fixture.away_team]} ${fixture.away_team}` : 'draw'; break
+                              case 'soccer_first_yellow_team': actual = fixture.first_yellow_team ? (fixture.first_yellow_team === 'home' ? `$<Flag team={fixture.home_team} /> ${fixture.home_team}` : `$<Flag team={fixture.away_team} /> ${fixture.away_team}`) : '—'; break
+                              case 'soccer_asian_handicap': actual = result === 'home' ? `$<Flag team={fixture.home_team} /> ${fixture.home_team}` : result === 'away' ? `$<Flag team={fixture.away_team} /> ${fixture.away_team}` : 'draw'; break
                             }
                             return (
                               <td key={rule.category_id} style={{ padding: '6px 6px 2px', textAlign: 'center' as const, fontSize: '11px', color: '#2d7a2d', fontWeight: 600, borderTop: '2px solid #eee' }}>
