@@ -1570,7 +1570,7 @@ export default function FixturesList({
                               return true
                             })
                             .map(rule => {
-                            let actual = '—'
+                            let actual: React.ReactNode = '—'
                             const h = fixture.home_score ?? 0
                             const a = fixture.away_score ?? 0
                             const htH = fixture.ht_home_score
@@ -1584,14 +1584,17 @@ export default function FixturesList({
                             const homeCards = fixture.live_home_cards ?? 0
                             const awayCards = fixture.live_away_cards ?? 0
                             const cornResult = homeCorn > awayCorn ? 'home' : awayCorn > homeCorn ? 'away' : 'draw'
+
+                            const teamNode = (team: string) => <span style={{display:'inline-flex',alignItems:'center',gap:3}}><Flag team={team} />{team}</span>
+
                             switch (rule.category_id) {
-                              case 'soccer_result': actual = result === 'home' ? `${fixture.home_team}` : result === 'away' ? `${fixture.away_team}` : 'draw'; break
+                              case 'soccer_result': actual = result === 'home' ? teamNode(fixture.home_team) : result === 'away' ? teamNode(fixture.away_team) : 'draw'; break
                               case 'soccer_team_to_advance': {
                                 const winner = h > a ? fixture.home_team : a > h ? fixture.away_team : fixture.penalty_winner || null
-                                actual = winner ? `${FLAGS[winner] || ''} ${winner}` : '—'
+                                actual = winner ? teamNode(winner) : '—'
                                 break
                               }
-                              case 'soccer_ht_result': actual = htResult ? (htResult === 'home' ? `${fixture.home_team} HT` : htResult === 'away' ? `${fixture.away_team} HT` : 'draw HT') : '—'; break
+                              case 'soccer_ht_result': actual = htResult ? (htResult === 'home' ? <span style={{display:'inline-flex',alignItems:'center',gap:3}}><Flag team={fixture.home_team} />HT</span> : htResult === 'away' ? <span style={{display:'inline-flex',alignItems:'center',gap:3}}><Flag team={fixture.away_team} />HT</span> : 'draw HT') : '—'; break
                               case 'soccer_exact_score': actual = `${h}–${a}`; break
                               case 'soccer_ht_exact_score': actual = htH != null && htA != null ? `${htH}–${htA} HT` : '—'; break
                               case 'soccer_first_goalscorer':
@@ -1600,27 +1603,27 @@ export default function FixturesList({
                                 const fts = fixture.first_team_score
                                 if (!fts) {
                                   if (isLive && h === 0 && a === 0) { actual = 'no goal'; break }
-                                  actual = h > 0 ? `${fixture.home_team}` : a > 0 ? `${fixture.away_team}` : '—'
+                                  actual = h > 0 ? teamNode(fixture.home_team) : a > 0 ? teamNode(fixture.away_team) : '—'
                                   break
                                 }
-                                actual = fts === 'home' ? `${fixture.home_team}` : `${fixture.away_team}`
+                                actual = fts === 'home' ? teamNode(fixture.home_team) : teamNode(fixture.away_team)
                                 break
                               }
                               case 'soccer_btts': actual = (h > 0 && a > 0) ? 'Yes' : 'No'; break
                               case 'soccer_total_goals_ou': actual = `${h + a} goals`; break
                               case 'soccer_total_corners_ou': actual = `${homeCorn + awayCorn} corners`; break
-                              case 'soccer_corners_winner': actual = cornResult === 'home' ? `${fixture.home_team}` : cornResult === 'away' ? `${fixture.away_team}` : 'draw'; break
-                              case 'soccer_ht_corners_winner': actual = htHomeCorn != null && htAwayCorn != null ? (htHomeCorn > htAwayCorn ? `${fixture.home_team} HT` : htAwayCorn > htHomeCorn ? `${fixture.away_team} HT` : 'draw HT') : '—'; break
+                              case 'soccer_corners_winner': actual = cornResult === 'home' ? teamNode(fixture.home_team) : cornResult === 'away' ? teamNode(fixture.away_team) : 'draw'; break
+                              case 'soccer_ht_corners_winner': actual = htHomeCorn != null && htAwayCorn != null ? (htHomeCorn > htAwayCorn ? <span style={{display:'inline-flex',alignItems:'center',gap:3}}><Flag team={fixture.home_team} />HT</span> : htAwayCorn > htHomeCorn ? <span style={{display:'inline-flex',alignItems:'center',gap:3}}><Flag team={fixture.away_team} />HT</span> : 'draw HT') : '—'; break
                               case 'soccer_card_points_ou': actual = `${homeCards + awayCards} card pts`; break
-                              case 'soccer_cards_home_away': actual = homeCards > awayCards ? `${fixture.home_team}` : awayCards > homeCards ? `${fixture.away_team}` : 'draw'; break
+                              case 'soccer_cards_home_away': actual = homeCards > awayCards ? teamNode(fixture.home_team) : awayCards > homeCards ? teamNode(fixture.away_team) : 'draw'; break
                               case 'soccer_cards_ht': {
                                 const htHC = fixture.ht_home_card_pts ?? 0
                                 const htAC = fixture.ht_away_card_pts ?? 0
-                                actual = htHC > htAC ? `${fixture.home_team}` : htAC > htHC ? `${fixture.away_team}` : 'draw'
+                                actual = htHC > htAC ? teamNode(fixture.home_team) : htAC > htHC ? teamNode(fixture.away_team) : 'draw'
                                 break
                               }
-                              case 'soccer_first_yellow_team': actual = fixture.first_yellow_team ? (fixture.first_yellow_team === 'home' ? `${fixture.home_team}` : `${fixture.away_team}`) : '—'; break
-                              case 'soccer_asian_handicap': actual = result === 'home' ? `${fixture.home_team}` : result === 'away' ? `${fixture.away_team}` : 'draw'; break
+                              case 'soccer_first_yellow_team': actual = fixture.first_yellow_team ? (fixture.first_yellow_team === 'home' ? teamNode(fixture.home_team) : teamNode(fixture.away_team)) : '—'; break
+                              case 'soccer_asian_handicap': actual = result === 'home' ? teamNode(fixture.home_team) : result === 'away' ? teamNode(fixture.away_team) : 'draw'; break
                             }
                             return (
                               <td key={rule.category_id} style={{ padding: '6px 6px 2px', textAlign: 'center' as const, fontSize: '11px', color: '#2d7a2d', fontWeight: 600, borderTop: '2px solid #eee' }}>
