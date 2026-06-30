@@ -214,6 +214,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       const { data: members } = await supabase.from('pool_members').select('*').eq('pool_id', pool.id)
 
       const pointsMap: Record<string, number> = {}
+      const maxPossibleMap: Record<string, number> = {}
       if (pool.deadline_type === 'before_tournament') {
         const { data: bracketScores } = await supabase
           .from('bracket_picks')
@@ -221,6 +222,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           .eq('pool_id', pool.id)
         bracketScores?.forEach(b => {
           if (b.bracket_scores?.total) pointsMap[b.user_id] = b.bracket_scores.total
+          if (b.bracket_scores?.max_possible != null) maxPossibleMap[b.user_id] = b.bracket_scores.max_possible
         })
       } else if (pool.package_id === 'CUSTOM') {
         const { data: scores } = await supabase.from('predictions_v2').select('user_id, points_earned').eq('pool_id', pool.id)
@@ -229,7 +231,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         const { data: scores } = await supabase.from('predictions').select('user_id, points_earned').eq('pool_id', pool.id)
         scores?.forEach(s => { if (s.points_earned) pointsMap[s.user_id] = (pointsMap[s.user_id] || 0) + s.points_earned })
       }
-      setLeaderboard((members || []).map(m => ({ ...m, points: pointsMap[m.user_id] || 0 })).sort((a, b) => b.points - a.points))
+      setLeaderboard((members || []).map(m => ({ ...m, points: pointsMap[m.user_id] || 0, maxPossible: maxPossibleMap[m.user_id] })).sort((a, b) => b.points - a.points))
 
       // ── "Your Leaderboard" — total points across only the fixtures the LOGGED-IN user predicted on ──
       if (pool.package_id === 'CUSTOM' && pool.deadline_type !== 'before_tournament') {
@@ -464,6 +466,11 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', minWidth: 24, textAlign: 'right' as const}}>
                 {member.points}
               </span>
+              {member.maxPossible != null && (
+                <span style={{fontSize: '11px', color: '#bbb', minWidth: 50, textAlign: 'right' as const}}>
+                  max {member.maxPossible}
+                </span>
+              )}
             </div>
           </div>
         ))}
@@ -566,7 +573,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       {/* Invite */}
       {isAdmin && (
         <Section title="invite" defaultOpen={!isMobile}>
-          <InvitePanel poolId={pool.id} poolName={pool.name} inviteUrl={inviteUrl} buyInAmount={pool.buy_in_amount} payoutStructure={pool.payout_structure} />
+          <InvitePanel poolName={pool.name} inviteUrl={inviteUrl} buyInAmount={pool.buy_in_amount} inviterName={user?.user_metadata?.display_name || user?.email?.split('@')[0] || null} />
         </Section>
       )}
 
