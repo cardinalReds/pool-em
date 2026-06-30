@@ -423,12 +423,12 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         </div>
       )}
       <Section title="leaderboard" defaultOpen={true}>
-        <div style={{fontSize: '10px', color: '#aaa', marginBottom: '8px', display: 'flex', justifyContent: 'space-between'}}>
+        <div style={{fontSize: '10px', color: '#aaa', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
           <span>player</span>
-          <div style={{display: 'flex', gap: 16, alignItems: 'center'}}>
-            {isAdmin && pool.buy_in_amount && <span style={{minWidth: 22, textAlign: 'center' as const}}>paid</span>}
-            <span style={{minWidth: 24, textAlign: 'right' as const}}>pts</span>
-            {pool.deadline_type === 'before_tournament' && <span style={{minWidth: 75, textAlign: 'right' as const}}>max possible</span>}
+          <div style={{display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0}}>
+            {isAdmin && pool.buy_in_amount && <span style={{width: 22, textAlign: 'center' as const}}>paid</span>}
+            <span style={{width: 28, textAlign: 'right' as const}}>pts</span>
+            {pool.deadline_type === 'before_tournament' && <span style={{width: 60, textAlign: 'right' as const}}>max possible</span>}
           </div>
         </div>
         {leaderboard.map((member, i) => (
@@ -437,11 +437,12 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             padding: '7px 8px', marginBottom: '1px',
             background: member.user_id === user?.id ? '#fff5f5' : 'transparent',
             borderLeft: `3px solid ${member.user_id === user?.id ? '#C8102E' : 'transparent'}`,
+            gap: 8,
           }}>
-            <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555', flex: 1}}>
+            <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const}}>
               {i + 1}. {member.display_name}
             </span>
-            <div style={{display: 'flex', alignItems: 'center', gap: 16}}>
+            <div style={{display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0}}>
               {isAdmin && pool.buy_in_amount && (
                 <button
                   onClick={() => togglePaid(member.id, member.is_paid)}
@@ -458,15 +459,15 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 </button>
               )}
               {!isAdmin && pool.buy_in_amount && (
-                <span style={{fontSize: '11px', color: member.is_paid ? '#2d7a2d' : '#ddd', minWidth: 22, textAlign: 'center' as const}}>
+                <span style={{fontSize: '11px', color: member.is_paid ? '#2d7a2d' : '#ddd', width: 22, textAlign: 'center' as const, flexShrink: 0}}>
                   {member.is_paid ? '✓' : '○'}
                 </span>
               )}
-              <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', minWidth: 24, textAlign: 'right' as const}}>
+              <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', width: 28, textAlign: 'right' as const, flexShrink: 0}}>
                 {member.points}
               </span>
               {pool.deadline_type === 'before_tournament' && (
-                <span style={{fontSize: '11px', color: '#bbb', minWidth: 75, textAlign: 'right' as const}}>
+                <span style={{fontSize: '11px', color: '#bbb', width: 60, textAlign: 'right' as const, flexShrink: 0}}>
                   {member.maxPossible != null ? member.maxPossible : ''}
                 </span>
               )}
