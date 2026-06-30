@@ -426,9 +426,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         <div style={{fontSize: '10px', color: '#aaa', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
           <span>player</span>
           <div style={{display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0}}>
-            {isAdmin && pool.buy_in_amount && <span style={{width: 22, textAlign: 'center' as const}}>paid</span>}
-            <span style={{width: 28, textAlign: 'right' as const}}>pts</span>
-            {pool.deadline_type === 'before_tournament' && <span style={{width: 48, textAlign: 'center' as const}}>max possible</span>}
+            {isAdmin && pool.buy_in_amount && <span style={{width: 22, textAlign: 'center' as const, flexShrink: 0}}>paid</span>}
+            <span style={{width: 28, textAlign: 'right' as const, flexShrink: 0}}>pts</span>
+            {pool.deadline_type === 'before_tournament' && <span style={{width: 48, textAlign: 'center' as const, flexShrink: 0, whiteSpace: 'nowrap' as const}}>max</span>}
           </div>
         </div>
         {leaderboard.map((member, i) => (
