@@ -467,7 +467,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               </span>
               {pool.deadline_type === 'before_tournament' && (
                 <span style={{fontSize: '11px', color: '#bbb', minWidth: 75, textAlign: 'right' as const}}>
-                  {member.maxPossible != null ? `max ${member.maxPossible}` : ''}
+                  {member.maxPossible != null ? member.maxPossible : ''}
                 </span>
               )}
             </div>
