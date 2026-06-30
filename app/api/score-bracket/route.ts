@@ -133,6 +133,10 @@ function buildActualRoundSets(
 }
 
 
+export async function GET() {
+  return POST()
+}
+
 export async function POST() {
   try {
     // Sync knockout fixture team names from API first
