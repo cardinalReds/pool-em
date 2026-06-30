@@ -148,6 +148,23 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
   awayTeam: string
 }) {
   const [openTeam, setOpenTeam] = useState<string | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Close on click outside
+  useEffect(() => {
+    if (!openTeam) return
+    function handleClickOutside(e: MouseEvent | TouchEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpenTeam(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('touchstart', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('touchstart', handleClickOutside)
+    }
+  }, [openTeam])
 
   function getPlayers(team: string) {
     return (WC_SQUADS[team] || [])
@@ -161,28 +178,22 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
   }
 
   function select(v: string) {
-    const scrollY = window.scrollY
     onChange(v)
-    setOpenTeam(null)
-    requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: 'instant' as any }))
+    // Keep dropdown open — highlight only, close on click outside
   }
 
   function toggle(team: string) {
     setOpenTeam(prev => prev === team ? null : team)
   }
 
-  const selectedTeam = value
-    ? (getPlayers(homeTeam).some(p => p.name === value) || value.includes(`(${homeTeam})`) ? homeTeam : awayTeam)
-    : null
-
   return (
-    <div style={{ fontSize: '13px' }}>
+    <div ref={containerRef} style={{ fontSize: '13px' }}>
       {/* Current selection */}
       {value && (
         <div style={{ padding: '6px 10px', background: '#fff5f5', border: '1px solid #f0d0d0', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ color: '#C8102E', fontWeight: 600 }}>{value}</span>
           {!disabled && (
-            <button type="button" onMouseDown={e => { e.preventDefault(); select('') }}
+            <button type="button" onMouseDown={e => { e.preventDefault(); onChange('') }}
               style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', fontSize: '16px', padding: '0 4px' }}>×</button>
           )}
         </div>
@@ -208,7 +219,10 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
                 {team} {openTeam === team ? '▲' : '▼'}
               </button>
               {openTeam === team && (
-                <div style={{ border: '1px solid #eee', borderTop: 'none', maxHeight: 220, overflowY: 'auto' as const }}>
+                <div
+                  onMouseDown={e => e.stopPropagation()}
+                  onTouchStart={e => e.stopPropagation()}
+                  style={{ border: '1px solid #eee', borderTop: 'none', maxHeight: 220, overflowY: 'auto' as const }}>
                   <button type="button" onMouseDown={e => { e.preventDefault(); select(`Own Goal (${team})`) }}
                     style={{
                       width: '100%', padding: '10px 12px', border: 'none', borderBottom: '1px solid #f5f5f5',
@@ -238,7 +252,6 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
           ))}
         </div>
       )}
-      {disabled && value && null}
     </div>
   )
 }
@@ -1572,13 +1585,13 @@ export default function FixturesList({
                             const awayCards = fixture.live_away_cards ?? 0
                             const cornResult = homeCorn > awayCorn ? 'home' : awayCorn > homeCorn ? 'away' : 'draw'
                             switch (rule.category_id) {
-                              case 'soccer_result': actual = result === 'home' ? `$<Flag team={fixture.home_team} /> ${fixture.home_team}` : result === 'away' ? `$<Flag team={fixture.away_team} /> ${fixture.away_team}` : 'draw'; break
+                              case 'soccer_result': actual = result === 'home' ? `${fixture.home_team}` : result === 'away' ? `${fixture.away_team}` : 'draw'; break
                               case 'soccer_team_to_advance': {
                                 const winner = h > a ? fixture.home_team : a > h ? fixture.away_team : fixture.penalty_winner || null
                                 actual = winner ? `${FLAGS[winner] || ''} ${winner}` : '—'
                                 break
                               }
-                              case 'soccer_ht_result': actual = htResult ? (htResult === 'home' ? `$<Flag team={fixture.home_team} /> HT` : htResult === 'away' ? `$<Flag team={fixture.away_team} /> HT` : 'draw HT') : '—'; break
+                              case 'soccer_ht_result': actual = htResult ? (htResult === 'home' ? `${fixture.home_team} HT` : htResult === 'away' ? `${fixture.away_team} HT` : 'draw HT') : '—'; break
                               case 'soccer_exact_score': actual = `${h}–${a}`; break
                               case 'soccer_ht_exact_score': actual = htH != null && htA != null ? `${htH}–${htA} HT` : '—'; break
                               case 'soccer_first_goalscorer':
@@ -1587,27 +1600,27 @@ export default function FixturesList({
                                 const fts = fixture.first_team_score
                                 if (!fts) {
                                   if (isLive && h === 0 && a === 0) { actual = 'no goal'; break }
-                                  actual = h > 0 ? `$<Flag team={fixture.home_team} /> ${fixture.home_team}` : a > 0 ? `$<Flag team={fixture.away_team} /> ${fixture.away_team}` : '—'
+                                  actual = h > 0 ? `${fixture.home_team}` : a > 0 ? `${fixture.away_team}` : '—'
                                   break
                                 }
-                                actual = fts === 'home' ? `$<Flag team={fixture.home_team} /> ${fixture.home_team}` : `$<Flag team={fixture.away_team} /> ${fixture.away_team}`
+                                actual = fts === 'home' ? `${fixture.home_team}` : `${fixture.away_team}`
                                 break
                               }
                               case 'soccer_btts': actual = (h > 0 && a > 0) ? 'Yes' : 'No'; break
                               case 'soccer_total_goals_ou': actual = `${h + a} goals`; break
                               case 'soccer_total_corners_ou': actual = `${homeCorn + awayCorn} corners`; break
-                              case 'soccer_corners_winner': actual = cornResult === 'home' ? `$<Flag team={fixture.home_team} /> ${fixture.home_team}` : cornResult === 'away' ? `$<Flag team={fixture.away_team} /> ${fixture.away_team}` : 'draw'; break
-                              case 'soccer_ht_corners_winner': actual = htHomeCorn != null && htAwayCorn != null ? (htHomeCorn > htAwayCorn ? `$<Flag team={fixture.home_team} /> HT` : htAwayCorn > htHomeCorn ? `$<Flag team={fixture.away_team} /> HT` : 'draw HT') : '—'; break
+                              case 'soccer_corners_winner': actual = cornResult === 'home' ? `${fixture.home_team}` : cornResult === 'away' ? `${fixture.away_team}` : 'draw'; break
+                              case 'soccer_ht_corners_winner': actual = htHomeCorn != null && htAwayCorn != null ? (htHomeCorn > htAwayCorn ? `${fixture.home_team} HT` : htAwayCorn > htHomeCorn ? `${fixture.away_team} HT` : 'draw HT') : '—'; break
                               case 'soccer_card_points_ou': actual = `${homeCards + awayCards} card pts`; break
-                              case 'soccer_cards_home_away': actual = homeCards > awayCards ? `$<Flag team={fixture.home_team} /> ${fixture.home_team}` : awayCards > homeCards ? `$<Flag team={fixture.away_team} /> ${fixture.away_team}` : 'draw'; break
+                              case 'soccer_cards_home_away': actual = homeCards > awayCards ? `${fixture.home_team}` : awayCards > homeCards ? `${fixture.away_team}` : 'draw'; break
                               case 'soccer_cards_ht': {
                                 const htHC = fixture.ht_home_card_pts ?? 0
                                 const htAC = fixture.ht_away_card_pts ?? 0
-                                actual = htHC > htAC ? `$<Flag team={fixture.home_team} /> ${fixture.home_team}` : htAC > htHC ? `$<Flag team={fixture.away_team} /> ${fixture.away_team}` : 'draw'
+                                actual = htHC > htAC ? `${fixture.home_team}` : htAC > htHC ? `${fixture.away_team}` : 'draw'
                                 break
                               }
-                              case 'soccer_first_yellow_team': actual = fixture.first_yellow_team ? (fixture.first_yellow_team === 'home' ? `$<Flag team={fixture.home_team} /> ${fixture.home_team}` : `$<Flag team={fixture.away_team} /> ${fixture.away_team}`) : '—'; break
-                              case 'soccer_asian_handicap': actual = result === 'home' ? `$<Flag team={fixture.home_team} /> ${fixture.home_team}` : result === 'away' ? `$<Flag team={fixture.away_team} /> ${fixture.away_team}` : 'draw'; break
+                              case 'soccer_first_yellow_team': actual = fixture.first_yellow_team ? (fixture.first_yellow_team === 'home' ? `${fixture.home_team}` : `${fixture.away_team}`) : '—'; break
+                              case 'soccer_asian_handicap': actual = result === 'home' ? `${fixture.home_team}` : result === 'away' ? `${fixture.away_team}` : 'draw'; break
                             }
                             return (
                               <td key={rule.category_id} style={{ padding: '6px 6px 2px', textAlign: 'center' as const, fontSize: '11px', color: '#2d7a2d', fontWeight: 600, borderTop: '2px solid #eee' }}>
