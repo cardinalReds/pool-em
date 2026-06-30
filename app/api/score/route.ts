@@ -12,7 +12,7 @@ const WC_SEASON = 2026
 
 async function fetchFinished() {
   const res = await fetch(
-    `https://v3.football.api-sports.io/fixtures?league=${WC_LEAGUE_ID}&season=${WC_SEASON}&status=FT`,
+    `https://v3.football.api-sports.io/fixtures?league=${WC_LEAGUE_ID}&season=${WC_SEASON}&status=FT-AET-PEN`,
     { headers: { 'x-apisports-key': API_FOOTBALL_KEY } }
   )
   const data = await res.json()
