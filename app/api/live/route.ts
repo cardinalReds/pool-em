@@ -11,7 +11,6 @@ const API_FOOTBALL_BASE = 'https://v3.football.api-sports.io'
 // Map API-Football status codes to our status values
 async function syncKnockoutFixtures() {
   const KNOCKOUT_ROUNDS = ['Round of 32', 'Round of 16', 'Quarter-finals', 'Semi-finals', 'Final']
-  
   for (const round of KNOCKOUT_ROUNDS) {
     const res = await fetch(
       `https://v3.football.api-sports.io/fixtures?league=1&season=2026&round=${encodeURIComponent(round)}`,
@@ -19,62 +18,67 @@ async function syncKnockoutFixtures() {
     )
     if (!res.ok) continue
     const data = await res.json()
-    const apiFixtures: any[] = data.response || []
-    if (!apiFixtures.length) continue
+    for (const f of data.response || []) {
+      const homeTeam = f.teams?.home?.name
+      const awayTeam = f.teams?.away?.name
+      const apiDate = f.fixture?.date
+      const apiId = f.fixture?.id
+      if (!homeTeam || !awayTeam || !apiDate) continue
 
-    // Get all our DB fixtures for this round
-    const { data: dbFixtures } = await supabase
-      .from('fixtures')
-      .select('id, home_team, away_team, date, api_fixture_id')
-      .eq('tournament_id', 'wc_2026')
-      .eq('round', round)
+      // Try matching by api_fixture_id first, then by date
+      let existing: any = null
+      if (apiId) {
+        const { data: byId } = await supabase
+          .from('fixtures')
+          .select('id, home_team, away_team, api_fixture_id')
+          .eq('api_fixture_id', apiId)
+          .maybeSingle()
+        existing = byId
+      }
+      if (!existing) {
+        // Match by date (within 1 hour) and round
+        const apiDateObj = new Date(apiDate)
+        const { data: byDate } = await supabase
+          .from('fixtures')
+          .select('id, home_team, away_team, api_fixture_id')
+          .eq('tournament_id', 'wc_2026')
+          .eq('round', round)
+          .gte('date', new Date(apiDateObj.getTime() - 3600000).toISOString())
+          .lte('date', new Date(apiDateObj.getTime() + 3600000).toISOString())
+          .maybeSingle()
+        existing = byDate
+      }
+      const venue = f.fixture?.venue?.name
+      const city = f.fixture?.venue?.city
 
-    const dbByApiId = new Map((dbFixtures || []).filter(f => f.api_fixture_id).map(f => [f.api_fixture_id, f]))
-    const apiIds = new Set(apiFixtures.map(f => f.fixture?.id))
+      if (!existing) {
+        // Insert new fixture (e.g. R16 fixtures published by API)
+        await supabase.from('fixtures').insert({
+          tournament_id: 'wc_2026',
+          round,
+          home_team: homeTeam,
+          away_team: awayTeam,
+          date: apiDate,
+          api_fixture_id: apiId,
+          status: 'NS',
+          venue: venue || null,
+          city: city || null,
+        })
+        continue
+      }
 
-    for (const apiF of apiFixtures) {
-      const apiId = apiF.fixture?.id
-      const homeTeam = apiF.teams?.home?.name
-      const awayTeam = apiF.teams?.away?.name
-      const apiDate = apiF.fixture?.date
-      if (!apiId || !homeTeam || !awayTeam || !apiDate) continue
+      const updates: Record<string, any> = {}
+      if (existing.home_team !== homeTeam) updates.home_team = homeTeam
+      if (existing.away_team !== awayTeam) updates.away_team = awayTeam
+      if (!existing.api_fixture_id && apiId) updates.api_fixture_id = apiId
+      if (venue) updates.venue = venue
+      if (city) updates.city = city
+      updates.date = apiDate
 
-      const existing = dbByApiId.get(apiId)
-      if (existing) {
-        // Update if changed
-        const updates: Record<string, any> = {}
-        if (existing.home_team !== homeTeam) updates.home_team = homeTeam
-        if (existing.away_team !== awayTeam) updates.away_team = awayTeam
-        if (existing.date !== apiDate) updates.date = apiDate
-        if (Object.keys(updates).length > 0) {
-          await supabase.from('fixtures').update(updates).eq('id', existing.id)
-        }
-      } else {
-        // Find an unmatched TBD row to claim, or insert new
-        const tbdRow = (dbFixtures || []).find(f => !f.api_fixture_id)
-        if (tbdRow) {
-          await supabase.from('fixtures').update({
-            home_team: homeTeam, away_team: awayTeam, date: apiDate, api_fixture_id: apiId,
-          }).eq('id', tbdRow.id)
-          // Mark as matched so we don't reuse it
-          tbdRow.api_fixture_id = apiId
-        } else {
-          // Insert new fixture row
-          await supabase.from('fixtures').insert({
-            tournament_id: 'wc_2026', round, home_team: homeTeam, away_team: awayTeam,
-            date: apiDate, api_fixture_id: apiId, status: 'NS',
-          })
-        }
+      if (Object.keys(updates).length > 0) {
+        await supabase.from('fixtures').update(updates).eq('id', existing.id)
       }
     }
-
-    // Delete DB rows that have no API counterpart (stale placeholders)
-    const stale = (dbFixtures || []).filter(f => f.api_fixture_id && !apiIds.has(f.api_fixture_id))
-    if (stale.length > 0) {
-      await supabase.from('fixtures').delete().in('id', stale.map(f => f.id))
-    }
-
-    await new Promise(r => setTimeout(r, 200))
   }
 }
 
@@ -403,9 +407,9 @@ export async function GET(request: Request) {
           ourFixture.home_score !== homeScore ||
           ourFixture.away_score !== awayScore
 
-        // Fetch events to get first scorer (only if score changed)
+        // Fetch events to get first scorer (only if score changed or no scorer yet)
         let firstScorer = ourFixture.first_scorer_name
-        if (scoreChanged) {
+        if (scoreChanged || (!firstScorer && homeScore + awayScore > 0)) {
           const events = await fetchFixtureEvents(apiId)
           firstScorer = extractFirstScorer(events, ourFixture.home_team, ourFixture.away_team)
         }
