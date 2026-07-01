@@ -166,8 +166,12 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
     }
   }, [openTeam])
 
+  function normalizeTeam(team: string) {
+    return team === 'Bosnia & Herzegovina' ? 'Bosnia and Herzegovina' : team
+  }
+
   function getPlayers(team: string) {
-    return (WC_SQUADS[team] || [])
+    return (WC_SQUADS[normalizeTeam(team)] || [])
       .slice()
       .sort((a, b) => {
         const ai = POSITION_ORDER.indexOf(a.position)
