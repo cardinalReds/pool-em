@@ -167,7 +167,9 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
   }, [openTeam])
 
   function normalizeTeam(team: string) {
-    return team === 'Bosnia & Herzegovina' ? 'Bosnia and Herzegovina' : team
+    if (team === 'Bosnia & Herzegovina') return 'Bosnia and Herzegovina'
+    if (team === 'Cape Verde Islands') return 'Cape Verde'
+    return team
   }
 
   function getPlayers(team: string) {
