@@ -557,9 +557,9 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
         const isLiveNow = (allGpMap[currentGP] || gpSessions).some(s => s.status === 'In Progress')
 
         if (isLiveNow) return (
-          <div style={{ padding: '8px 14px', background: '#f0fff4', borderBottom: '1px solid #e0e0db', fontSize: '11px', color: '#2d7a2d', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#2d7a2d', display: 'inline-block', animation: 'pulse 1.5s infinite' }} />
-            session live
+          <div style={{ background: '#2d7a2d', padding: '4px 14px', display: 'flex', alignItems: 'center', gap: 5, borderBottom: '1px solid #e0e0db' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'white', display: 'inline-block' }} />
+            <span style={{ color: 'white', fontSize: '10px', fontWeight: 700 }}>LIVE</span>
           </div>
         )
         if (isWeekendLocked) return (
