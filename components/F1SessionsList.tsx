@@ -412,15 +412,23 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
       for (const m of membersRes.data || []) memberMap[m.user_id] = m.display_name
       setMembers(memberMap)
 
-      // Find the next upcoming GP
+      // Find the current live GP first, then next upcoming
       const gpNames = [...new Set(allSessions.map((s: F1Session) => s.competition_name))]
       const now = new Date()
-      const nextIdx = gpNames.findIndex(gp => {
-        const gpSessions = allSessions.filter((s: F1Session) => s.competition_name === gp)
-        const race = gpSessions.find((s: F1Session) => s.session_type === 'Race')
-        return race && new Date(race.date) > now
-      })
-      setGpIndex(nextIdx >= 0 ? nextIdx : Math.max(0, gpNames.length - 1))
+      // Prefer a GP with a live session
+      const liveIdx = gpNames.findIndex(gp =>
+        allSessions.some((s: F1Session) => s.competition_name === gp && s.status === 'In Progress')
+      )
+      if (liveIdx >= 0) {
+        setGpIndex(liveIdx)
+      } else {
+        const nextIdx = gpNames.findIndex(gp => {
+          const gpSessions = allSessions.filter((s: F1Session) => s.competition_name === gp)
+          const race = gpSessions.find((s: F1Session) => s.session_type === 'Race')
+          return race && new Date(race.date) > now
+        })
+        setGpIndex(nextIdx >= 0 ? nextIdx : Math.max(0, gpNames.length - 1))
+      }
       setLoading(false)
     }
     load()
@@ -555,13 +563,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
         const isWeekendLocked = deadlineType === 'before_weekend' && lockTime <= new Date()
         const locksSoon = !isWeekendLocked && lockTime.getTime() - Date.now() < 24 * 60 * 60 * 1000
         const isLiveNow = (allGpMap[currentGP] || gpSessions).some(s => s.status === 'In Progress')
-
-        if (isLiveNow) return (
-          <div style={{ background: '#2d7a2d', padding: '4px 14px', display: 'flex', alignItems: 'center', gap: 5, borderBottom: '1px solid #e0e0db' }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'white', display: 'inline-block' }} />
-            <span style={{ color: 'white', fontSize: '10px', fontWeight: 700 }}>LIVE</span>
-          </div>
-        )
+        if (isLiveNow) return null // live shown per-session card now
         if (isWeekendLocked) return (
           <div style={{ padding: '8px 14px', background: '#f5f5f5', borderBottom: '1px solid #e0e0db', fontSize: '11px', color: '#aaa' }}>
             🔒 predictions locked — weekend started {fmt(firstSession.date)}
@@ -583,9 +585,24 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
         const sessionRules = poolRules.filter(r => catIds.includes(r.category_id))
         if (sessionRules.length === 0) return null
         const locked = isLocked(session, deadlineType, allGpMap[currentGP] || gpSessions)
+        const isLive = session.status === 'In Progress'
 
         return (
-          <div key={session.id} style={{ marginBottom: 12, border: '1px solid #e0e0db', background: 'white' }}>
+          <div key={session.id} style={{
+            marginBottom: 12,
+            border: isLive ? '2px solid #2d7a2d' : '1px solid #e0e0db',
+            borderLeft: isLive ? '4px solid #2d7a2d' : '1px solid #e0e0db',
+            background: 'white',
+          }}>
+            {/* Live banner */}
+            {isLive && (
+              <div style={{ background: '#2d7a2d', padding: '4px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: 'white', fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'white', display: 'inline-block' }} />
+                  LIVE
+                </span>
+              </div>
+            )}
             {/* Session header */}
             <div style={{ padding: '10px 14px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fafafa' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
