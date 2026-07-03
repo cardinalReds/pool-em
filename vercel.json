@@ -2,10 +2,9 @@
   "crons": [
     { "path": "/api/score", "schedule": "* * * * *" },
     { "path": "/api/live", "schedule": "* * * * *" },
+    { "path": "/api/f1/live", "schedule": "* * * * *" },
     { "path": "/api/reminders", "schedule": "*/30 * * * *" },
     { "path": "/api/odds", "schedule": "0 */6 * * *" },
-    { "path": "/api/live-f1", "schedule": "*/15 * * * *" },
-    { "path": "/api/score-f1", "schedule": "*/15 * * * *" },
     { "path": "/api/score-bracket", "schedule": "*/5 * * * *" }
   ]
 }

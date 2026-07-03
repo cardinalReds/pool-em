@@ -21,7 +21,7 @@ async function fetchSessionStatus(competitionId: number, season: number): Promis
 
 async function triggerScoring() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.pool-em.com'
-  await fetch(`${appUrl}/api/score-f1`, {
+  await fetch(`${appUrl}/api/f1/score`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -40,20 +40,22 @@ export async function GET(request: Request) {
 
   try {
     const now = new Date()
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-    const sixHoursFromNow = new Date(now.getTime() + 6 * 60 * 60 * 1000)
+    // Only look at sessions starting in the last 6 hours or next 30 minutes
+    // This way we only poll when a session is actually happening or about to start
+    const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000)
+    const thirtyMinsFromNow = new Date(now.getTime() + 30 * 60 * 1000)
 
     const { data: candidateSessions } = await supabase
       .from('f1_sessions')
-      .select('id, competition_id, competition_name, season, session_type, status')
+      .select('id, competition_id, competition_name, season, session_type, status, scored, date')
       .eq('tournament_id', TOURNAMENT_ID)
-      .neq('status', 'Completed')
+      .eq('scored', false)
       .neq('status', 'Cancelled')
-      .gte('date', sevenDaysAgo.toISOString())
-      .lte('date', sixHoursFromNow.toISOString())
+      .gte('date', sixHoursAgo.toISOString())
+      .lte('date', thirtyMinsFromNow.toISOString())
 
     if (!candidateSessions?.length) {
-      return NextResponse.json({ ok: true, checked: 0, updated: 0, skipped: true })
+      return NextResponse.json({ ok: true, checked: 0, skipped: true })
     }
 
     // Group by competition
@@ -73,14 +75,13 @@ export async function GET(request: Request) {
       const apiSessions = await fetchSessionStatus(competition_id, season)
 
       for (const dbSession of sessions) {
-        // Match by session_type since our internal id != API session id
         const apiSession = apiSessions.find((s: any) =>
           s.type?.toLowerCase().replace(/\s+/g, '_') === dbSession.session_type?.toLowerCase().replace(/\s+/g, '_') ||
           s.type === dbSession.session_type
         )
         if (!apiSession) continue
 
-        const apiStatus = apiSession.status // 'Completed', 'In Progress', 'Scheduled', etc.
+        const apiStatus = apiSession.status
 
         if (apiStatus === 'Completed' && dbSession.status !== 'Completed') {
           await supabase.from('f1_sessions').update({ status: 'Completed', scored: false }).eq('id', dbSession.id)
@@ -90,18 +91,16 @@ export async function GET(request: Request) {
           await supabase.from('f1_sessions').update({ status: 'In Progress' }).eq('id', dbSession.id)
           updated++
           anyInProgress = true
-        } else if (apiStatus !== dbSession.status && apiStatus !== 'Completed') {
-          await supabase.from('f1_sessions').update({ status: apiStatus }).eq('id', dbSession.id)
+        } else if (apiStatus === 'In Progress') {
+          anyInProgress = true
         }
-
-        if (apiStatus === 'In Progress') anyInProgress = true
       }
     }
 
-    // Trigger scoring when session completes OR during live race (for live updates)
+    // Trigger scoring when session completes or is live
     if (justCompleted || anyInProgress) await triggerScoring()
 
-    return NextResponse.json({ ok: true, checked: candidateSessions.length, updated })
+    return NextResponse.json({ ok: true, checked: candidateSessions.length, updated, justCompleted, anyInProgress })
   } catch (err) {
     console.error('F1 live route error:', err)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
