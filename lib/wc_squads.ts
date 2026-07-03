@@ -326,7 +326,7 @@ export const WC_SQUADS: Record<string, Player[]> = {
     { name: 'R. Christie', position: 'Midfielder', number: 11 },
     { name: 'L. Ferguson', position: 'Midfielder', number: 19 },
     { name: 'T. Fletcher', position: 'Midfielder', number: 8 },
-    { name: 'J. McGinn', position: 'Midfielder', number: 7 },
+    { name: 'J.  McGinn', position: 'Midfielder', number: 7 },
     { name: 'K. McLean', position: 'Midfielder', number: 23 },
     { name: 'S. McTominay', position: 'Midfielder', number: 4 },
     { name: 'C. Adams', position: 'Attacker', number: 10 },
@@ -813,7 +813,7 @@ export const WC_SQUADS: Record<string, Player[]> = {
     { name: 'Ferran Torres', position: 'Midfielder', number: 7 },
     { name: 'Nico Williams', position: 'Attacker', number: 17 },
   ],
-  'Cabo Verde': [
+  'Cape Verde': [
     { name: 'Márcio Rosa', position: 'Goalkeeper', number: 12 },
     { name: 'Vózinha', position: 'Goalkeeper', number: 1 },
     { name: 'C. dos Santos', position: 'Goalkeeper', number: 23 },
