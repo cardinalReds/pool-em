@@ -884,7 +884,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                                       const team = F1_GRID.find(t => t.drivers.some((d: any) => d.name === name || name.includes(d.name.split(' ').pop())))
                                       return team && !Q1_EXCLUDED_TEAMS.includes(team.name)
                                     })
-                                    const lastName = (n: string) => n.replace(/s+Jr.?$/i, '').split(' ').pop() || n
+                                    const lastName = (n: string) => n.split(' ').filter(w => !/^jr\.?$/i.test(w)).pop() || n
                                     actual = eligible.map(lastName).join(', ') || '—'
                                   }
                                 }
@@ -895,7 +895,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                                       const team = F1_GRID.find(t => t.drivers.some((d: any) => d.name === name || name.includes(d.name.split(' ').pop())))
                                       return team && !Q3_EXCLUDED_TEAMS.includes(team.name)
                                     })
-                                    const lastName = (n: string) => n.replace(/s+Jr.?$/i, '').split(' ').pop() || n
+                                    const lastName = (n: string) => n.split(' ').filter(w => !/^jr\.?$/i.test(w)).pop() || n
                                     actual = eligible.map(lastName).join(', ') || '—'
                                   }
                                 }
