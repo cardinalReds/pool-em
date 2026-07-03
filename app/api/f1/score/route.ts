@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
       // Find the parent session(s) that hold user predictions for this competition
       const { data: parentSessions } = await supabase
         .from('f1_sessions')
-        .select('id')
+        .select('id, results')
         .eq('tournament_id', TOURNAMENT_ID)
         .eq('competition_id', session.competition_id)
         .eq('season', session.season)
@@ -220,6 +220,23 @@ export async function POST(request: NextRequest) {
       if (!parentSessions?.length) {
         await supabase.from('f1_sessions').update({ scored: true }).eq('id', session.id)
         continue
+      }
+
+      // Store sub-session metadata in parent session for UI display
+      for (const parent of parentSessions) {
+        const existingResults: any[] = Array.isArray(parent.results) ? parent.results : []
+        const driverRows = existingResults.filter((r: any) => r.driver_id)
+        const metaRows = existingResults.filter((r: any) => !r.driver_id)
+
+        if (session.session_type === '1st Qualifying' || session.session_type === '1st Sprint Shootout') {
+          const q1Eliminated = results.filter(r => r.position > 15).map(r => r.driver_name)
+          const newMeta = [...metaRows.filter((m: any) => !m.q1_eliminated), { q1_eliminated: q1Eliminated }]
+          await supabase.from('f1_sessions').update({ results: [...driverRows, ...newMeta] }).eq('id', parent.id)
+        } else if (session.session_type === '2nd Qualifying' || session.session_type === '2nd Sprint Shootout') {
+          const q3Qualifiers = results.filter(r => r.position <= 10).map(r => r.driver_name)
+          const newMeta = [...metaRows.filter((m: any) => !m.q3_qualifiers), { q3_qualifiers: q3Qualifiers }]
+          await supabase.from('f1_sessions').update({ results: [...driverRows, ...newMeta] }).eq('id', parent.id)
+        }
       }
 
       const { data: pools } = await supabase.from('pools').select('id').eq('tournament_id', TOURNAMENT_ID)
