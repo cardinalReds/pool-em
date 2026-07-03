@@ -601,6 +601,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                   <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'white', display: 'inline-block' }} />
                   LIVE
                 </span>
+                <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '10px' }}>session will be marked as live while awaiting FIA confirmation</span>
               </div>
             )}
             {/* Session header */}
@@ -873,9 +874,28 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                                 else if (r.category_id === 'f1_sprint_winner') actual = winner || '—'
                                 else if (r.category_id === 'f1_pole_to_win') actual = (poleSitter && winner) ? (poleSitter === winner ? 'yes' : 'no') : '—'
                                 else if (r.category_id === 'f1_first_pit_lap') {
-                                  // Show actual first pit lap from session results metadata
                                   const pitEntry = results.find((r: any) => r.first_pit_lap !== undefined)
                                   actual = pitEntry?.first_pit_lap != null ? `lap ${pitEntry.first_pit_lap}` : '—'
+                                }
+                                else if (r.category_id === 'f1_q1_eliminated') {
+                                  const q1Entry = results.find((r: any) => r.q1_eliminated !== undefined)
+                                  if (q1Entry?.q1_eliminated) {
+                                    const eligible = q1Entry.q1_eliminated.filter((name: string) => {
+                                      const team = F1_GRID.find(t => t.drivers.some((d: any) => d.name === name || name.includes(d.name.split(' ').pop())))
+                                      return team && !Q1_EXCLUDED_TEAMS.includes(team.name)
+                                    })
+                                    actual = eligible.map((n: string) => n.split(' ').pop()).join(', ') || '—'
+                                  }
+                                }
+                                else if (r.category_id === 'f1_q3_qualifier') {
+                                  const q3Entry = results.find((r: any) => r.q3_qualifiers !== undefined)
+                                  if (q3Entry?.q3_qualifiers) {
+                                    const eligible = q3Entry.q3_qualifiers.filter((name: string) => {
+                                      const team = F1_GRID.find(t => t.drivers.some((d: any) => d.name === name || name.includes(d.name.split(' ').pop())))
+                                      return team && !Q3_EXCLUDED_TEAMS.includes(team.name)
+                                    })
+                                    actual = eligible.map((n: string) => n.split(' ').pop()).join(', ') || '—'
+                                  }
                                 }
                                 return [
                                   <td key={`actual_${r.category_id}`} style={{ padding: '6px 6px 2px', textAlign: 'center' as const, borderTop: '2px solid #eee', fontSize: '11px', fontWeight: 600, color: '#2d7a2d', whiteSpace: 'nowrap' as const }}>
