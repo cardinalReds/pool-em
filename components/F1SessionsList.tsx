@@ -106,7 +106,7 @@ const SESSION_CATEGORIES: Record<string, string[]> = {
 
 const SESSION_LABEL: Record<string, string> = {
   '3rd Qualifying': 'Qualifying', 'Race': 'Race', 'Sprint': 'Sprint',
-  '1st Sprint Shootout': 'Sprint Q1', '2nd Sprint Shootout': 'Sprint Q2', '3rd Sprint Shootout': 'Sprint Q3',
+  '1st Sprint Shootout': 'Sprint Q1', '2nd Sprint Shootout': 'Sprint Q2', '3rd Sprint Shootout': 'Sprint Qualifying',
 }
 
 function driverNameMatches(pick: string, actual: string): boolean {
