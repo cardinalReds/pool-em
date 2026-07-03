@@ -104,8 +104,9 @@ function scoreF1Prediction(categoryId: string, pred: any, results: DriverResult[
       return top3.some(n => driverMatches(pred.value_text, n)) ? rule.points : 0
     }
     case 'f1_q1_eliminated': {
-      // Score using 1st qualifying results — position > 15 means eliminated in Q1
-      const q1Eliminated = results.filter(r => r.position > 15).map(r => r.driver_name)
+      // Q1 eliminated = positions 17-20 (bottom 6 of 22, or bottom 5 of 20)
+      // Top 16 advance to Q2, positions 17+ are eliminated
+      const q1Eliminated = results.filter(r => r.position > 16).map(r => r.driver_name)
       return q1Eliminated.some(n => driverMatches(pred.value_text, n)) ? rule.points : 0
     }
     case 'f1_q3_qualifier': {
@@ -229,7 +230,7 @@ export async function POST(request: NextRequest) {
         const metaRows = existingResults.filter((r: any) => !r.driver_id)
 
         if (session.session_type === '1st Qualifying' || session.session_type === '1st Sprint Shootout') {
-          const q1Eliminated = results.filter(r => r.position > 15).map(r => r.driver_name)
+          const q1Eliminated = results.filter(r => r.position > 16).map(r => r.driver_name)
           const newMeta = [...metaRows.filter((m: any) => !m.q1_eliminated), { q1_eliminated: q1Eliminated }]
           await supabase.from('f1_sessions').update({ results: [...driverRows, ...newMeta] }).eq('id', parent.id)
         } else if (session.session_type === '2nd Qualifying' || session.session_type === '2nd Sprint Shootout') {
