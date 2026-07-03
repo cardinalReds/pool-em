@@ -1,20 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// ── F1 2026 scoring route ────────────────────────────────────────────────
-// Mirrors the structure/conventions of /api/score (auth, predictions_v2,
-// pool_rules), but is a separate route rather than a branch inside
-// /api/score/route.ts, because that route is hardcoded end-to-end to
-// tournament_id = 'wc_2026' (its early-exit query, fixture fetch, and pools
-// query all assume a single soccer tournament). F1 also has no `fixtures`
-// row to hang off of — see f1_sessions instead.
-
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_KEY!
 )
 
-const API_KEY = process.env.API_FOOTBALL_KEY! // same key covers all API-Sports products, incl. F1
+const API_KEY = process.env.API_FOOTBALL_KEY!
 const F1_BASE = 'https://v1.formula-1.api-sports.io'
 const TOURNAMENT_ID = 'f1_2026'
 
@@ -31,14 +23,19 @@ interface DriverResult {
   gap: string | null
 }
 
+interface PoolRule {
+  category_id: string
+  points: number
+  bonus_points: number
+}
+
 async function fetchRankings(apiSessionId: number): Promise<DriverResult[]> {
   const res = await fetch(`${F1_BASE}/rankings/races?race=${apiSessionId}`, {
     headers: { 'x-apisports-key': API_KEY },
   })
   if (!res.ok) return []
   const data = await res.json()
-  const rows: any[] = data.response || []
-  return rows.map(r => ({
+  return (data.response || []).map((r: any) => ({
     driver_id: r.driver?.id,
     driver_name: r.driver?.name,
     abbr: r.driver?.abbr ?? null,
@@ -49,7 +46,7 @@ async function fetchRankings(apiSessionId: number): Promise<DriverResult[]> {
     time: r.time ?? null,
     laps: r.laps ?? 0,
     gap: r.gap ?? null,
-  })).filter(r => r.driver_id && r.position)
+  })).filter((r: DriverResult) => r.driver_id && r.position)
 }
 
 async function fetchFastestLap(apiSessionId: number): Promise<string | null> {
@@ -58,17 +55,11 @@ async function fetchFastestLap(apiSessionId: number): Promise<string | null> {
   })
   if (!res.ok) return null
   const data = await res.json()
-  // Position 1 in fastestlaps = the driver who set the fastest lap
-  const top = data.response?.[0]
-  return top?.driver?.name ?? null
+  return data.response?.[0]?.driver?.name ?? null
 }
 
-// Normalizes a driver name for loose matching against picks, same spirit as
-// the accent/initial stripping already used for soccer_first_goalscorer.
 function normalizeDriver(name: string): string {
-  return name
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ').trim().toLowerCase()
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
 }
 
 function driverMatches(pick: string | null, actual: string | null | undefined): boolean {
@@ -76,137 +67,94 @@ function driverMatches(pick: string | null, actual: string | null | undefined): 
   const normPick = normalizeDriver(pick)
   const normActual = normalizeDriver(actual)
   if (normPick === normActual) return true
-  // Partial match: pick is contained in actual name or vice versa
-  // e.g. "Kimi Antonelli" matches "Andrea Kimi Antonelli"
   if (normActual.includes(normPick) || normPick.includes(normActual)) return true
-  // Last name match: last word of pick matches last word of actual
   const pickLast = normPick.split(' ').pop() || ''
   const actualLast = normActual.split(' ').pop() || ''
   if (pickLast.length > 3 && pickLast === actualLast) return true
   return false
 }
 
-interface PoolRule {
-  category_id: string
-  points: number
-  bonus_points: number
-}
-
-// Returns points earned for a single predictions_v2 row given a session's
-// driver classification. Picks are stored in value_text (driver name) or
-// value_yesno, matching the input_type values seeded in ruleset_categories.
 function scoreF1Prediction(categoryId: string, pred: any, results: DriverResult[], rule: PoolRule, fastestLapDriver?: string | null): number {
-  // Sort by position — all classified finishers
   const sorted = [...results].sort((a, b) => a.position - b.position)
   const retirements = sorted.filter(r => r.time === 'DNF').sort((a, b) => a.laps - b.laps)
   const finishers = sorted.filter(r => r.time !== 'DNF')
   const winner = finishers[0]?.driver_name
   const podium = finishers.slice(0, 3).map(r => r.driver_name)
   const pointsFinishers = finishers.slice(0, 10).map(r => r.driver_name)
-  const poleSitter = results.find(r => r.grid === '1')?.driver_name
-  const firstRetirementCorrected = retirements[0]?.driver_name
+  const poleSitter = results.find(r => r.grid === '1')?.driver_name ?? finishers[0]?.driver_name
+  const firstRetirement = retirements[0]?.driver_name
 
   switch (categoryId) {
     case 'f1_race_winner':
       return driverMatches(pred.value_text, winner) ? rule.points : 0
-
     case 'f1_podium':
-      return podium.some(name => driverMatches(pred.value_text, name)) ? rule.points : 0
-
+      return podium.some(n => driverMatches(pred.value_text, n)) ? rule.points : 0
     case 'f1_points_finish':
-      return pointsFinishers.some(name => driverMatches(pred.value_text, name)) ? rule.points : 0
-
-    case 'f1_fastest_lap': {
-      if (!fastestLapDriver || !pred.value_text) return 0
-      return driverMatches(pred.value_text, fastestLapDriver) ? rule.points : 0
-    }
-
+      return pointsFinishers.some(n => driverMatches(pred.value_text, n)) ? rule.points : 0
+    case 'f1_fastest_lap':
+      return fastestLapDriver && driverMatches(pred.value_text, fastestLapDriver) ? rule.points : 0
     case 'f1_first_retirement':
-      return driverMatches(pred.value_text, firstRetirementCorrected) ? rule.points : 0
-
+      return driverMatches(pred.value_text, firstRetirement) ? rule.points : 0
     case 'f1_pole_to_win':
       return (pred.value_yesno === (poleSitter === winner)) ? rule.points : 0
-
     case 'f1_pole_position':
       return driverMatches(pred.value_text, poleSitter) ? rule.points : 0
-
     case 'f1_top3_quali': {
-      // Scored against a QUALIFYING session's results, not the race's — caller
-      // passes the right `results` array depending on which session this is.
       const top3 = results.filter(r => r.position <= 3).map(r => r.driver_name)
-      return top3.some(name => driverMatches(pred.value_text, name)) ? rule.points : 0
+      return top3.some(n => driverMatches(pred.value_text, n)) ? rule.points : 0
     }
-
     case 'f1_q1_eliminated': {
-      // Q1 eliminated = drivers NOT in top 15 of qualifying results
-      // 3rd qualifying has 10 drivers (Q3), 2nd has 15 (Q2+Q3), 1st has all 20
-      // We score against the 1st qualifying session results — positions 16-20 are Q1 eliminees
-      // But we only have the session's own results, so position > 15 means eliminated in Q1
+      // Score using 1st qualifying results — position > 15 means eliminated in Q1
       const q1Eliminated = results.filter(r => r.position > 15).map(r => r.driver_name)
-      return q1Eliminated.some(name => driverMatches(pred.value_text, name)) ? rule.points : 0
+      return q1Eliminated.some(n => driverMatches(pred.value_text, n)) ? rule.points : 0
     }
-
     case 'f1_q3_qualifier': {
-      // Q3 qualifiers = top 10 of qualifying results (from 3rd qualifying session)
+      // Score using 2nd qualifying results — position <= 10 made it to Q3
       const q3Drivers = results.filter(r => r.position <= 10).map(r => r.driver_name)
-      return q3Drivers.some(name => driverMatches(pred.value_text, name)) ? rule.points : 0
+      return q3Drivers.some(n => driverMatches(pred.value_text, n)) ? rule.points : 0
     }
-
-    case 'f1_first_pit_lap': {
-      // Closest prediction wins — scored separately after all preds are collected
-      // Individual scoring: 0 unless exact, but we handle closest-wins at pool level
-      // For now just return points if exact, 0 otherwise
-      // TODO: implement closest-wins logic at pool scoring level
-      return 0
-    }
-
+    case 'f1_first_pit_lap':
+      return 0 // handled separately via closest-wins logic below
     case 'f1_teammate_battle': {
-      // value_text = driver name predicted to finish ahead
-      // Find both teammates and check who finished higher position (lower number)
       if (!pred.value_text) return 0
-      // Find which team this driver is on
       const pickedDriver = results.find(r => driverMatches(pred.value_text, r.driver_name))
       if (!pickedDriver) return 0
-      // Find teammate (same team, different driver)
-      const teammate = results.find(r =>
-        r.team_id === pickedDriver.team_id && r.driver_id !== pickedDriver.driver_id
-      )
+      const teammate = results.find(r => r.team_id === pickedDriver.team_id && r.driver_id !== pickedDriver.driver_id)
       if (!teammate) return 0
-      // Lower position = finished higher = wins the battle
       return pickedDriver.position < teammate.position ? rule.points : 0
     }
-
     case 'f1_podium_order_1':
     case 'f1_podium_order_2':
     case 'f1_podium_order_3': {
-      const pos = parseInt(categoryId.slice(-1)) // 1, 2, or 3
+      const pos = parseInt(categoryId.slice(-1))
       const actualAtPos = finishers[pos - 1]?.driver_name
-      const pick = pred.value_text
-      if (!pick || !actualAtPos) return 0
-      if (driverMatches(pick, actualAtPos)) return rule.points // exact position
-      // Partial credit: correct driver but wrong position
-      const onPodium = podium.some(name => driverMatches(pick, name))
-      return onPodium ? (rule.bonus_points || 0) : 0
+      if (!pred.value_text || !actualAtPos) return 0
+      if (driverMatches(pred.value_text, actualAtPos)) return rule.points
+      return podium.some(n => driverMatches(pred.value_text, n)) ? (rule.bonus_points || 0) : 0
     }
-
-    case 'f1_sprint_winner': {
-      const sprintWinner = finishers[0]?.driver_name
-      return driverMatches(pred.value_text, sprintWinner) ? rule.points : 0
-    }
-
-    case 'f1_sprint_podium': {
-      const sprintPodium = finishers.slice(0, 3).map(r => r.driver_name)
-      return sprintPodium.some(name => driverMatches(pred.value_text, name)) ? rule.points : 0
-    }
-
-    // f1_top6_teammate: storage shape not finalized (needs two driver slots,
-    // not one value_text) — see note below. Not scored yet.
+    case 'f1_sprint_winner':
+      return driverMatches(pred.value_text, finishers[0]?.driver_name) ? rule.points : 0
+    case 'f1_sprint_podium':
+      return finishers.slice(0, 3).some(r => driverMatches(pred.value_text, r.driver_name)) ? rule.points : 0
     case 'f1_top6_teammate':
       return 0
-
     default:
       return 0
   }
+}
+
+// Maps a completed sub-session type to:
+// - parentSessionTypes: which session holds the user's predictions (fixture_id)
+// - categoriesToScore: which category_ids to score from this sub-session's results
+const SESSION_SCORING_MAP: Record<string, { parentTypes: string[], categories: string[] }> = {
+  '1st Qualifying':       { parentTypes: ['3rd Qualifying'],       categories: ['f1_q1_eliminated'] },
+  '1st Sprint Shootout':  { parentTypes: ['3rd Sprint Shootout'],  categories: ['f1_q1_eliminated'] },
+  '2nd Qualifying':       { parentTypes: ['3rd Qualifying'],       categories: ['f1_q3_qualifier'] },
+  '2nd Sprint Shootout':  { parentTypes: ['3rd Sprint Shootout'],  categories: ['f1_q3_qualifier'] },
+  '3rd Qualifying':       { parentTypes: ['3rd Qualifying'],       categories: ['f1_pole_position', 'f1_top3_quali'] },
+  '3rd Sprint Shootout':  { parentTypes: ['3rd Sprint Shootout'],  categories: ['f1_pole_position', 'f1_top3_quali'] },
+  'Race':                 { parentTypes: ['Race'],                  categories: ['f1_race_winner', 'f1_podium', 'f1_podium_order_1', 'f1_podium_order_2', 'f1_podium_order_3', 'f1_points_finish', 'f1_fastest_lap', 'f1_first_retirement', 'f1_pole_to_win', 'f1_first_pit_lap', 'f1_teammate_battle'] },
+  'Sprint':               { parentTypes: ['Sprint'],                categories: ['f1_sprint_winner', 'f1_sprint_podium', 'f1_first_pit_lap', 'f1_teammate_battle'] },
 }
 
 export async function POST(request: NextRequest) {
@@ -218,10 +166,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Early exit: only do work if there's an unscored, completed session
     const { data: pendingSessions } = await supabase
       .from('f1_sessions')
-      .select('id, api_session_id:id, session_type, competition_id')
+      .select('id, session_type, competition_id, season, status, scored')
       .eq('tournament_id', TOURNAMENT_ID)
       .eq('status', 'Completed')
       .eq('scored', false)
@@ -234,23 +181,39 @@ export async function POST(request: NextRequest) {
     let sessionsScored = 0
 
     for (const session of pendingSessions) {
-      const results = await fetchRankings(session.id)
-      if (!results.length) continue // results not published by the API yet
+      const mapping = SESSION_SCORING_MAP[session.session_type]
+      if (!mapping) {
+        // Unknown session type — just mark scored and move on
+        await supabase.from('f1_sessions').update({ scored: true }).eq('id', session.id)
+        continue
+      }
 
-      // Fetch fastest lap driver separately
-      const fastestLapDriver = session.session_type === 'Race' || session.session_type === 'Sprint'
+      const results = await fetchRankings(session.id)
+      if (!results.length) continue // API results not published yet
+
+      // Store results on the sub-session
+      const fastestLapDriver = (session.session_type === 'Race' || session.session_type === 'Sprint')
         ? await fetchFastestLap(session.id)
         : null
-
-      await supabase.from('f1_sessions').update({ 
+      await supabase.from('f1_sessions').update({
         results: [...results, { fastest_lap_driver: fastestLapDriver }],
       }).eq('id', session.id)
 
-      // Get all pools running this tournament
-      const { data: pools } = await supabase
-        .from('pools')
+      // Find the parent session(s) that hold user predictions for this competition
+      const { data: parentSessions } = await supabase
+        .from('f1_sessions')
         .select('id')
         .eq('tournament_id', TOURNAMENT_ID)
+        .eq('competition_id', session.competition_id)
+        .eq('season', session.season)
+        .in('session_type', mapping.parentTypes)
+
+      if (!parentSessions?.length) {
+        await supabase.from('f1_sessions').update({ scored: true }).eq('id', session.id)
+        continue
+      }
+
+      const { data: pools } = await supabase.from('pools').select('id').eq('tournament_id', TOURNAMENT_ID)
 
       for (const pool of pools || []) {
         const { data: rulesData } = await supabase
@@ -261,7 +224,6 @@ export async function POST(request: NextRequest) {
         const ruleMap: Record<string, PoolRule> = {}
         ;(rulesData || []).forEach((r: any) => {
           ruleMap[r.category_id] = r
-          // Map podium_order_1/2/3 to the parent podium_order rule
           if (r.category_id === 'f1_podium_order') {
             ruleMap['f1_podium_order_1'] = r
             ruleMap['f1_podium_order_2'] = r
@@ -269,43 +231,50 @@ export async function POST(request: NextRequest) {
           }
         })
 
-        const { data: preds } = await supabase
-          .from('predictions_v2')
-          .select('*')
-          .eq('pool_id', pool.id)
-          .eq('fixture_id', session.id) // f1_sessions.id doubles as the "fixture" reference for predictions_v2
-
-        for (const pred of preds || []) {
-          const rule = ruleMap[pred.category_id]
-          if (!rule) continue
-
-          const points = scoreF1Prediction(pred.category_id, pred, results, rule, fastestLapDriver)
-          await supabase
+        for (const parent of parentSessions) {
+          // Fetch only the predictions for categories this sub-session scores
+          const { data: preds } = await supabase
             .from('predictions_v2')
-            .update({ points_earned: points, is_correct: points > 0 })
-            .eq('id', pred.id)
-        }
+            .select('*')
+            .eq('pool_id', pool.id)
+            .eq('fixture_id', parent.id)
+            .in('category_id', mapping.categories)
 
-        // ── Closest-wins scoring for f1_first_pit_lap ──────────────────
-        const pitRule = ruleMap['f1_first_pit_lap']
-        if (pitRule && (session.session_type === 'Race' || session.session_type === 'Sprint')) {
-          const pitRes = await fetch(`${F1_BASE}/pitstops?race=${session.id}`, {
-            headers: { 'x-apisports-key': API_KEY },
-          })
-          if (pitRes.ok) {
-            const pitData = await pitRes.json()
-            const pits: any[] = pitData.response || []
-            if (pits.length > 0) {
-              const firstPitLap = Math.min(...pits.map((p: any) => p.lap || 999))
-              const pitPreds = (preds || []).filter((p: any) => p.category_id === 'f1_first_pit_lap' && p.value_number)
-              if (pitPreds.length > 0) {
-                const minDiff = Math.min(...pitPreds.map((p: any) => Math.abs(p.value_number - firstPitLap)))
-                for (const p of pitPreds) {
-                  const diff = Math.abs(p.value_number - firstPitLap)
-                  const pts = diff === minDiff ? pitRule.points : 0
-                  await supabase.from('predictions_v2')
-                    .update({ points_earned: pts, is_correct: pts > 0 })
-                    .eq('id', p.id)
+          for (const pred of preds || []) {
+            const rule = ruleMap[pred.category_id]
+            if (!rule) continue
+            const points = scoreF1Prediction(pred.category_id, pred, results, rule, fastestLapDriver)
+            await supabase.from('predictions_v2')
+              .update({ points_earned: points, is_correct: points > 0 })
+              .eq('id', pred.id)
+          }
+
+          // Closest-wins pit stop scoring
+          const pitRule = ruleMap['f1_first_pit_lap']
+          if (pitRule && mapping.categories.includes('f1_first_pit_lap')) {
+            const pitRes = await fetch(`${F1_BASE}/pitstops?race=${session.id}`, {
+              headers: { 'x-apisports-key': API_KEY },
+            })
+            if (pitRes.ok) {
+              const pitData = await pitRes.json()
+              const pits: any[] = pitData.response || []
+              if (pits.length > 0) {
+                const firstPitLap = Math.min(...pits.map((p: any) => p.lap || 999))
+                const { data: pitPreds } = await supabase
+                  .from('predictions_v2')
+                  .select('*')
+                  .eq('pool_id', pool.id)
+                  .eq('fixture_id', parent.id)
+                  .eq('category_id', 'f1_first_pit_lap')
+                if (pitPreds?.length) {
+                  const minDiff = Math.min(...pitPreds.map((p: any) => Math.abs((p.value_number || 0) - firstPitLap)))
+                  for (const p of pitPreds) {
+                    const diff = Math.abs((p.value_number || 0) - firstPitLap)
+                    const pts = diff === minDiff ? pitRule.points : 0
+                    await supabase.from('predictions_v2')
+                      .update({ points_earned: pts, is_correct: pts > 0 })
+                      .eq('id', p.id)
+                  }
                 }
               }
             }
