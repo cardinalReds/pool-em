@@ -260,6 +260,10 @@ export async function POST(request: NextRequest) {
               const pits: any[] = pitData.response || []
               if (pits.length > 0) {
                 const firstPitLap = Math.min(...pits.map((p: any) => p.lap || 999))
+                // Store first pit lap in session results for UI display
+                await supabase.from('f1_sessions').update({
+                  results: [...results, { fastest_lap_driver: fastestLapDriver, first_pit_lap: firstPitLap }],
+                }).eq('id', session.id)
                 const { data: pitPreds } = await supabase
                   .from('predictions_v2')
                   .select('*')

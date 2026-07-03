@@ -554,6 +554,14 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
         const lockTime = new Date(firstSession.date)
         const isWeekendLocked = deadlineType === 'before_weekend' && lockTime <= new Date()
         const locksSoon = !isWeekendLocked && lockTime.getTime() - Date.now() < 24 * 60 * 60 * 1000
+        const isLiveNow = (allGpMap[currentGP] || gpSessions).some(s => s.status === 'In Progress')
+
+        if (isLiveNow) return (
+          <div style={{ padding: '8px 14px', background: '#f0fff4', borderBottom: '1px solid #e0e0db', fontSize: '11px', color: '#2d7a2d', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#2d7a2d', display: 'inline-block', animation: 'pulse 1.5s infinite' }} />
+            session live
+          </div>
+        )
         if (isWeekendLocked) return (
           <div style={{ padding: '8px 14px', background: '#f5f5f5', borderBottom: '1px solid #e0e0db', fontSize: '11px', color: '#aaa' }}>
             🔒 predictions locked — weekend started {fmt(firstSession.date)}
@@ -795,7 +803,9 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                                   const p = memberPreds[`${memberId}:${session.id}:${r.category_id}`]
                                   let display: string = '—'
                                   let correct: boolean | null = null
-                                  if (p?.value_text) display = p.value_text
+                                  if (r.category_id === 'f1_first_pit_lap') {
+                                    display = p?.value_number != null ? `lap ${p.value_number}` : '—'
+                                  } else if (p?.value_text) display = p.value_text
                                   else if (p?.value_yesno != null) display = p.value_yesno ? 'yes' : 'no'
                                   correct = p?.is_correct ?? null
                                   return [
@@ -845,6 +855,11 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                                 else if (r.category_id === 'f1_podium') actual = finishers.slice(0,3).map((f:any) => f.driver_name).join(', ') || '—'
                                 else if (r.category_id === 'f1_sprint_winner') actual = winner || '—'
                                 else if (r.category_id === 'f1_pole_to_win') actual = (poleSitter && winner) ? (poleSitter === winner ? 'yes' : 'no') : '—'
+                                else if (r.category_id === 'f1_first_pit_lap') {
+                                  // Show actual first pit lap from session results metadata
+                                  const pitEntry = results.find((r: any) => r.first_pit_lap !== undefined)
+                                  actual = pitEntry?.first_pit_lap != null ? `lap ${pitEntry.first_pit_lap}` : '—'
+                                }
                                 return [
                                   <td key={`actual_${r.category_id}`} style={{ padding: '6px 6px 2px', textAlign: 'center' as const, borderTop: '2px solid #eee', fontSize: '11px', fontWeight: 600, color: '#2d7a2d', whiteSpace: 'nowrap' as const }}>
                                     {actual}
