@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { data: pendingSessions } = await supabase
+    const { data: completedSessions } = await supabase
       .from('f1_sessions')
       .select('id, session_type, competition_id, season, status, scored')
       .eq('tournament_id', TOURNAMENT_ID)
@@ -174,7 +174,16 @@ export async function POST(request: NextRequest) {
       .eq('scored', false)
       .limit(20)
 
-    if (!pendingSessions?.length) {
+    const { data: liveSessions } = await supabase
+      .from('f1_sessions')
+      .select('id, session_type, competition_id, season, status, scored')
+      .eq('tournament_id', TOURNAMENT_ID)
+      .eq('status', 'In Progress')
+      .limit(5)
+
+    const pendingSessions = [...(completedSessions || []), ...(liveSessions || [])]
+
+    if (!pendingSessions.length) {
       return NextResponse.json({ ok: true, sessions_scored: 0, skipped: true })
     }
 
@@ -286,8 +295,11 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      await supabase.from('f1_sessions').update({ scored: true }).eq('id', session.id)
-      sessionsScored++
+      // Only mark as fully scored when Completed — keep rescoring while In Progress
+      if (session.status === 'Completed') {
+        await supabase.from('f1_sessions').update({ scored: true }).eq('id', session.id)
+        sessionsScored++
+      }
     }
 
     return NextResponse.json({ ok: true, sessions_scored: sessionsScored })
