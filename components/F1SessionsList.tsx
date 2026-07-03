@@ -527,7 +527,19 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
   const safeIdx = Math.min(gpIndex, gpNames.length - 1)
   const currentGP = gpNames[safeIdx]
   const gpSessions = gpMap[currentGP] || []
-  const sorted = gpSessions.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  const now = new Date()
+  const sorted = gpSessions.slice().sort((a, b) => {
+    // Live sessions first
+    const aLive = a.status === 'In Progress' ? 0 : 1
+    const bLive = b.status === 'In Progress' ? 0 : 1
+    if (aLive !== bLive) return aLive - bLive
+    // Then upcoming (NS) by date ascending
+    const aUpcoming = a.status === 'NS' || (!a.scored && a.status !== 'Completed') ? 0 : 1
+    const bUpcoming = b.status === 'NS' || (!b.scored && b.status !== 'Completed') ? 0 : 1
+    if (aUpcoming !== bUpcoming) return aUpcoming - bUpcoming
+    // Then by date
+    return new Date(a.date).getTime() - new Date(b.date).getTime()
+  })
   const race = sorted.find(s => s.session_type === 'Race')
   const hasSprint = sorted.some(s => s.session_type === 'Sprint')
   const isCompleted = race?.status === 'Completed'
