@@ -30,6 +30,14 @@ async function triggerScoring() {
   }).catch(() => {})
 }
 
+function isLiveStatus(status: string) {
+  return ['Live', 'In Progress', 'live', 'in_progress'].includes(status)
+}
+
+function isCompletedStatus(status: string) {
+  return ['Completed', 'Finished', 'completed', 'finished'].includes(status)
+}
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization')
   const { searchParams } = new URL(request.url)
@@ -40,8 +48,6 @@ export async function GET(request: Request) {
 
   try {
     const now = new Date()
-    // Only look at sessions starting in the last 6 hours or next 30 minutes
-    // This way we only poll when a session is actually happening or about to start
     const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000)
     const thirtyMinsFromNow = new Date(now.getTime() + 30 * 60 * 1000)
 
@@ -58,7 +64,6 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: true, checked: 0, skipped: true })
     }
 
-    // Group by competition
     const byCompetition = new Map<string, typeof candidateSessions>()
     for (const s of candidateSessions) {
       const key = `${s.competition_id}-${s.season}`
@@ -83,21 +88,20 @@ export async function GET(request: Request) {
 
         const apiStatus = apiSession.status
 
-        if (apiStatus === 'Completed' && dbSession.status !== 'Completed') {
+        if (isCompletedStatus(apiStatus) && !isCompletedStatus(dbSession.status)) {
           await supabase.from('f1_sessions').update({ status: 'Completed', scored: false }).eq('id', dbSession.id)
           updated++
           justCompleted = true
-        } else if (apiStatus === 'In Progress' && dbSession.status !== 'In Progress') {
+        } else if (isLiveStatus(apiStatus) && !isLiveStatus(dbSession.status)) {
           await supabase.from('f1_sessions').update({ status: 'In Progress' }).eq('id', dbSession.id)
           updated++
           anyInProgress = true
-        } else if (apiStatus === 'In Progress') {
+        } else if (isLiveStatus(apiStatus)) {
           anyInProgress = true
         }
       }
     }
 
-    // Trigger scoring when session completes or is live
     if (justCompleted || anyInProgress) await triggerScoring()
 
     return NextResponse.json({ ok: true, checked: candidateSessions.length, updated, justCompleted, anyInProgress })
