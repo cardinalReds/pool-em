@@ -434,6 +434,23 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
     load()
   }, [poolId, userId, tournamentId])
 
+  // Realtime subscription — update session status/scored without full reload
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('f1-sessions-live')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'f1_sessions',
+      }, (payload) => {
+        const updated = payload.new as F1Session
+        setSessions(prev => prev.map(s => s.id === updated.id ? { ...s, ...updated } : s))
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [])
+
   function updatePred(sessionId: number, categoryId: string, value: any) {
     const scrollY = window.scrollY
     const key = `${sessionId}:${categoryId}`
