@@ -586,6 +586,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                     <span style={{fontSize: '12px', color: '#555'}}>{rule.ruleset_categories?.name || rule.category_id}</span>
                     <span style={{fontSize: '12px', color: '#111', fontWeight: 600, marginLeft: '8px', flexShrink: 0}}>
                       {isExact ? `${rule.points}pt/team${rule.bonus_points > 0 ? ` +${rule.bonus_points}` : ''}` : `${rule.points} pt${rule.points !== 1 ? 's' : ''}`}
+                      {rule.category_id === 'soccer_team_to_advance' && <span style={{fontSize: '10px', color: '#aaa', fontWeight: 400}}> +2/round</span>}
                     </span>
                   </div>
                   {isCardPts && (

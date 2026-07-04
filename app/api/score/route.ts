@@ -217,11 +217,20 @@ function scoreCustomPrediction(
       if (homeScore > awayScore) winner = 'home'
       else if (awayScore > homeScore) winner = 'away'
       else if (fixtureRow?.penalty_winner) {
-        // penalty_winner stores the team name
         winner = fixtureRow.penalty_winner === facts.homeTeam ? 'home' : 'away'
       }
       if (!winner) return 0
-      return pred.value_wld === winner ? rule.points : 0
+      if (pred.value_wld !== winner) return 0
+      // Escalate points by round: base + 2 per progressive round
+      const roundBonus: Record<string, number> = {
+        'Round of 32': 0,
+        'Round of 16': 2,
+        'Quarter-finals': 4,
+        'Semi-finals': 6,
+        'Final': 8,
+      }
+      const bonus = Object.entries(roundBonus).find(([r]) => round.includes(r))?.[1] ?? 0
+      return rule.points + bonus
     }
 
     case 'soccer_ht_result':
