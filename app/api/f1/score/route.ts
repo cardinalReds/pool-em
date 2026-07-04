@@ -104,9 +104,8 @@ function scoreF1Prediction(categoryId: string, pred: any, results: DriverResult[
       return top3.some(n => driverMatches(pred.value_text, n)) ? rule.points : 0
     }
     case 'f1_q1_eliminated': {
-      // Q1 eliminated = positions 17-20 (bottom 6 of 22, or bottom 5 of 20)
-      // Top 16 advance to Q2, positions 17+ are eliminated
-      const q1Eliminated = results.filter(r => r.position > 16).map(r => r.driver_name)
+      // Score using 1st qualifying results — position > 15 means eliminated in Q1
+      const q1Eliminated = results.filter(r => r.position > 15).map(r => r.driver_name)
       return q1Eliminated.some(n => driverMatches(pred.value_text, n)) ? rule.points : 0
     }
     case 'f1_q3_qualifier': {
@@ -155,7 +154,7 @@ const SESSION_SCORING_MAP: Record<string, { parentTypes: string[], categories: s
   '3rd Qualifying':       { parentTypes: ['3rd Qualifying'],       categories: ['f1_pole_position', 'f1_top3_quali'] },
   '3rd Sprint Shootout':  { parentTypes: ['3rd Sprint Shootout'],  categories: ['f1_pole_position', 'f1_top3_quali'] },
   'Race':                 { parentTypes: ['Race'],                  categories: ['f1_race_winner', 'f1_podium', 'f1_podium_order_1', 'f1_podium_order_2', 'f1_podium_order_3', 'f1_points_finish', 'f1_fastest_lap', 'f1_first_retirement', 'f1_pole_to_win', 'f1_first_pit_lap', 'f1_teammate_battle'] },
-  'Sprint':               { parentTypes: ['Sprint'],                categories: ['f1_sprint_winner', 'f1_sprint_podium', 'f1_first_pit_lap', 'f1_teammate_battle'] },
+  'Sprint':               { parentTypes: ['Sprint'],                categories: ['f1_race_winner', 'f1_sprint_winner', 'f1_sprint_podium', 'f1_podium_order_1', 'f1_podium_order_2', 'f1_podium_order_3', 'f1_fastest_lap', 'f1_first_retirement', 'f1_first_pit_lap', 'f1_teammate_battle'] },
 }
 
 export async function POST(request: NextRequest) {
@@ -212,7 +211,7 @@ export async function POST(request: NextRequest) {
       // Find the parent session(s) that hold user predictions for this competition
       const { data: parentSessions } = await supabase
         .from('f1_sessions')
-        .select('id, results')
+        .select('id')
         .eq('tournament_id', TOURNAMENT_ID)
         .eq('competition_id', session.competition_id)
         .eq('season', session.season)
@@ -221,23 +220,6 @@ export async function POST(request: NextRequest) {
       if (!parentSessions?.length) {
         await supabase.from('f1_sessions').update({ scored: true }).eq('id', session.id)
         continue
-      }
-
-      // Store sub-session metadata in parent session for UI display
-      for (const parent of parentSessions) {
-        const existingResults: any[] = Array.isArray(parent.results) ? parent.results : []
-        const driverRows = existingResults.filter((r: any) => r.driver_id)
-        const metaRows = existingResults.filter((r: any) => !r.driver_id)
-
-        if (session.session_type === '1st Qualifying' || session.session_type === '1st Sprint Shootout') {
-          const q1Eliminated = results.filter(r => r.position > 16).map(r => r.driver_name)
-          const newMeta = [...metaRows.filter((m: any) => !m.q1_eliminated), { q1_eliminated: q1Eliminated }]
-          await supabase.from('f1_sessions').update({ results: [...driverRows, ...newMeta] }).eq('id', parent.id)
-        } else if (session.session_type === '2nd Qualifying' || session.session_type === '2nd Sprint Shootout') {
-          const q3Qualifiers = results.filter(r => r.position <= 10).map(r => r.driver_name)
-          const newMeta = [...metaRows.filter((m: any) => !m.q3_qualifiers), { q3_qualifiers: q3Qualifiers }]
-          await supabase.from('f1_sessions').update({ results: [...driverRows, ...newMeta] }).eq('id', parent.id)
-        }
       }
 
       const { data: pools } = await supabase.from('pools').select('id').eq('tournament_id', TOURNAMENT_ID)
