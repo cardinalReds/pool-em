@@ -923,6 +923,18 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                                 else if (r.category_id === 'f1_podium') actual = finishers.slice(0,3).map((f:any) => f.driver_name).join(', ') || '—'
                                 else if (r.category_id === 'f1_sprint_winner') actual = winner || '—'
                                 else if (r.category_id === 'f1_pole_to_win') actual = (poleSitter && winner) ? (poleSitter === winner ? 'yes' : 'no') : '—'
+                                else if (r.category_id === 'f1_teammate_battle') {
+                                  const assignedTeam = session.teammate_battle_team || sorted.find(s => s.session_type === 'Race')?.teammate_battle_team || null
+                                  if (assignedTeam) {
+                                    const teamDrivers = F1_GRID.find(t => t.name === assignedTeam)?.drivers || []
+                                    const d1 = results.find((r: any) => r.driver_name && teamDrivers.some((d: any) => d.name === r.driver_name))
+                                    const d2 = results.find((r: any) => r.driver_name && teamDrivers.some((d: any) => d.name === r.driver_name) && r.driver_id !== d1?.driver_id)
+                                    if (d1 && d2) {
+                                      const winner = d1.position < d2.position ? d1.driver_name : d2.driver_name
+                                      actual = winner.split(' ').pop() || winner
+                                    }
+                                  }
+                                }
                                 else if (r.category_id === 'f1_first_pit_lap') {
                                   const pitEntry = results.find((r: any) => r.first_pit_lap !== undefined || r.no_pit_stop !== undefined)
                                   if (!pitEntry) actual = '—'
