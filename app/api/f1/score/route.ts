@@ -272,34 +272,36 @@ export async function POST(request: NextRequest) {
             if (pitRes.ok) {
               const pitData = await pitRes.json()
               const pits: any[] = pitData.response || []
-              if (pits.length > 0) {
-                const firstPitLap = Math.min(...pits.map((p: any) => p.lap || 999))
-                // Store first pit lap in session results for UI display
-                await supabase.from('f1_sessions').update({
-                  results: [...results, { fastest_lap_driver: fastestLapDriver, first_pit_lap: firstPitLap }],
-                }).eq('id', session.id)
-                const { data: pitPreds } = await supabase
-                  .from('predictions_v2')
-                  .select('*')
-                  .eq('pool_id', pool.id)
-                  .eq('fixture_id', parent.id)
-                  .eq('category_id', 'f1_first_pit_lap')
-                if (pitPreds?.length) {
-                  // value_number = 0 means "no pit stop"
-                  const noPitStop = pits.length === 0
-                  const minDiff = noPitStop ? 0 : Math.min(...pitPreds.filter((p: any) => p.value_number > 0).map((p: any) => Math.abs((p.value_number || 0) - firstPitLap)))
-                  for (const p of pitPreds) {
-                    let pts = 0
-                    if (p.value_number === 0) {
-                      pts = noPitStop ? pitRule.points : 0
-                    } else if (!noPitStop) {
-                      const diff = Math.abs((p.value_number || 0) - firstPitLap)
-                      pts = diff === minDiff ? pitRule.points : 0
-                    }
-                    await supabase.from('predictions_v2')
-                      .update({ points_earned: pts, is_correct: pts > 0 })
-                      .eq('id', p.id)
+              const firstPitLap = pits.length > 0 ? Math.min(...pits.map((p: any) => p.lap || 999)) : null
+              const noPitStop = pits.length === 0
+
+              // Store pit stop result in session metadata
+              await supabase.from('f1_sessions').update({
+                results: [...results, { fastest_lap_driver: fastestLapDriver, first_pit_lap: firstPitLap, no_pit_stop: noPitStop }],
+              }).eq('id', session.id)
+
+              const { data: pitPreds } = await supabase
+                .from('predictions_v2')
+                .select('*')
+                .eq('pool_id', pool.id)
+                .eq('fixture_id', parent.id)
+                .eq('category_id', 'f1_first_pit_lap')
+              if (pitPreds?.length) {
+                const validPreds = pitPreds.filter((p: any) => p.value_number > 0)
+                const minDiff = !noPitStop && validPreds.length > 0
+                  ? Math.min(...validPreds.map((p: any) => Math.abs(p.value_number - firstPitLap!)))
+                  : 0
+                for (const p of pitPreds) {
+                  let pts = 0
+                  if (p.value_number === 0) {
+                    pts = noPitStop ? pitRule.points : 0
+                  } else if (!noPitStop && firstPitLap != null) {
+                    const diff = Math.abs(p.value_number - firstPitLap)
+                    pts = diff === minDiff ? pitRule.points : 0
                   }
+                  await supabase.from('predictions_v2')
+                    .update({ points_earned: pts, is_correct: pts > 0 })
+                    .eq('id', p.id)
                 }
               }
             }
