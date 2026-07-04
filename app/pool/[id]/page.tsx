@@ -126,6 +126,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const [leaderboardTab, setLeaderboardTab] = useState<'overall' | 'h2h'>('overall')
   const [h2hOpponent, setH2hOpponent] = useState<any>(null)
   const [allPredsCached, setAllPredsCached] = useState<any[]>([])
+  const [finishedFixtureIds, setFinishedFixtureIds] = useState<Set<number>>(new Set())
   const [totalFixtureCount, setTotalFixtureCount] = useState(0)
   const [finishedFixtureCount, setFinishedFixtureCount] = useState(0)
   const [poolRules, setPoolRules] = useState<any[]>([])
@@ -259,6 +260,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           .eq('tournament_id', pool.tournament_id)
           .eq('status', 'FT')
         const finishedIds = new Set((finishedFixtures || []).map((f: any) => f.id))
+        setFinishedFixtureIds(finishedIds)
         setFinishedFixtureCount(finishedFixtures?.length || 0)
 
         // Step 1: find the finished fixtures THIS user predicted on
@@ -448,8 +450,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         {h2hOpponent && (() => {
           const myId = user?.id
           const oppId = h2hOpponent.user_id
-          const myFixtures = new Set(allPredsCached.filter(p => p.user_id === myId && (p.value_wld || p.value_text || p.value_ou || p.value_yesno !== null || p.value_number !== null)).map(p => p.fixture_id))
-          const oppFixtures = new Set(allPredsCached.filter(p => p.user_id === oppId && (p.value_wld || p.value_text || p.value_ou || p.value_yesno !== null || p.value_number !== null)).map(p => p.fixture_id))
+          const hasValue = (p: any) => p.value_wld || p.value_text || p.value_ou || p.value_yesno !== null || p.value_number !== null
+          const myFixtures = new Set(allPredsCached.filter(p => p.user_id === myId && hasValue(p) && finishedFixtureIds.has(p.fixture_id)).map(p => p.fixture_id))
+          const oppFixtures = new Set(allPredsCached.filter(p => p.user_id === oppId && hasValue(p) && finishedFixtureIds.has(p.fixture_id)).map(p => p.fixture_id))
           const sharedFixtures = new Set([...myFixtures].filter(id => oppFixtures.has(id)))
           const myPts = allPredsCached.filter(p => p.user_id === myId && sharedFixtures.has(p.fixture_id)).reduce((sum, p) => sum + (p.points_earned || 0), 0)
           const oppPts = allPredsCached.filter(p => p.user_id === oppId && sharedFixtures.has(p.fixture_id)).reduce((sum, p) => sum + (p.points_earned || 0), 0)
