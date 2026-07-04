@@ -93,8 +93,13 @@ function scoreF1Prediction(categoryId: string, pred: any, results: DriverResult[
       return pointsFinishers.some(n => driverMatches(pred.value_text, n)) ? rule.points : 0
     case 'f1_fastest_lap':
       return fastestLapDriver && driverMatches(pred.value_text, fastestLapDriver) ? rule.points : 0
-    case 'f1_first_retirement':
+    case 'f1_first_retirement': {
+      // "No Retirement" is correct if there are no retirements
+      if (pred.value_text === 'No Retirement') {
+        return retirements.length === 0 ? rule.points : 0
+      }
       return driverMatches(pred.value_text, firstRetirement) ? rule.points : 0
+    }
     case 'f1_pole_to_win':
       return (pred.value_yesno === (poleSitter === winner)) ? rule.points : 0
     case 'f1_pole_position':
@@ -280,10 +285,17 @@ export async function POST(request: NextRequest) {
                   .eq('fixture_id', parent.id)
                   .eq('category_id', 'f1_first_pit_lap')
                 if (pitPreds?.length) {
-                  const minDiff = Math.min(...pitPreds.map((p: any) => Math.abs((p.value_number || 0) - firstPitLap)))
+                  // value_number = 0 means "no pit stop"
+                  const noPitStop = pits.length === 0
+                  const minDiff = noPitStop ? 0 : Math.min(...pitPreds.filter((p: any) => p.value_number > 0).map((p: any) => Math.abs((p.value_number || 0) - firstPitLap)))
                   for (const p of pitPreds) {
-                    const diff = Math.abs((p.value_number || 0) - firstPitLap)
-                    const pts = diff === minDiff ? pitRule.points : 0
+                    let pts = 0
+                    if (p.value_number === 0) {
+                      pts = noPitStop ? pitRule.points : 0
+                    } else if (!noPitStop) {
+                      const diff = Math.abs((p.value_number || 0) - firstPitLap)
+                      pts = diff === minDiff ? pitRule.points : 0
+                    }
                     await supabase.from('predictions_v2')
                       .update({ points_earned: pts, is_correct: pts > 0 })
                       .eq('id', p.id)

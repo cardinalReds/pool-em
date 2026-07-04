@@ -718,12 +718,21 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                         excludeTeams={Q3_EXCLUDED_TEAMS}
                         onChange={v => updatePred(session.id, rule.category_id, { value_text: v })} />
                     ) : rule.category_id === 'f1_first_pit_lap' ? (
-                      <PitStopLapPicker
-                        value={pred?.value_number || 0}
-                        disabled={locked}
-                        totalLaps={sorted.find(s => s.session_type === 'Race')?.total_laps || session.total_laps}
-                        onChange={v => updatePred(session.id, rule.category_id, { value_number: v })}
-                      />
+                      <div>
+                        <PitStopLapPicker
+                          value={pred?.value_number || 0}
+                          disabled={locked}
+                          totalLaps={sorted.find(s => s.session_type === 'Race')?.total_laps || session.total_laps}
+                          onChange={v => updatePred(session.id, rule.category_id, { value_number: v })}
+                        />
+                        <div style={{ textAlign: 'center' as const, marginTop: 8 }}>
+                          <button type="button" disabled={locked}
+                            onClick={() => !locked && updatePred(session.id, rule.category_id, { value_number: 0 })}
+                            style={{ fontSize: '11px', color: pred?.value_number === 0 ? '#C8102E' : '#aaa', background: 'none', border: 'none', cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit', textDecoration: pred?.value_number === 0 ? 'underline' : 'none' }}>
+                            no pit stop
+                          </button>
+                        </div>
+                      </div>
                     ) : rule.category_id === 'f1_teammate_battle' ? (
                       <TeammateBattlePicker
                         assignedTeam={session.teammate_battle_team || 
@@ -732,6 +741,18 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                         disabled={locked}
                         onChange={v => updatePred(session.id, rule.category_id, { value_text: v })}
                       />
+                    ) : rule.category_id === 'f1_first_retirement' ? (
+                      <div>
+                        <DriverDropdown value={pred?.value_text || ''} disabled={locked}
+                          onChange={v => updatePred(session.id, rule.category_id, { value_text: v })} />
+                        <div style={{ marginTop: 6 }}>
+                          <button type="button" disabled={locked}
+                            onClick={() => !locked && updatePred(session.id, rule.category_id, { value_text: 'No Retirement' })}
+                            style={{ fontSize: '11px', color: pred?.value_text === 'No Retirement' ? '#C8102E' : '#aaa', background: pred?.value_text === 'No Retirement' ? '#fff5f5' : 'none', border: pred?.value_text === 'No Retirement' ? '1px solid #f0d0d0' : 'none', padding: '4px 8px', cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit', width: '100%', textAlign: 'left' as const }}>
+                            no retirement
+                          </button>
+                        </div>
+                      </div>
                     ) : rule.input_type === 'player' ? (
                       <DriverDropdown value={pred?.value_text || ''} disabled={locked}
                         onChange={v => updatePred(session.id, rule.category_id, { value_text: v })} />
