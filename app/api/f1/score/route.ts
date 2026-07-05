@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
   try {
     const { data: completedSessions } = await supabase
       .from('f1_sessions')
-      .select('id, session_type, competition_id, season, status, scored')
+      .select('id, session_type, competition_id, season, status, scored, results')
       .eq('tournament_id', TOURNAMENT_ID)
       .eq('status', 'Completed')
       .eq('scored', false)
@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
 
     const { data: liveSessions } = await supabase
       .from('f1_sessions')
-      .select('id, session_type, competition_id, season, status, scored')
+      .select('id, session_type, competition_id, season, status, scored, results')
       .eq('tournament_id', TOURNAMENT_ID)
       .eq('status', 'In Progress')
       .limit(5)
@@ -230,8 +230,21 @@ export async function POST(request: NextRequest) {
         if (pitRes.ok) {
           const pitData = await pitRes.json()
           const pits: any[] = pitData.response || []
-          noPitStop = pits.length === 0
-          firstPitLap = pits.length > 0 ? Math.min(...pits.map((p: any) => p.lap || 999)) : null
+          if (pits.length > 0) {
+            noPitStop = false
+            firstPitLap = Math.min(...pits.map((p: any) => p.lap || 999))
+          } else if (session.session_type === 'Sprint') {
+            noPitStop = true
+          }
+        }
+        // Fallback: check if pit data was manually stored in session results
+        if (noPitStop === null) {
+          const storedResults: any[] = Array.isArray(session.results) ? session.results : []
+          const pitMeta = storedResults.find((r: any) => r.first_pit_lap !== undefined || r.no_pit_stop !== undefined)
+          if (pitMeta) {
+            firstPitLap = pitMeta.first_pit_lap ?? null
+            noPitStop = pitMeta.no_pit_stop ?? false
+          }
         }
       }
 
@@ -320,14 +333,14 @@ export async function POST(request: NextRequest) {
               const validPreds = pitPreds.filter((p: any) => p.value_number > 0)
               const minDiff = !noPitStop && firstPitLap != null && validPreds.length > 0
                 ? Math.min(...validPreds.map((p: any) => Math.abs(p.value_number - firstPitLap!)))
-                : 0
+                : null
               for (const p of pitPreds) {
                 let pts = 0
                 if (p.value_number === 0) {
                   pts = noPitStop ? pitRule.points : 0
-                } else if (!noPitStop && firstPitLap != null) {
+                } else if (!noPitStop && firstPitLap != null && minDiff !== null) {
                   const diff = Math.abs(p.value_number - firstPitLap)
-                  pts = diff === minDiff ? pitRule.points : 0
+                  pts = diff === minDiff ? pitRule.points : 0 // tie = both get points
                 }
                 await supabase.from('predictions_v2')
                   .update({ points_earned: pts, is_correct: pts > 0 })
@@ -339,7 +352,10 @@ export async function POST(request: NextRequest) {
       }
 
       // Only mark as fully scored when Completed — keep rescoring while In Progress
-      if (session.status === 'Completed') {
+      // For Race/Sprint: don't mark scored until pit stop data is available
+      const needsPitData = mapping.categories.includes('f1_first_pit_lap')
+      const hasPitData = noPitStop !== null // null means we didn't get a response, false means confirmed no pits
+      if (session.status === 'Completed' && (!needsPitData || hasPitData)) {
         await supabase.from('f1_sessions').update({ scored: true }).eq('id', session.id)
         sessionsScored++
       }
