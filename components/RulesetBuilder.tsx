@@ -193,7 +193,7 @@ const CATEGORY_GROUPS = [
   { label: 'Corners', ids: ['soccer_corners_winner', 'soccer_ht_corners_winner', 'soccer_total_corners_ou'] },
   { label: 'Cards', ids: ['soccer_card_points_ou', 'soccer_cards_home_away', 'soccer_cards_ht', 'soccer_first_yellow_team'] },
   { label: 'Fight Result', ids: ['mma_result', 'mma_method'] },
-  { label: 'Fight Duration', ids: ['mma_goes_distance', 'mma_finish_rd1', 'mma_round_finish', 'mma_total_rounds_ou'] },
+  { label: 'Fight Duration', ids: ['mma_round_finish'] },
   { label: 'Race', ids: ['f1_race_winner', 'f1_podium_order', 'f1_podium', 'f1_points_finish', 'f1_fastest_lap', 'f1_first_retirement', 'f1_pole_to_win', 'f1_first_pit_lap', 'f1_teammate_battle'] },
   { label: 'Qualifying', ids: ['f1_pole_position', 'f1_top3_quali', 'f1_q1_eliminated', 'f1_q3_qualifier'] },
   { label: 'Sprint', ids: ['f1_sprint_winner', 'f1_sprint_podium'] },
