@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import RulesetBuilder from '@/components/RulesetBuilder'
 
@@ -54,11 +54,31 @@ export default function CreatePoolPage() {
     { id: 'custom', label: 'Custom', description: 'Write your own payout rules' },
   ]
 
-  const TOURNAMENTS = [
-    { id: 'wc_2026', name: 'FIFA World Cup 2026', sport: 'soccer', description: 'Group stage · Jun 12 – Jul 2' },
-    { id: 'ufc_freedom_250', name: 'UFC Freedom 250', sport: 'mma', description: 'White House · Jun 14, 5pm PT' },
-    { id: 'f1_2026', name: 'Formula 1 2026', sport: 'f1', description: '23 races · Mar–Nov 2026' },
-  ]
+  const [TOURNAMENTS, setTOURNAMENTS] = useState<{id: string, name: string, sport: string, description: string}[]>([])
+
+  useEffect(() => {
+    async function loadTournaments() {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('tournaments')
+        .select('id, name, sport')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+      // Map to display format
+      const map: Record<string, string> = {
+        'wc_2026': 'Group stage · Jun 12 – Jul 2',
+        'f1_2026': '23 races · Mar–Nov 2026',
+        'ufc_329': 'McGregor vs Holloway · Jul 11, T-Mobile Arena',
+      }
+      setTOURNAMENTS((data || []).map(t => ({
+        id: t.id,
+        name: t.name,
+        sport: t.sport,
+        description: map[t.id] || '',
+      })))
+    }
+    loadTournaments()
+  }, [])
 
   // Step 2 → step 3: bracket pools skip ruleset builder
   function goToStep3() {
