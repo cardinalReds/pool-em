@@ -682,6 +682,23 @@ export default function RulesetBuilder({ sport, onComplete }: {
           />
         )}
 
+        {/* Round finished (MMA) */}
+        {cat.id === 'mma_round_finish' && (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
+            {[1, 2, 3, 4, 5].map(round => (
+              <button key={round}
+                style={{ ...btnStyle(round), flex: '0 0 44px' }}
+                onClick={() => setUserPicks(p => ({ ...p, [cat.id]: round }))}>
+                R{round}
+              </button>
+            ))}
+            <button style={{ ...btnStyle('Decision'), flex: '1 1 auto' }}
+              onClick={() => setUserPicks(p => ({ ...p, [cat.id]: 'Decision' }))}>
+              Decision
+            </button>
+          </div>
+        )}
+
         {/* Team text input */}
         {cat.input_type === 'team' && (
           <input placeholder="team name..."
