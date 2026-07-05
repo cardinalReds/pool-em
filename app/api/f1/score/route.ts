@@ -222,7 +222,6 @@ export async function POST(request: NextRequest) {
 
       // Fetch pit stop data once for race/sprint sessions
       let firstPitLap: number | null = null
-      let noPitStop: boolean | null = null
       if (mapping.categories.includes('f1_first_pit_lap')) {
         const pitRes = await fetch(`${F1_BASE}/pitstops?race=${session.id}`, {
           headers: { 'x-apisports-key': API_KEY },
@@ -231,26 +230,20 @@ export async function POST(request: NextRequest) {
           const pitData = await pitRes.json()
           const pits: any[] = pitData.response || []
           if (pits.length > 0) {
-            noPitStop = false
             firstPitLap = Math.min(...pits.map((p: any) => p.lap || 999))
-          } else if (session.session_type === 'Sprint') {
-            noPitStop = true
           }
         }
-        // Fallback: check if pit data was manually stored in session results
-        if (noPitStop === null) {
+        // Fallback: check stored session results
+        if (firstPitLap === null) {
           const storedResults: any[] = Array.isArray(session.results) ? session.results : []
-          const pitMeta = storedResults.find((r: any) => r.first_pit_lap !== undefined || r.no_pit_stop !== undefined)
-          if (pitMeta) {
-            firstPitLap = pitMeta.first_pit_lap ?? null
-            noPitStop = pitMeta.no_pit_stop ?? false
-          }
+          const pitMeta = storedResults.find((r: any) => r.first_pit_lap != null)
+          if (pitMeta) firstPitLap = pitMeta.first_pit_lap
         }
       }
 
       // Store all results metadata in one write
       await supabase.from('f1_sessions').update({
-        results: [...results, { fastest_lap_driver: fastestLapDriver, first_pit_lap: firstPitLap, no_pit_stop: noPitStop }],
+        results: [...results, { fastest_lap_driver: fastestLapDriver, first_pit_lap: firstPitLap }],
       }).eq('id', session.id)
 
       // Find the parent session(s) that hold user predictions for this competition
@@ -322,7 +315,7 @@ export async function POST(request: NextRequest) {
 
           // Closest-wins pit stop scoring
           const pitRule = ruleMap['f1_first_pit_lap']
-          if (pitRule && mapping.categories.includes('f1_first_pit_lap') && noPitStop !== null) {
+          if (pitRule && mapping.categories.includes('f1_first_pit_lap') && firstPitLap !== null) {
             const { data: pitPreds } = await supabase
               .from('predictions_v2')
               .select('*')
@@ -330,18 +323,10 @@ export async function POST(request: NextRequest) {
               .eq('fixture_id', parent.id)
               .eq('category_id', 'f1_first_pit_lap')
             if (pitPreds?.length) {
-              const validPreds = pitPreds.filter((p: any) => p.value_number > 0)
-              const minDiff = !noPitStop && firstPitLap != null && validPreds.length > 0
-                ? Math.min(...validPreds.map((p: any) => Math.abs(p.value_number - firstPitLap!)))
-                : null
+              const minDiff = Math.min(...pitPreds.filter((p: any) => p.value_number > 0).map((p: any) => Math.abs(p.value_number - firstPitLap!)))
               for (const p of pitPreds) {
-                let pts = 0
-                if (p.value_number === 0) {
-                  pts = noPitStop ? pitRule.points : 0
-                } else if (!noPitStop && firstPitLap != null && minDiff !== null) {
-                  const diff = Math.abs(p.value_number - firstPitLap)
-                  pts = diff === minDiff ? pitRule.points : 0 // tie = both get points
-                }
+                const diff = Math.abs((p.value_number || 0) - firstPitLap!)
+                const pts = p.value_number > 0 && diff === minDiff ? pitRule.points : 0
                 await supabase.from('predictions_v2')
                   .update({ points_earned: pts, is_correct: pts > 0 })
                   .eq('id', p.id)
@@ -353,11 +338,13 @@ export async function POST(request: NextRequest) {
 
       // Only mark as fully scored when Completed — keep rescoring while In Progress
       // For Race/Sprint: don't mark scored until pit stop data is available
-      const needsPitData = mapping.categories.includes('f1_first_pit_lap')
-      const hasPitData = noPitStop !== null // null means we didn't get a response, false means confirmed no pits
-      if (session.status === 'Completed' && (!needsPitData || hasPitData)) {
-        await supabase.from('f1_sessions').update({ scored: true }).eq('id', session.id)
-        sessionsScored++
+      if (session.status === 'Completed') {
+        // Don't mark scored if we still need pit stop data and it's not available yet
+        const needsPitData = mapping.categories.includes('f1_first_pit_lap')
+        if (!needsPitData || firstPitLap !== null) {
+          await supabase.from('f1_sessions').update({ scored: true }).eq('id', session.id)
+          sessionsScored++
+        }
       }
     }
 
