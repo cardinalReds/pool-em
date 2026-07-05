@@ -50,12 +50,23 @@ async function fetchRankings(apiSessionId: number): Promise<DriverResult[]> {
 }
 
 async function fetchFastestLap(apiSessionId: number): Promise<string | null> {
-  const res = await fetch(`${F1_BASE}/rankings/fastestlaps?race=${apiSessionId}`, {
+  // Fastest lap is in the races endpoint, not rankings/fastestlaps
+  const res = await fetch(`${F1_BASE}/races?id=${apiSessionId}`, {
     headers: { 'x-apisports-key': API_KEY },
   })
   if (!res.ok) return null
   const data = await res.json()
-  return data.response?.[0]?.driver?.name ?? null
+  const race = data.response?.[0]
+  if (!race?.fastest_lap?.driver?.id) return null
+  // Look up driver name from rankings since races endpoint only has driver ID
+  const driverId = race.fastest_lap.driver.id
+  const rankRes = await fetch(`${F1_BASE}/rankings/races?race=${apiSessionId}`, {
+    headers: { 'x-apisports-key': API_KEY },
+  })
+  if (!rankRes.ok) return null
+  const rankData = await rankRes.json()
+  const driver = rankData.response?.find((r: any) => r.driver?.id === driverId)
+  return driver?.driver?.name ?? null
 }
 
 function normalizeDriver(name: string): string {
