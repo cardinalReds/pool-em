@@ -66,7 +66,7 @@ async function fetchFixtureEvents(fixtureId: number, homeTeamId: number): Promis
     const elapsed = event.time.elapsed + (event.time.extra || 0)
     const isFirstHalf = elapsed <= 45
 
-    if (event.type === 'Goal' && event.detail !== 'Missed Penalty') {
+    if (event.type === 'Goal' && event.detail !== 'Missed Penalty' && event.comments !== 'Penalty Shootout') {
       const scorerName = event.player?.name || null
       if (firstScorerName === null) {
         firstScorerName = scorerName
