@@ -178,9 +178,10 @@ async function fetchFixtureEvents(apiFixtureId: number): Promise<any[]> {
 }
 
 function extractFirstScorer(events: any[], homeTeam: string, awayTeam: string): string | null {
-  // Include own goals — filter only missed penalties
+  // Include own goals — filter missed penalties and penalty shootout goals
+  // Shootout penalties happen at elapsed > 120 or in 'penalties' period
   const goals = events
-    .filter(e => e.type === 'Goal' && e.detail !== 'Missed Penalty')
+    .filter(e => e.type === 'Goal' && e.detail !== 'Missed Penalty' && e.comments !== 'Penalty Shootout')
     .sort((a, b) => a.time.elapsed - b.time.elapsed)
 
   const first = goals[0]
