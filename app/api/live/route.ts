@@ -426,11 +426,13 @@ export async function GET(request: Request) {
           }
         }
 
-        // Determine penalty winner if match went to shootout
+        // Determine penalty winner if match went to shootout — only when FT
         let penaltyWinner: string | null = null
-        const penScore = apiFixture.score?.penalty
-        if (penScore?.home != null && penScore?.away != null && (penScore.home > 0 || penScore.away > 0)) {
-          penaltyWinner = penScore.home > penScore.away ? ourFixture.home_team : ourFixture.away_team
+        if (status === 'FT') {
+          const penScore = apiFixture.score?.penalty
+          if (penScore?.home != null && penScore?.away != null && (penScore.home > 0 || penScore.away > 0)) {
+            penaltyWinner = penScore.home > penScore.away ? ourFixture.home_team : ourFixture.away_team
+          }
         }
 
         // Update fixture
