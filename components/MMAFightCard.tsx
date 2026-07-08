@@ -22,6 +22,9 @@ interface MMAFixture {
   fighter2_photo: string | null
   venue: string
   city: string
+  weight_class: string | null
+  fighter1_nationality: string | null
+  fighter2_nationality: string | null
 }
 
 interface PoolRule {
@@ -59,6 +62,24 @@ const SEGMENT_LABEL: Record<string, string> = {
 }
 
 const SEGMENTS = ['main_card', 'prelims', 'early_prelims']
+
+function nationalityFlag(nationality: string | null): string {
+  const flags: Record<string, string> = {
+    'USA': '🇺🇸', 'United States': '🇺🇸',
+    'Ireland': '🇮🇪', 'England': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'Brazil': '🇧🇷',
+    'Australia': '🇦🇺', 'Russia': '🇷🇺', 'France': '🇫🇷',
+    'China': '🇨🇳', 'Afghanistan': '🇦🇫', 'Aruba': '🇦🇼',
+    'Canada': '🇨🇦', 'Mexico': '🇲🇽', 'Japan': '🇯🇵',
+    'New Zealand': '🇳🇿', 'Poland': '🇵🇱', 'Ukraine': '🇺🇦',
+    'Georgia': '🇬🇪', 'Dagestan': '🇷🇺', 'Nigeria': '🇳🇬',
+    'Jamaica': '🇯🇲', 'Netherlands': '🇳🇱', 'Sweden': '🇸🇪',
+    'Norway': '🇳🇴', 'Denmark': '🇩🇰', 'Germany': '🇩🇪',
+    'Italy': '🇮🇹', 'Spain': '🇪🇸', 'Portugal': '🇵🇹',
+    'South Korea': '🇰🇷', 'Thailand': '🇹🇭', 'Philippines': '🇵🇭',
+    'Cameroon': '🇨🇲', 'Congo': '🇨🇩', 'Senegal': '🇸🇳',
+  }
+  return nationality ? (flags[nationality] || '') : ''
+}
 
 function lastName(name: string): string {
   const suffixes = ['III', 'II', 'IV', 'Jr', 'Jr.', 'Sr', 'Sr.']
@@ -362,6 +383,7 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                     <div style={{ fontSize: '16px', fontWeight: 900, color: winner === fight.home_team ? '#2d7a2d' : '#111' }}>
                       {lastName(fight.home_team)}
                     </div>
+                    {fight.fighter1_nationality && <div style={{ fontSize: '14px', marginTop: 2 }}>{nationalityFlag(fight.fighter1_nationality)}</div>}
                     {winner === fight.home_team && <div style={{ fontSize: '10px', fontWeight: 700, color: '#2d7a2d' }}>WIN</div>}
                   </div>
                 </div>
@@ -369,8 +391,9 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                 {/* VS */}
                 <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', paddingBottom: 8 }}>
                   <div style={{ fontSize: '11px', fontWeight: 700, color: '#ccc' }}>vs</div>
-                  <div style={{ fontSize: '10px', color: '#bbb', marginTop: 4, whiteSpace: 'nowrap' as const }}>
-                    {fight.scheduled_rounds === 5 ? '5 rounds' : '3 rounds'}
+                  <div style={{ fontSize: '10px', color: '#bbb', marginTop: 4, textAlign: 'center' as const }}>
+                    {fight.weight_class && <div>{fight.weight_class}</div>}
+                    <div>{fight.scheduled_rounds === 5 ? '5 rounds' : '3 rounds'}</div>
                   </div>
                 </div>
 
@@ -396,6 +419,7 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                     <div style={{ fontSize: '16px', fontWeight: 900, color: winner === fight.away_team ? '#2d7a2d' : '#111' }}>
                       {lastName(fight.away_team)}
                     </div>
+                    {fight.fighter2_nationality && <div style={{ fontSize: '14px', marginTop: 2 }}>{nationalityFlag(fight.fighter2_nationality)}</div>}
                     {winner === fight.away_team && <div style={{ fontSize: '10px', fontWeight: 700, color: '#2d7a2d' }}>WIN</div>}
                   </div>
                 </div>
