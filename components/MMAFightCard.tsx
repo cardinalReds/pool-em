@@ -47,6 +47,7 @@ interface Props {
   userId: string
   deadlineType: string
   tournamentId: string
+  isAdmin?: boolean
 }
 
 const SEGMENT_LABEL: Record<string, string> = {
@@ -64,7 +65,7 @@ function fmtTime(dateStr: string) {
   })
 }
 
-export default function MMAFightCard({ poolId, userId, deadlineType, tournamentId }: Props) {
+export default function MMAFightCard({ poolId, userId, deadlineType, tournamentId, isAdmin }: Props) {
   const [fixtures, setFixtures] = useState<MMAFixture[]>([])
   const [poolRules, setPoolRules] = useState<PoolRule[]>([])
   const [preds, setPreds] = useState<Record<string, Pred>>({})
@@ -72,16 +73,21 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
   const [allPreds, setAllPreds] = useState<Pred[]>([])
   const [activeTab, setActiveTab] = useState<string>('main_card')
   const [loading, setLoading] = useState(true)
+  const [ghostEntries, setGhostEntries] = useState<{ id: string; name: string }[]>([])
+  const [activeEntryId, setActiveEntryId] = useState<string>(userId) // who we're making picks for
+  const [newGhostName, setNewGhostName] = useState('')
+  const [addingGhost, setAddingGhost] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
     async function load() {
-      const [fixturesRes, rulesRes, predsRes, membersRes, allPredsRes] = await Promise.all([
+      const [fixturesRes, rulesRes, predsRes, membersRes, allPredsRes, ghostRes] = await Promise.all([
         supabase.from('fixtures').select('*').eq('tournament_id', tournamentId),
         supabase.from('pool_rules').select('category_id, points, bonus_points, ruleset_categories(name, input_type)').eq('pool_id', poolId),
         supabase.from('predictions_v2').select('*').eq('pool_id', poolId).eq('user_id', userId),
         supabase.from('pool_members').select('user_id, display_name').eq('pool_id', poolId),
         supabase.from('predictions_v2').select('*').eq('pool_id', poolId),
+        supabase.from('ghost_entries').select('id, name').eq('pool_id', poolId),
       ])
 
       setFixtures(fixturesRes.data || [])
@@ -92,6 +98,8 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
         name: r.ruleset_categories?.name || r.category_id,
         input_type: r.ruleset_categories?.input_type || 'wld',
       })))
+
+      setGhostEntries(ghostRes.data || [])
 
       const predMap: Record<string, Pred> = {}
       for (const p of predsRes.data || []) {
@@ -125,21 +133,43 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
     return () => { supabase.removeChannel(channel) }
   }, [poolId, userId, tournamentId])
 
+  // Reload preds when switching entry
+  useEffect(() => {
+    if (!activeEntryId) return
+    supabase.from('predictions_v2').select('*').eq('pool_id', poolId).eq('user_id', activeEntryId).then(({ data }) => {
+      const predMap: Record<string, Pred> = {}
+      for (const p of data || []) predMap[`${p.fixture_id}:${p.category_id}`] = p
+      setPreds(predMap)
+    })
+  }, [activeEntryId, poolId])
+
+  async function addGhostEntry() {
+    if (!newGhostName.trim()) return
+    const { data } = await supabase.from('ghost_entries').insert({
+      pool_id: poolId, name: newGhostName.trim(), created_by: userId
+    }).select().single()
+    if (data) {
+      setGhostEntries(prev => [...prev, data])
+      setActiveEntryId(data.id)
+      setNewGhostName('')
+      setAddingGhost(false)
+    }
+  }
+
   const savePred = useCallback(async (fixtureId: number, categoryId: string, value: Partial<Pred>) => {
     const key = `${fixtureId}:${categoryId}`
     const existing = preds[key]
-    const updated = { ...existing, fixture_id: fixtureId, category_id: categoryId, pool_id: poolId, user_id: userId, ...value }
-    setPreds(prev => ({ ...prev, [key]: updated }))
+    setPreds(prev => ({ ...prev, [key]: { ...existing, fixture_id: fixtureId, category_id: categoryId, ...value } }))
 
     if (existing?.id) {
       await supabase.from('predictions_v2').update(value).eq('id', existing.id)
     } else {
       const { data } = await supabase.from('predictions_v2').insert({
-        pool_id: poolId, user_id: userId, fixture_id: fixtureId, category_id: categoryId, ...value
+        pool_id: poolId, user_id: activeEntryId, fixture_id: fixtureId, category_id: categoryId, ...value
       }).select().single()
       if (data) setPreds(prev => ({ ...prev, [key]: data }))
     }
-  }, [preds, poolId, userId])
+  }, [preds, poolId, activeEntryId])
 
   if (loading) return <div style={{ color: '#aaa', fontSize: '13px', padding: 16 }}>loading...</div>
 
@@ -189,6 +219,56 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
         <div style={{ fontSize: '13px', fontWeight: 600 }}>{fixtures[0]?.venue}</div>
         <div style={{ fontSize: '11px', color: '#aaa' }}>{fixtures[0]?.city}</div>
       </div>
+
+      {/* Entry switcher — admin only for now */}
+      {isAdmin && (
+        <div style={{ marginBottom: 16, padding: '10px 12px', background: '#f9f9f9', border: '1px solid #e0e0db' }}>
+          <div style={{ fontSize: '10px', fontWeight: 600, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>making picks for</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginBottom: 8 }}>
+            {/* Self */}
+            <button type="button" onClick={() => setActiveEntryId(userId)}
+              style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
+                borderColor: activeEntryId === userId ? '#C8102E' : '#ddd',
+                background: activeEntryId === userId ? '#C8102E' : 'white',
+                color: activeEntryId === userId ? 'white' : '#555', fontWeight: activeEntryId === userId ? 700 : 400 }}>
+              you
+            </button>
+            {/* Ghost entries */}
+            {ghostEntries.map(g => (
+              <button key={g.id} type="button" onClick={() => setActiveEntryId(g.id)}
+                style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
+                  borderColor: activeEntryId === g.id ? '#C8102E' : '#ddd',
+                  background: activeEntryId === g.id ? '#C8102E' : 'white',
+                  color: activeEntryId === g.id ? 'white' : '#555', fontWeight: activeEntryId === g.id ? 700 : 400 }}>
+                {g.name}
+              </button>
+            ))}
+            {/* Add new */}
+            {!addingGhost && (
+              <button type="button" onClick={() => setAddingGhost(true)}
+                style={{ padding: '5px 10px', fontSize: '12px', border: '1px dashed #ddd', background: 'white', color: '#aaa', cursor: 'pointer', fontFamily: 'inherit' }}>
+                + add entry
+              </button>
+            )}
+          </div>
+          {addingGhost && (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input autoFocus value={newGhostName} onChange={e => setNewGhostName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addGhostEntry()}
+                placeholder="entry name..."
+                style={{ flex: 1, padding: '6px 8px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit' }} />
+              <button type="button" onClick={addGhostEntry}
+                style={{ padding: '6px 12px', background: '#111', color: 'white', border: 'none', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer' }}>
+                add
+              </button>
+              <button type="button" onClick={() => { setAddingGhost(false); setNewGhostName('') }}
+                style={{ padding: '6px 10px', background: 'none', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer', color: '#aaa' }}>
+                cancel
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '2px solid #e0e0db', marginBottom: 20, gap: 0 }}>
@@ -255,19 +335,19 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                   {fight.fighter1_photo ? (
                     <img src={fight.fighter1_photo} alt={fight.home_team}
                       style={{
-                        width: isMain ? 110 : 80, height: isMain ? 110 : 80,
+                        width: 110, height: 110,
                         objectFit: 'cover', borderRadius: '50%',
                         border: winner === fight.home_team ? '3px solid #2d7a2d' : '3px solid #f0f0f0',
                         filter: isFinished && winner !== fight.home_team ? 'grayscale(60%)' : 'none',
                       }} />
                   ) : (
-                    <div style={{ width: isMain ? 110 : 80, height: isMain ? 110 : 80, borderRadius: '50%', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: isMain ? 36 : 28, color: '#ddd' }}>👤</div>
+                    <div style={{ width: 110, height: 110, borderRadius: '50%', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, color: '#ddd' }}>👤</div>
                   )}
                   <div style={{ textAlign: 'center' as const }}>
-                    <div style={{ fontSize: isMain ? '14px' : '12px', fontWeight: 700, color: winner === fight.home_team ? '#2d7a2d' : '#111' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: winner === fight.home_team ? '#2d7a2d' : '#111' }}>
                       {fight.home_team.split(' ').slice(0, -1).join(' ')}
                     </div>
-                    <div style={{ fontSize: isMain ? '16px' : '14px', fontWeight: 900, color: winner === fight.home_team ? '#2d7a2d' : '#111' }}>
+                    <div style={{ fontSize: '16px', fontWeight: 900, color: winner === fight.home_team ? '#2d7a2d' : '#111' }}>
                       {fight.home_team.split(' ').pop()}
                     </div>
                     {winner === fight.home_team && <div style={{ fontSize: '10px', fontWeight: 700, color: '#2d7a2d' }}>WIN</div>}
@@ -287,19 +367,19 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                   {fight.fighter2_photo ? (
                     <img src={fight.fighter2_photo} alt={fight.away_team}
                       style={{
-                        width: isMain ? 110 : 80, height: isMain ? 110 : 80,
+                        width: 110, height: 110,
                         objectFit: 'cover', borderRadius: '50%',
                         border: winner === fight.away_team ? '3px solid #2d7a2d' : '3px solid #f0f0f0',
                         filter: isFinished && winner !== fight.away_team ? 'grayscale(60%)' : 'none',
                       }} />
                   ) : (
-                    <div style={{ width: isMain ? 110 : 80, height: isMain ? 110 : 80, borderRadius: '50%', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: isMain ? 36 : 28, color: '#ddd' }}>👤</div>
+                    <div style={{ width: 110, height: 110, borderRadius: '50%', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, color: '#ddd' }}>👤</div>
                   )}
                   <div style={{ textAlign: 'center' as const }}>
-                    <div style={{ fontSize: isMain ? '14px' : '12px', fontWeight: 700, color: winner === fight.away_team ? '#2d7a2d' : '#111' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: winner === fight.away_team ? '#2d7a2d' : '#111' }}>
                       {fight.away_team.split(' ').slice(0, -1).join(' ')}
                     </div>
-                    <div style={{ fontSize: isMain ? '16px' : '14px', fontWeight: 900, color: winner === fight.away_team ? '#2d7a2d' : '#111' }}>
+                    <div style={{ fontSize: '16px', fontWeight: 900, color: winner === fight.away_team ? '#2d7a2d' : '#111' }}>
                       {fight.away_team.split(' ').pop()}
                     </div>
                     {winner === fight.away_team && <div style={{ fontSize: '10px', fontWeight: 700, color: '#2d7a2d' }}>WIN</div>}
