@@ -22,6 +22,8 @@ interface MMAFixture {
   fighter2_photo: string | null
   venue: string
   city: string
+  fighter1_last_name: string | null
+  fighter2_last_name: string | null
   weight_class: string | null
   fighter1_nationality: string | null
   fighter2_nationality: string | null
@@ -83,8 +85,15 @@ function nationalityFlag(nationality: string | null): string {
 
 function lastName(name: string): string {
   const suffixes = ['III', 'II', 'IV', 'Jr', 'Jr.', 'Sr', 'Sr.']
+  const prefixes = ['Saint', 'Van', 'De', 'Del', 'Da', 'Du', 'Von', 'Mac', 'Mc', 'La', 'Le', 'El']
   const parts = name.split(' ')
-  if (parts.length >= 2 && suffixes.includes(parts[parts.length - 1])) {
+  // Handle suffix (e.g. Kamaka III)
+  let end = parts.length
+  if (end > 1 && suffixes.includes(parts[end - 1])) {
+    return parts.slice(-2).join(' ')
+  }
+  // Handle compound surname (e.g. Saint Denis)
+  if (end > 2 && prefixes.includes(parts[end - 2])) {
     return parts.slice(-2).join(' ')
   }
   return parts[parts.length - 1] || name
@@ -381,7 +390,7 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                       {fight.home_team.split(' ').slice(0, -1).join(' ')}
                     </div>
                     <div style={{ fontSize: '16px', fontWeight: 900, color: winner === fight.home_team ? '#2d7a2d' : '#111' }}>
-                      {lastName(fight.home_team)}
+                      {fight.fighter1_last_name || lastName(fight.home_team)}
                     </div>
                     {fight.fighter1_nationality && <div style={{ fontSize: '14px', marginTop: 2 }}>{nationalityFlag(fight.fighter1_nationality)}</div>}
                     {winner === fight.home_team && <div style={{ fontSize: '10px', fontWeight: 700, color: '#2d7a2d' }}>WIN</div>}
@@ -417,7 +426,7 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                       {fight.away_team.split(' ').slice(0, -1).join(' ')}
                     </div>
                     <div style={{ fontSize: '16px', fontWeight: 900, color: winner === fight.away_team ? '#2d7a2d' : '#111' }}>
-                      {lastName(fight.away_team)}
+                      {fight.fighter2_last_name || lastName(fight.away_team)}
                     </div>
                     {fight.fighter2_nationality && <div style={{ fontSize: '14px', marginTop: 2 }}>{nationalityFlag(fight.fighter2_nationality)}</div>}
                     {winner === fight.away_team && <div style={{ fontSize: '10px', fontWeight: 700, color: '#2d7a2d' }}>WIN</div>}
@@ -469,12 +478,12 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                         <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
                           disabled={locked || isFinished}
                           onClick={() => !locked && !isFinished && savePred(fight.id, rule.category_id, { value_wld: 'home' })}>
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>{lastName(fight.home_team)}</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>{fight.fighter1_last_name || lastName(fight.home_team)}</span>
                         </button>
                         <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
                           disabled={locked || isFinished}
                           onClick={() => !locked && !isFinished && savePred(fight.id, rule.category_id, { value_wld: 'away' })}>
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>{lastName(fight.away_team)}</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>{fight.fighter2_last_name || lastName(fight.away_team)}</span>
                         </button>
                       </div>
                     )}
