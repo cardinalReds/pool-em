@@ -236,7 +236,12 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         const { data: scores } = await supabase.from('predictions').select('user_id, points_earned').eq('pool_id', pool.id)
         scores?.forEach(s => { if (s.points_earned) pointsMap[s.user_id] = (pointsMap[s.user_id] || 0) + s.points_earned })
       }
-      setLeaderboard((members || []).map(m => ({ ...m, points: pointsMap[m.user_id] || 0, maxPossible: maxPossibleMap[m.user_id] })).sort((a, b) => b.points - a.points))
+      // Include ghost entries in leaderboard
+      const { data: ghosts } = await supabase.from('ghost_entries').select('id, name').eq('pool_id', pool.id)
+      const ghostMembers = (ghosts || []).map(g => ({ user_id: g.id, display_name: g.name, is_paid: false, is_ghost: true }))
+      const allMembers = [...(members || []), ...ghostMembers]
+
+      setLeaderboard(allMembers.map(m => ({ ...m, points: pointsMap[m.user_id] || 0, maxPossible: maxPossibleMap[m.user_id] })).sort((a, b) => b.points - a.points))
 
       // ── "Your Leaderboard" — total points across only the fixtures the LOGGED-IN user predicted on ──
       if (pool.package_id === 'CUSTOM' && pool.deadline_type !== 'before_tournament') {
@@ -496,9 +501,20 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             borderLeft: `3px solid ${member.user_id === user?.id ? '#C8102E' : 'transparent'}`,
           }}>
             <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, textAlign: 'left' as const}}>
-              {i + 1}. {member.display_name}
+              {i + 1}. {member.display_name}{member.is_ghost ? <span style={{fontSize: '10px', color: '#bbb', marginLeft: 4}}>ghost</span> : ''}
             </span>
             <div style={{display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0}}>
+              {isAdmin && member.is_ghost && (
+                <button onClick={async () => {
+                  if (!confirm(`Delete ${member.display_name}?`)) return
+                  const supabase = (await import('@/lib/supabase/client')).createClient()
+                  await supabase.from('predictions_v2').delete().eq('pool_id', pool.id).eq('user_id', member.user_id)
+                  await supabase.from('ghost_entries').delete().eq('id', member.user_id)
+                  setLeaderboard(prev => prev.filter(m => m.user_id !== member.user_id))
+                }} style={{fontSize: '11px', color: '#C8102E', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit'}}>
+                  delete
+                </button>
+              )}
               {isAdmin && pool.buy_in_amount && (
                 <div style={{width: 40, display: 'flex', justifyContent: 'center', flexShrink: 0}}>
                   <button onClick={() => togglePaid(member.id, member.is_paid)}
