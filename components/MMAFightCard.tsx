@@ -344,7 +344,9 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                         filter: isFinished && winner !== fight.home_team ? 'grayscale(60%)' : 'none',
                       }} />
                   ) : (
-                    <div style={{ width: 110, height: 110, borderRadius: '50%', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, color: '#ddd' }}>👤</div>
+                    <div style={{ width: 110, height: 110, borderRadius: '50%', background: '#e0e0db', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, fontWeight: 700, color: '#aaa' }}>
+                      {fight.home_team.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                    </div>
                   )}
                   <div style={{ textAlign: 'center' as const }}>
                     <div style={{ fontSize: '14px', fontWeight: 700, color: winner === fight.home_team ? '#2d7a2d' : '#111' }}>
@@ -376,7 +378,9 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                         filter: isFinished && winner !== fight.away_team ? 'grayscale(60%)' : 'none',
                       }} />
                   ) : (
-                    <div style={{ width: 110, height: 110, borderRadius: '50%', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, color: '#ddd' }}>👤</div>
+                    <div style={{ width: 110, height: 110, borderRadius: '50%', background: '#e0e0db', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, fontWeight: 700, color: '#aaa' }}>
+                      {fight.away_team.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                    </div>
                   )}
                   <div style={{ textAlign: 'center' as const }}>
                     <div style={{ fontSize: '14px', fontWeight: 700, color: winner === fight.away_team ? '#2d7a2d' : '#111' }}>
