@@ -223,7 +223,7 @@ export default function CreatePoolPage() {
                   setSport(t.sport)
                   // Reset deadline type to sensible default for each sport
                   if (t.sport === 'f1') setDeadlineType('before_weekend' as any)
-                  else if (t.sport === 'mma') setDeadlineType('before_each_game')
+                  else if (t.sport === 'mma') setDeadlineType('before_tournament')
                   else setDeadlineType('before_each_game')
                 }}
                   style={{
@@ -243,12 +243,12 @@ export default function CreatePoolPage() {
                 {id: 'before_weekend', label: 'before each race weekend', desc: 'picks lock before the qualifying session starts — one ticket per GP weekend'},
                 {id: 'before_session', label: 'before each session', desc: 'separate tickets for qualifying and race — picks lock before each session'},
               ] : sport === 'mma' ? [
-                {id: 'before_each_game', label: 'before each fight', desc: 'picks lock at fight time — predict fight by fight'},
+                {id: 'before_each_game', label: 'before each fight', desc: 'picks lock at fight time — predict fight by fight', hidden: true},
                 {id: 'before_tournament', label: 'before the card', desc: 'predict all fights before the card starts — picks lock at first fight'},
               ] : [
                 {id: 'before_each_game', label: 'before each game', desc: 'picks lock at kickoff — predict game by game'},
                 {id: 'before_tournament', label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'},
-              ]).map(opt => (
+              ]).filter(opt => !opt.hidden).map(opt => (
                 <button key={opt.id} onClick={() => setDeadlineType(opt.id as any)}
                   style={{
                     padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer', minHeight: 60,
