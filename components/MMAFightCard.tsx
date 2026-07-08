@@ -134,15 +134,13 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
     return () => { supabase.removeChannel(channel) }
   }, [poolId, userId, tournamentId])
 
-  // Reload preds when switching entry
-  useEffect(() => {
-    if (!activeEntryId) return
-    supabase.from('predictions_v2').select('*').eq('pool_id', poolId).eq('user_id', activeEntryId).then(({ data }) => {
-      const predMap: Record<string, Pred> = {}
-      for (const p of data || []) predMap[`${p.fixture_id}:${p.category_id}`] = p
-      setPreds(predMap)
-    })
-  }, [activeEntryId, poolId])
+  async function switchEntry(entryId: string) {
+    setActiveEntryId(entryId)
+    const { data } = await supabase.from('predictions_v2').select('*').eq('pool_id', poolId).eq('user_id', entryId)
+    const predMap: Record<string, Pred> = {}
+    for (const p of data || []) predMap[`${p.fixture_id}:${p.category_id}`] = p
+    setPreds(predMap)
+  }
 
   async function addGhostEntry() {
     if (!newGhostName.trim()) return
@@ -151,7 +149,7 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
     }).select().single()
     if (data) {
       setGhostEntries(prev => [...prev, data])
-      setActiveEntryId(data.id)
+      await switchEntry(data.id)
       setNewGhostName('')
       setAddingGhost(false)
     }
@@ -229,7 +227,7 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
           <div style={{ fontSize: '10px', fontWeight: 600, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>making picks for</div>
           <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginBottom: 8 }}>
             {/* Self */}
-            <button type="button" onClick={() => setActiveEntryId(userId)}
+            <button type="button" onClick={() => switchEntry(userId)}
               style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
                 borderColor: activeEntryId === userId ? '#C8102E' : '#ddd',
                 background: activeEntryId === userId ? '#C8102E' : 'white',
@@ -238,7 +236,7 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
             </button>
             {/* Ghost entries */}
             {ghostEntries.map(g => (
-              <button key={g.id} type="button" onClick={() => setActiveEntryId(g.id)}
+              <button key={g.id} type="button" onClick={() => switchEntry(g.id)}
                 style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
                   borderColor: activeEntryId === g.id ? '#C8102E' : '#ddd',
                   background: activeEntryId === g.id ? '#C8102E' : 'white',
