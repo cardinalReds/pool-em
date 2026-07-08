@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
+const supabase = createClient()
+
 interface MMAFixture {
   id: number
   date: string
@@ -77,7 +79,6 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
   const [activeEntryId, setActiveEntryId] = useState<string>(userId) // who we're making picks for
   const [newGhostName, setNewGhostName] = useState('')
   const [addingGhost, setAddingGhost] = useState(false)
-  const supabase = createClient()
 
   useEffect(() => {
     async function load() {
@@ -217,7 +218,9 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
       {/* Event info */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ fontSize: '13px', fontWeight: 600 }}>{fixtures[0]?.venue}</div>
-        <div style={{ fontSize: '11px', color: '#aaa' }}>{fixtures[0]?.city}</div>
+        <div style={{ fontSize: '11px', color: '#aaa' }}>
+          {fixtures[0]?.city} · {fixtures[0] && new Date(fixtures[0].date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+        </div>
       </div>
 
       {/* Entry switcher — admin only for now */}
