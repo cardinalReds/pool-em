@@ -21,7 +21,7 @@ export default function CreatePoolPage() {
 
   // Step 2 — tournament + deadline
   const [sport, setSport] = useState('soccer')
-  const [tournamentId, setTournamentId] = useState('wc_2026')
+  const [tournamentId, setTournamentId] = useState('')
   const [deadlineType, setDeadlineType] = useState<'before_each_game' | 'before_tournament' | 'before_weekend' | 'before_session'>('before_each_game')
 
   // Step 3a — per-game ruleset (before_each_game only)
@@ -242,9 +242,11 @@ export default function CreatePoolPage() {
               {(sport === 'f1' ? [
                 {id: 'before_weekend', label: 'before each race weekend', desc: 'picks lock before the qualifying session starts — one ticket per GP weekend'},
                 {id: 'before_session', label: 'before each session', desc: 'separate tickets for qualifying and race — picks lock before each session'},
+              ] : sport === 'mma' ? [
+                {id: 'before_each_game', label: 'before each fight', desc: 'picks lock at fight time — predict fight by fight'},
               ] : [
-                {id: 'before_each_game', label: TOURNAMENTS.find(t => t.id === tournamentId)?.sport === 'mma' ? 'before each fight' : 'before each game', desc: TOURNAMENTS.find(t => t.id === tournamentId)?.sport === 'mma' ? 'picks lock at fight time — predict fight by fight' : 'picks lock at kickoff — predict game by game'},
-                ...(TOURNAMENTS.find(t => t.id === tournamentId)?.sport === 'mma' ? [{id: 'before_each_game', label: 'before the card', desc: 'predict all fights before the card starts — picks lock at first fight'}] : [{id: 'before_tournament', label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'}]),
+                {id: 'before_each_game', label: 'before each game', desc: 'picks lock at kickoff — predict game by game'},
+                {id: 'before_tournament', label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'},
               ]).map(opt => (
                 <button key={opt.id} onClick={() => setDeadlineType(opt.id as any)}
                   style={{
