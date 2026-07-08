@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { RULE_PACKAGES } from '@/types'
 import FixturesList from '@/components/FixturesList'
 import F1SessionsList from '@/components/F1SessionsList'
+import MMAFightCard from '@/components/MMAFightCard'
 import ReminderButton from '@/components/ReminderButton'
 import InvitePanel from '@/components/InvitePanel'
 import { DEFAULT_BRACKET_SCORING } from '@/lib/bracketEngine'
@@ -714,6 +715,8 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               ) : user && (
                 pool.sport === 'f1'
                   ? <F1SessionsList poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} />
+                  : pool.sport === 'mma'
+                  ? <MMAFightCard poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} />
                   : <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />
               )}
             </div>
@@ -747,6 +750,8 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               ) : user && (
                 pool.sport === 'f1'
                   ? <F1SessionsList poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} />
+                  : pool.sport === 'mma'
+                  ? <MMAFightCard poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} />
                   : <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />
               )}
             </div>
