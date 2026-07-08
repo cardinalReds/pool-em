@@ -114,7 +114,7 @@ export default function CreatePoolPage() {
     if (poolError) { setError(poolError.message); setLoading(false); return }
 
     // Save per-game rules (before_each_game, before_weekend, before_session pools)
-    if ((deadlineType === 'before_each_game' || deadlineType === 'before_weekend' || deadlineType === 'before_session') && selectedRules.length > 0) {
+    if (selectedRules.length > 0) {
       await supabase.from('pool_rules').insert(
         selectedRules.map(r => ({
           pool_id: pool.id,
@@ -244,7 +244,7 @@ export default function CreatePoolPage() {
                 {id: 'before_session', label: 'before each session', desc: 'separate tickets for qualifying and race — picks lock before each session'},
               ] : [
                 {id: 'before_each_game', label: TOURNAMENTS.find(t => t.id === tournamentId)?.sport === 'mma' ? 'before each fight' : 'before each game', desc: TOURNAMENTS.find(t => t.id === tournamentId)?.sport === 'mma' ? 'picks lock at fight time — predict fight by fight' : 'picks lock at kickoff — predict game by game'},
-                ...(TOURNAMENTS.find(t => t.id === tournamentId)?.sport === 'mma' ? [{id: 'before_tournament', label: 'before the card', desc: 'predict all fights before the card starts — picks lock at first fight'}] : [{id: 'before_tournament', label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'}]),
+                ...(TOURNAMENTS.find(t => t.id === tournamentId)?.sport === 'mma' ? [{id: 'before_each_game', label: 'before the card', desc: 'predict all fights before the card starts — picks lock at first fight'}] : [{id: 'before_tournament', label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'}]),
               ]).map(opt => (
                 <button key={opt.id} onClick={() => setDeadlineType(opt.id as any)}
                   style={{
