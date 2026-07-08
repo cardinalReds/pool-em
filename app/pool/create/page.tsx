@@ -125,8 +125,8 @@ export default function CreatePoolPage() {
       )
     }
 
-    // Save bracket scoring rules (before_tournament pools)
-    if (deadlineType === 'before_tournament') {
+    // Save bracket scoring rules (before_tournament soccer/f1 pools only, not MMA)
+    if (deadlineType === 'before_tournament' && sport !== 'mma') {
       await supabase.from('bracket_scoring_rules').upsert({
         pool_id: pool.id,
         group_format: groupFormat,
@@ -244,6 +244,7 @@ export default function CreatePoolPage() {
                 {id: 'before_session', label: 'before each session', desc: 'separate tickets for qualifying and race — picks lock before each session'},
               ] : sport === 'mma' ? [
                 {id: 'before_each_game', label: 'before each fight', desc: 'picks lock at fight time — predict fight by fight'},
+                {id: 'before_tournament', label: 'before the card', desc: 'predict all fights before the card starts — picks lock at first fight'},
               ] : [
                 {id: 'before_each_game', label: 'before each game', desc: 'picks lock at kickoff — predict game by game'},
                 {id: 'before_tournament', label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'},
