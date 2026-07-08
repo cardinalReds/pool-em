@@ -148,6 +148,9 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
       setPreds(predMap)
       setMembers(membersRes.data || [])
       setAllPreds(allPredsRes.data || [])
+      // Merge ghost entries into members list
+      const ghosts = (ghostRes.data || []).map((g: any) => ({ user_id: g.id, display_name: g.name }))
+      setMembers([...(membersRes.data || []), ...ghosts])
 
       // Auto-select tab with live fight, else earliest upcoming
       const all = fixturesRes.data || []
@@ -527,7 +530,7 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
               })}
             </div>
 
-            {/* Everyone's picks */}
+            {/* Everyone's picks — only show after segment locks */}
             {members.length > 1 && (
               <div style={{ padding: '10px 12px', borderTop: '1px solid #f0f0f0' }}>
                 <div style={{ fontSize: '10px', fontWeight: 600, color: '#bbb', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>everyone's picks</div>
@@ -544,23 +547,26 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                       let memberPts = 0
                       return (
                         <tr key={m.user_id} style={{ borderTop: '1px solid #f9f9f9' }}>
-                          <td style={{ padding: '4px 0', color: m.user_id === userId ? '#C8102E' : '#555', fontWeight: m.user_id === userId ? 600 : 400, fontSize: '11px' }}>
+                          <td style={{ padding: '4px 0', color: m.user_id === activeEntryId ? '#C8102E' : '#555', fontWeight: m.user_id === activeEntryId ? 600 : 400, fontSize: '11px' }}>
                             {m.display_name}{m.user_id === userId ? ' (you)' : ''}
                           </td>
                           {poolRules.map(r => {
                             const p = allPreds.find(x => x.user_id === m.user_id && x.fixture_id === fight.id && x.category_id === r.category_id)
                             if (p?.points_earned) memberPts += p.points_earned
-                            const display = p?.value_wld === 'home' ? lastName(fight.home_team)
-                              : p?.value_wld === 'away' ? lastName(fight.away_team)
-                              : p?.value_text || (p?.value_number ? `R${p.value_number}` : '—')
-                            const correct = p?.is_correct
+                            const hasPick = p?.value_wld || p?.value_text || p?.value_number != null
+                            const display = !locked && m.user_id !== activeEntryId
+                              ? (hasPick ? '🔒' : '—')
+                              : p?.value_wld === 'home' ? (fight.fighter1_last_name || lastName(fight.home_team))
+                              : p?.value_wld === 'away' ? (fight.fighter2_last_name || lastName(fight.away_team))
+                              : p?.value_text || (p?.value_number != null ? `R${p.value_number}` : '—')
+                            const correct = locked ? p?.is_correct : null
                             return (
                               <td key={r.category_id} style={{ textAlign: 'center' as const, padding: '4px 2px', color: correct === true ? '#2d7a2d' : correct === false ? '#C8102E' : '#555', fontSize: '11px' }}>
                                 {display || '—'}{correct === true ? ' ✓' : correct === false ? ' ✗' : ''}
                               </td>
                             )
                           })}
-                          <td style={{ textAlign: 'right' as const, fontWeight: 700, color: m.user_id === userId ? '#C8102E' : '#888', fontSize: '11px' }}>{memberPts || 0}</td>
+                          <td style={{ textAlign: 'right' as const, fontWeight: 700, color: m.user_id === activeEntryId ? '#C8102E' : '#888', fontSize: '11px' }}>{locked ? (memberPts || 0) : ''}</td>
                         </tr>
                       )
                     })}
