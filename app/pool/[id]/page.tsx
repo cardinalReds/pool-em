@@ -544,7 +544,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
       {/* Scoring */}
       <Section title="scoring" defaultOpen={!isMobile}>
-        {pool.deadline_type === 'before_tournament' ? (
+        {pool.deadline_type === 'before_tournament' && pool.sport !== 'mma' ? (
           <div style={{fontSize: '12px', color: '#555', lineHeight: 1.9}}>
             {(() => {
               const bsr = bracketScoringRules
@@ -701,7 +701,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                   </div>
                 </div>
               )}
-              {user && pool.deadline_type === 'before_tournament' ? (
+              {user && pool.deadline_type === 'before_tournament' && pool.sport !== 'mma' ? (
                 <>
                   <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} isAdmin={isAdmin} tournamentId={pool.tournament_id} />
                   {new Date() >= new Date('2026-06-11T19:00:00Z') && (
@@ -734,7 +734,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           {/* Predictions */}
           <div style={{padding: '40px 24px', overflowY: 'auto', display: 'flex', justifyContent: 'center'}}>
             <div style={{width: '100%', maxWidth: 560}}>
-              {user && pool.deadline_type === 'before_tournament' ? (
+              {user && pool.deadline_type === 'before_tournament' && pool.sport !== 'mma' ? (
                 <>
                   <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} isAdmin={isAdmin} tournamentId={pool.tournament_id} />
                   {new Date() >= new Date('2026-06-11T19:00:00Z') && (
