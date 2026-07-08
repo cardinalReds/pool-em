@@ -60,6 +60,15 @@ const SEGMENT_LABEL: Record<string, string> = {
 
 const SEGMENTS = ['main_card', 'prelims', 'early_prelims']
 
+function lastName(name: string): string {
+  const suffixes = ['III', 'II', 'IV', 'Jr', 'Jr.', 'Sr', 'Sr.']
+  const parts = name.split(' ')
+  if (parts.length >= 2 && suffixes.includes(parts[parts.length - 1])) {
+    return parts.slice(-2).join(' ')
+  }
+  return parts[parts.length - 1] || name
+}
+
 function fmtTime(dateStr: string) {
   return new Date(dateStr).toLocaleString('en-US', {
     weekday: 'short', month: 'short', day: 'numeric',
@@ -351,7 +360,7 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                       {fight.home_team.split(' ').slice(0, -1).join(' ')}
                     </div>
                     <div style={{ fontSize: '16px', fontWeight: 900, color: winner === fight.home_team ? '#2d7a2d' : '#111' }}>
-                      {fight.home_team.split(' ').pop()}
+                      {lastName(fight.home_team)}
                     </div>
                     {winner === fight.home_team && <div style={{ fontSize: '10px', fontWeight: 700, color: '#2d7a2d' }}>WIN</div>}
                   </div>
@@ -385,7 +394,7 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                       {fight.away_team.split(' ').slice(0, -1).join(' ')}
                     </div>
                     <div style={{ fontSize: '16px', fontWeight: 900, color: winner === fight.away_team ? '#2d7a2d' : '#111' }}>
-                      {fight.away_team.split(' ').pop()}
+                      {lastName(fight.away_team)}
                     </div>
                     {winner === fight.away_team && <div style={{ fontSize: '10px', fontWeight: 700, color: '#2d7a2d' }}>WIN</div>}
                   </div>
@@ -436,12 +445,12 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                         <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
                           disabled={locked || isFinished}
                           onClick={() => !locked && !isFinished && savePred(fight.id, rule.category_id, { value_wld: 'home' })}>
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>{fight.home_team.split(' ').pop()}</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>{lastName(fight.home_team)}</span>
                         </button>
                         <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
                           disabled={locked || isFinished}
                           onClick={() => !locked && !isFinished && savePred(fight.id, rule.category_id, { value_wld: 'away' })}>
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>{fight.away_team.split(' ').pop()}</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>{lastName(fight.away_team)}</span>
                         </button>
                       </div>
                     )}
@@ -508,8 +517,8 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                           {poolRules.map(r => {
                             const p = allPreds.find(x => x.user_id === m.user_id && x.fixture_id === fight.id && x.category_id === r.category_id)
                             if (p?.points_earned) memberPts += p.points_earned
-                            const display = p?.value_wld === 'home' ? fight.home_team.split(' ').pop()
-                              : p?.value_wld === 'away' ? fight.away_team.split(' ').pop()
+                            const display = p?.value_wld === 'home' ? lastName(fight.home_team)
+                              : p?.value_wld === 'away' ? lastName(fight.away_team)
                               : p?.value_text || (p?.value_number ? `R${p.value_number}` : '—')
                             const correct = p?.is_correct
                             return (
