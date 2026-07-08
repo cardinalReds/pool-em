@@ -761,7 +761,7 @@ export default function FixturesList({
   const [currentPage, setCurrentPage] = useState(0)
 
   const isCustom = packageId?.toUpperCase() === 'CUSTOM'
-  const isMMA = tournamentId === 'ufc_freedom_250'
+  const isMMA = tournamentId?.startsWith('ufc_') || tournamentId?.includes('mma')
   const hasPerGame = poolRules.some(r => r.prediction_type === 'per_game')
   const hasPerRound = poolRules.some(r => r.prediction_type === 'per_round')
   const onlyRoundSpecials = isCustom && hasPerRound && !hasPerGame
