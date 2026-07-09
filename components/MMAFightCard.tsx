@@ -531,47 +531,54 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
             </div>
 
             {/* Everyone's picks — only show after segment locks */}
-            {members.length > 1 && (
+            {(locked || isLive || isFinished) && members.length > 1 && (
               <div style={{ padding: '10px 12px', borderTop: '1px solid #f0f0f0' }}>
-                <div style={{ fontSize: '10px', fontWeight: 600, color: '#bbb', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>everyone's picks</div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: 'left' as const, color: '#aaa', fontWeight: 400, paddingBottom: 4 }}>player</th>
-                      {poolRules.map(r => <th key={r.category_id} style={{ textAlign: 'center' as const, color: '#aaa', fontWeight: 400, paddingBottom: 4, fontSize: '10px' }}>{r.name.split(' ')[0]}</th>)}
-                      <th style={{ textAlign: 'right' as const, color: '#aaa', fontWeight: 400, paddingBottom: 4 }}>pts</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {members.map(m => {
-                      let memberPts = 0
-                      return (
-                        <tr key={m.user_id} style={{ borderTop: '1px solid #f9f9f9' }}>
-                          <td style={{ padding: '4px 0', color: m.user_id === activeEntryId ? '#C8102E' : '#555', fontWeight: m.user_id === activeEntryId ? 600 : 400, fontSize: '11px' }}>
-                            {m.display_name}{m.user_id === userId ? ' (you)' : ''}
-                          </td>
-                          {poolRules.map(r => {
+                <div style={{ fontSize: '10px', fontWeight: 600, color: '#bbb', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8 }}>everyone's picks</div>
+                <div style={{ overflowX: 'auto' as const }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                    <thead>
+                      <tr>
+                        <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600 }}></td>
+                        {poolRules.map(r => <td key={r.category_id} style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'center' as const, whiteSpace: 'nowrap' as const }}>{r.name}</td>)}
+                        {(isFinished || isLive) && <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'right' as const }}>pts</td>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {members
+                        .filter(m => poolRules.some(r => {
+                          const p = allPreds.find(x => x.user_id === m.user_id && x.fixture_id === fight.id && x.category_id === r.category_id)
+                          return p && (p.value_wld || p.value_text || p.value_number != null)
+                        }))
+                        .map(m => {
+                          const memberPts = poolRules.reduce((sum, r) => {
                             const p = allPreds.find(x => x.user_id === m.user_id && x.fixture_id === fight.id && x.category_id === r.category_id)
-                            if (p?.points_earned) memberPts += p.points_earned
-                            const hasPick = p?.value_wld || p?.value_text || p?.value_number != null
-                            const display = !locked && m.user_id !== activeEntryId
-                              ? (hasPick ? '🔒' : '—')
-                              : p?.value_wld === 'home' ? (fight.fighter1_last_name || lastName(fight.home_team))
-                              : p?.value_wld === 'away' ? (fight.fighter2_last_name || lastName(fight.away_team))
-                              : p?.value_text || (p?.value_number != null ? `R${p.value_number}` : '—')
-                            const correct = locked ? p?.is_correct : null
-                            return (
-                              <td key={r.category_id} style={{ textAlign: 'center' as const, padding: '4px 2px', color: correct === true ? '#2d7a2d' : correct === false ? '#C8102E' : '#555', fontSize: '11px' }}>
-                                {display || '—'}{correct === true ? ' ✓' : correct === false ? ' ✗' : ''}
+                            return sum + (p?.points_earned || 0)
+                          }, 0)
+                          const isMe = m.user_id === activeEntryId
+                          return (
+                            <tr key={m.user_id} style={{ background: isMe ? '#fff5f5' : 'transparent' }}>
+                              <td style={{ padding: '4px 6px', fontWeight: isMe ? 700 : 400, color: isMe ? '#C8102E' : '#555', whiteSpace: 'nowrap' as const, borderTop: '1px solid #f5f5f5' }}>
+                                {m.display_name}{m.user_id === userId ? ' (you)' : ''}
                               </td>
-                            )
-                          })}
-                          <td style={{ textAlign: 'right' as const, fontWeight: 700, color: m.user_id === activeEntryId ? '#C8102E' : '#888', fontSize: '11px' }}>{locked ? (memberPts || 0) : ''}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                              {poolRules.map(r => {
+                                const p = allPreds.find(x => x.user_id === m.user_id && x.fixture_id === fight.id && x.category_id === r.category_id)
+                                const correct = p?.is_correct
+                                const display = p?.value_wld === 'home' ? (fight.fighter1_last_name || lastName(fight.home_team))
+                                  : p?.value_wld === 'away' ? (fight.fighter2_last_name || lastName(fight.away_team))
+                                  : p?.value_text || (p?.value_number != null ? `R${p.value_number}` : '—')
+                                return (
+                                  <td key={r.category_id} style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', color: correct === true ? '#2d7a2d' : correct === false ? '#C8102E' : '#555' }}>
+                                    {display || '—'}{correct === true ? ' ✓' : correct === false ? ' ✗' : ''}
+                                  </td>
+                                )
+                              })}
+                              {(isFinished || isLive) && <td style={{ padding: '4px 6px', textAlign: 'right' as const, fontWeight: 700, color: isMe ? '#C8102E' : '#888', borderTop: '1px solid #f5f5f5' }}>{memberPts}</td>}
+                            </tr>
+                          )
+                        })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
