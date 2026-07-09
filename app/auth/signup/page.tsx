@@ -48,8 +48,8 @@ export default function SignupPage() {
 
       <form onSubmit={handleSignup} style={{display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
         <div>
-          <label style={{display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.3rem', color: 'var(--text-dim)'}}>your name</label>
-          <input className="input" type="text" placeholder="what your friends call you" value={displayName}
+          <label style={{display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.3rem', color: 'var(--text-dim)'}}>username</label>
+          <input className="input" type="text" placeholder="your username" value={displayName}
             onChange={e => setDisplayName(e.target.value)} required
             style={{fontSize: '16px', padding: '0.65rem 0.75rem'}} />
         </div>
