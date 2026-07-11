@@ -576,6 +576,10 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                             const p = allPreds.find(x => x.user_id === m.user_id && x.fixture_id === fight.id && x.category_id === r.category_id)
                             return sum + (p?.points_earned || 0)
                           }, 0)
+                          return { m, memberPts }
+                        })
+                        .sort((a, b) => b.memberPts - a.memberPts)
+                        .map(({ m, memberPts }) => {
                           const isMe = m.user_id === activeEntryId
                           return (
                             <tr key={m.user_id} style={{ background: isMe ? '#fff5f5' : 'transparent' }}>
