@@ -552,31 +552,8 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
               })}
             </div>
 
-            {/* Actual row */}
-            {isFinished && (
-              <div style={{ padding: '8px 12px', borderTop: '1px solid #f0f0f0', background: '#f9f9f9', display: 'flex', gap: 16, alignItems: 'center' }}>
-                <div style={{ fontSize: '10px', fontWeight: 700, color: '#2d7a2d', textTransform: 'uppercase' as const, letterSpacing: '0.06em', flexShrink: 0 }}>actual</div>
-                {poolRules.map(rule => {
-                  let actual = '—'
-                  if (rule.category_id === 'mma_result') {
-                    actual = winner ? (winner === fight.home_team ? (fight.fighter1_last_name || lastName(fight.home_team)) : (fight.fighter2_last_name || lastName(fight.away_team))) : '—'
-                  } else if (rule.category_id === 'mma_method') {
-                    actual = fight.result_method || '—'
-                  } else if (rule.category_id === 'mma_round_finish') {
-                    actual = fight.result_method === 'Decision' ? 'Decision' : fight.result_round ? `R${fight.result_round}` : '—'
-                  }
-                  return (
-                    <div key={rule.category_id} style={{ flex: 1, textAlign: 'center' as const }}>
-                      <div style={{ fontSize: '9px', color: '#aaa', marginBottom: 2 }}>{rule.name}</div>
-                      <div style={{ fontSize: '11px', fontWeight: 600, color: '#2d7a2d' }}>{actual}</div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* Everyone's picks — only show after segment locks */}
-            {(locked || isLive || isFinished) && members.length > 1 && (
+            {/* Everyone's picks — visible once locked or live, like soccer */}
+            {(locked || isLive || isNextUp || isFinished) && members.length > 1 && (
               <div style={{ padding: '10px 12px', borderTop: '1px solid #f0f0f0' }}>
                 <div style={{ fontSize: '10px', fontWeight: 600, color: '#bbb', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8 }}>everyone's picks</div>
                 <div style={{ overflowX: 'auto' as const }}>
@@ -585,7 +562,7 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                       <tr>
                         <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600 }}></td>
                         {poolRules.map(r => <td key={r.category_id} style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'center' as const, whiteSpace: 'nowrap' as const }}>{r.name}</td>)}
-                        {(isFinished || isLive) && <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'right' as const }}>pts</td>}
+                        {isFinished && <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'right' as const }}>pts</td>}
                       </tr>
                     </thead>
                     <tbody>
@@ -617,11 +594,36 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                                   </td>
                                 )
                               })}
-                              {(isFinished || isLive) && <td style={{ padding: '4px 6px', textAlign: 'right' as const, fontWeight: 700, color: isMe ? '#C8102E' : '#888', borderTop: '1px solid #f5f5f5' }}>{memberPts}</td>}
+                              {isFinished && <td style={{ padding: '4px 6px', textAlign: 'right' as const, fontWeight: 700, color: isMe ? '#C8102E' : '#888', borderTop: '1px solid #f5f5f5' }}>{memberPts}</td>}
                             </tr>
                           )
                         })}
                     </tbody>
+                    {isFinished && (
+                      <tfoot>
+                        <tr>
+                          <td style={{ padding: '6px 6px 2px', fontSize: '10px', fontWeight: 700, color: '#2d7a2d', borderTop: '2px solid #eee', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>actual</td>
+                          {poolRules.map(r => {
+                            let actual = '—'
+                            if (r.category_id === 'mma_result') {
+                              actual = winner
+                                ? (winner === fight.home_team ? (fight.fighter1_last_name || lastName(fight.home_team)) : (fight.fighter2_last_name || lastName(fight.away_team)))
+                                : '—'
+                            } else if (r.category_id === 'mma_method') {
+                              actual = fight.result_method || '—'
+                            } else if (r.category_id === 'mma_round_finish') {
+                              actual = fight.result_method === 'Decision' ? 'Decision' : fight.result_round ? `R${fight.result_round}` : '—'
+                            }
+                            return (
+                              <td key={r.category_id} style={{ padding: '6px 6px 2px', textAlign: 'center' as const, borderTop: '2px solid #eee', fontSize: '11px', fontWeight: 600, color: '#2d7a2d' }}>
+                                {actual}
+                              </td>
+                            )
+                          })}
+                          <td style={{ borderTop: '2px solid #eee' }} />
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
               </div>
