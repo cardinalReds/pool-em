@@ -220,7 +220,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
       const pointsMap: Record<string, number> = {}
       const maxPossibleMap: Record<string, number> = {}
-      if (pool.deadline_type === 'before_tournament') {
+      if (pool.deadline_type === 'before_tournament' && pool.sport !== 'mma') {
         const { data: bracketScores } = await supabase
           .from('bracket_picks')
           .select('user_id, bracket_scores')
