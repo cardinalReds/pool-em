@@ -124,6 +124,8 @@ export async function POST(request: NextRequest) {
         scored: true,
         home_score: winner?.id === result.fighter1?.id ? 1 : 0,
         away_score: winner?.id === result.fighter2?.id ? 1 : 0,
+        result_method: result.result_method || null,
+        result_round: result.result_method === 'Decision' ? null : (result.result_round || null),
       }).eq('id', fixture.id)
 
       scored++

@@ -24,6 +24,8 @@ interface MMAFixture {
   city: string
   fighter1_last_name: string | null
   fighter2_last_name: string | null
+  result_method: string | null
+  result_round: number | null
   weight_class: string | null
   fighter1_nationality: string | null
   fighter2_nationality: string | null
@@ -152,10 +154,19 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
       const ghosts = (ghostRes.data || []).map((g: any) => ({ user_id: g.id, display_name: g.name }))
       setMembers([...(membersRes.data || []), ...ghosts])
 
-      // Auto-select tab with live fight, else earliest upcoming
+      // Auto-select tab: live first, then segment with next upcoming fight
       const all = fixturesRes.data || []
       const live = all.find((f: MMAFixture) => f.status === 'live')
-      if (live) { setActiveTab(live.card_segment || 'main_card') }
+      if (live) {
+        setActiveTab(live.card_segment || 'main_card')
+      } else {
+        // Find segment that has unfinished fights (NS or not FT)
+        const segmentOrder = ['early_prelims', 'prelims', 'main_card']
+        const nextSeg = segmentOrder.find(seg =>
+          all.some((f: MMAFixture) => f.card_segment === seg && f.status !== 'FT')
+        )
+        if (nextSeg) setActiveTab(nextSeg)
+      }
 
       setLoading(false)
     }
@@ -227,10 +238,18 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
   // Sort within each segment: fight_order 1 = headliner = top. Live bubbles to very top.
   for (const seg of Object.keys(bySegment)) {
     bySegment[seg].sort((a, b) => {
-      const aLive = a.status === 'live' ? -1 : 0
-      const bLive = b.status === 'live' ? -1 : 0
+      // Live first
+      const aLive = a.status === 'live' ? 0 : 1
+      const bLive = b.status === 'live' ? 0 : 1
       if (aLive !== bLive) return aLive - bLive
-      return (a.fight_order || 99) - (b.fight_order || 99) // 1 = top
+      // FT to bottom, sorted by fight_order descending (last fight fought = bottom)
+      const aFt = a.status === 'FT'
+      const bFt = b.status === 'FT'
+      if (aFt && bFt) return (b.fight_order || 0) - (a.fight_order || 0)
+      if (aFt) return 1
+      if (bFt) return -1
+      // NS: next up = highest fight_order among remaining = top
+      return (b.fight_order || 0) - (a.fight_order || 0)
     })
   }
 
@@ -529,6 +548,29 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                 )
               })}
             </div>
+
+            {/* Actual row */}
+            {isFinished && (
+              <div style={{ padding: '8px 12px', borderTop: '1px solid #f0f0f0', background: '#f9f9f9', display: 'flex', gap: 16, alignItems: 'center' }}>
+                <div style={{ fontSize: '10px', fontWeight: 700, color: '#2d7a2d', textTransform: 'uppercase' as const, letterSpacing: '0.06em', flexShrink: 0 }}>actual</div>
+                {poolRules.map(rule => {
+                  let actual = '—'
+                  if (rule.category_id === 'mma_result') {
+                    actual = winner ? (winner === fight.home_team ? (fight.fighter1_last_name || lastName(fight.home_team)) : (fight.fighter2_last_name || lastName(fight.away_team))) : '—'
+                  } else if (rule.category_id === 'mma_method') {
+                    actual = fight.result_method || '—'
+                  } else if (rule.category_id === 'mma_round_finish') {
+                    actual = fight.result_method === 'Decision' ? 'Decision' : fight.result_round ? `R${fight.result_round}` : '—'
+                  }
+                  return (
+                    <div key={rule.category_id} style={{ flex: 1, textAlign: 'center' as const }}>
+                      <div style={{ fontSize: '9px', color: '#aaa', marginBottom: 2 }}>{rule.name}</div>
+                      <div style={{ fontSize: '11px', fontWeight: 600, color: '#2d7a2d' }}>{actual}</div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
 
             {/* Everyone's picks — only show after segment locks */}
             {(locked || isLive || isFinished) && members.length > 1 && (
