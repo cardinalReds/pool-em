@@ -362,6 +362,9 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
       {tabFights.map(fight => {
         const locked = isLocked(fight, activeTab)
         const isLive = fight.status === 'live'
+        const cardStarted = Object.values(bySegment).flat().some(f => f.status === 'FT')
+        const isNextUp = cardStarted && fight.status === 'NS' && 
+          !bySegment[activeTab]?.some(f => f.status === 'NS' && (f.fight_order || 0) > (fight.fight_order || 0))
         const isFinished = fight.home_score !== null && fight.away_score !== null
         const winner = fight.home_score === 1 ? fight.home_team : fight.away_score === 1 ? fight.away_team : null
         const isMain = fight.fight_order === 1 && activeTab === 'main_card'
@@ -369,12 +372,12 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
         return (
           <div key={fight.id} style={{
             marginBottom: 24,
-            border: isLive ? '2px solid #2d7a2d' : '1px solid #e0e0db',
+            border: (isLive || isNextUp) ? '2px solid #2d7a2d' : '1px solid #e0e0db',
             background: 'white',
             overflow: 'hidden',
           }}>
             {/* Live banner */}
-            {isLive && (
+            {(isLive || isNextUp) && (
               <div style={{ background: '#2d7a2d', padding: '4px 12px', display: 'flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'white', display: 'inline-block' }} />
                 <span style={{ color: 'white', fontSize: '10px', fontWeight: 700 }}>LIVE</span>
