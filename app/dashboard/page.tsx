@@ -20,7 +20,7 @@ export default function DashboardPage() {
     if (!user) { window.location.href = '/auth/login'; return }
     setUser(user)
 
-    const { data: admin } = await supabase.from('pools').select('*').eq('admin_id', user.id).order('created_at', { ascending: false })
+    const { data: admin } = await supabase.from('pools').select('*, sport').eq('admin_id', user.id).order('created_at', { ascending: false })
     const { data: member } = await supabase.from('pool_members').select('*, pools(*)').eq('user_id', user.id).order('joined_at', { ascending: false })
 
     setAdminPools(admin || [])
@@ -30,9 +30,27 @@ export default function DashboardPage() {
 
     const { data: liveFixtures } = await supabase.from('fixtures').select('tournament_id').eq('status', 'live')
     const { data: liveF1Sessions } = await supabase.from('f1_sessions').select('tournament_id').eq('status', 'In Progress')
+
+    // MMA: live tag shows from first fight FT until all fights are scored
+    const mmaTournamentIds = allPools.filter(p => p?.sport === 'mma').map(p => p.tournament_id).filter(Boolean)
+    const mmaTournamentsInProgress = new Set<string>()
+    if (mmaTournamentIds.length) {
+      const { data: mmaFixtures } = await supabase.from('fixtures').select('tournament_id, status, scored').in('tournament_id', mmaTournamentIds)
+      const byTournament: Record<string, any[]> = {}
+      for (const f of mmaFixtures || []) {
+        if (!byTournament[f.tournament_id]) byTournament[f.tournament_id] = []
+        byTournament[f.tournament_id].push(f)
+      }
+      for (const [tid, fights] of Object.entries(byTournament)) {
+        const hasStarted = fights.some(f => f.status !== 'NS')
+        const allDone = fights.every(f => f.scored)
+        if (hasStarted && !allDone) mmaTournamentsInProgress.add(tid)
+      }
+    }
+
     const liveSoccerTournaments = new Set((liveFixtures || []).map((f: any) => f.tournament_id))
     const liveF1Tournaments = new Set((liveF1Sessions || []).map((s: any) => s.tournament_id))
-    const allLiveTournaments = new Set([...liveSoccerTournaments, ...liveF1Tournaments])
+    const allLiveTournaments = new Set([...liveSoccerTournaments, ...liveF1Tournaments, ...mmaTournamentsInProgress])
     if (allLiveTournaments.size > 0) {
       const liveIds = new Set(allPools.filter(p => p && allLiveTournaments.has(p.tournament_id)).map(p => p.id) as string[])
       setLivePoolIds(liveIds)
