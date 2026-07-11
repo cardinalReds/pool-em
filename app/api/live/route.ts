@@ -219,23 +219,21 @@ async function fetchFixtureStats(apiFixtureId: number): Promise<{ homeCorners: n
 }
 
 async function fetchLiveMMAFights(): Promise<any[]> {
-  const res = await fetch(
-    `https://v1.mma.api-sports.io/fights?date=${new Date().toISOString().slice(0, 10)}`,
-    { headers: { 'x-apisports-key': process.env.API_FOOTBALL_KEY! } }
-  )
-  if (!res.ok) return []
-  const data = await res.json()
-  return (data.response ?? []).filter((f: any) => ['IN', 'PF', 'LIVE', 'EOR', 'FT'].includes(f.status?.short))
-}
-
-async function fetchMMAResult(apiId: number): Promise<any> {
-  const res = await fetch(
-    `https://v1.mma.api-sports.io/fights/results?id=${apiId}`,
-    { headers: { 'x-apisports-key': process.env.API_FOOTBALL_KEY! } }
-  )
-  if (!res.ok) return null
-  const data = await res.json()
-  return data.response?.[0] ?? null
+  // Try today and tomorrow (UTC) to catch cross-midnight events
+  const today = new Date().toISOString().slice(0, 10)
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const results: any[] = []
+  for (const date of [today, tomorrow]) {
+    const res = await fetch(
+      `https://api.balldontlie.io/mma/v1/fights?date=${date}&per_page=100`,
+      { headers: { 'Authorization': process.env.BALLDONTLIE_API_KEY! } }
+    )
+    if (!res.ok) continue
+    const data = await res.json()
+    const fights = (data.data ?? []).filter((f: any) => ['in_progress', 'completed'].includes(f.status))
+    results.push(...fights)
+  }
+  return results
 }
 
 async function handleMMATournament() {
@@ -246,9 +244,9 @@ async function handleMMATournament() {
 
   for (const fight of liveFights) {
     const apiId = fight.id
-    const apiStatus = fight.status?.short
-    const isFinished = apiStatus === 'FT'
-    const isLive = ['IN', 'PF', 'LIVE', 'EOR'].includes(apiStatus)
+    const apiStatus = fight.status
+    const isFinished = apiStatus === 'completed'
+    const isLive = apiStatus === 'in_progress'
 
     const { data: ourFixture } = await supabase
       .from('fixtures')
@@ -292,7 +290,7 @@ async function handleMMATournament() {
 
 async function triggerScoring(fixtureId: string) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL
-  await fetch(`${appUrl}/api/score`, {
+  await fetch(`${appUrl}/api/mma/score`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -324,13 +322,8 @@ export async function GET(request: Request) {
     const results: Record<string, any> = {}
 
     for (const tournament of activeTournaments) {
-      // ── MMA tournaments ──────────────────────────────────────────────
-      if (tournament.id === 'ufc_freedom_250') {
-        results[tournament.id] = await handleMMATournament()
-        continue
-      }
-
       // ── Soccer tournaments ───────────────────────────────────────────
+      if (tournament.sport === 'mma' || tournament.id.startsWith('ufc_') || tournament.id.startsWith('f1_')) continue
       // Only call API if there are live fixtures OR fixtures that started in the last 3 hours
       const now = new Date()
       const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000)
