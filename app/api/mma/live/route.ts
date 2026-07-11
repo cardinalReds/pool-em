@@ -9,19 +9,21 @@ const supabase = createClient(
 const BDL_KEY = process.env.BALLDONTLIE_API_KEY!
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.pool-em.com'
 
-async function fetchLiveMMAFights(): Promise<any[]> {
-  const today = new Date().toISOString().slice(0, 10)
-  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+async function fetchMMAFightsByEvent(eventId: number): Promise<any[]> {
+  const res = await fetch(
+    `https://api.balldontlie.io/mma/v1/fights?event_ids[]=${eventId}&per_page=100`,
+    { headers: { Authorization: BDL_KEY } }
+  )
+  if (!res.ok) return []
+  const data = await res.json()
+  return data.data ?? []
+}
+
+async function fetchLiveMMAFights(eventIds: number[]): Promise<any[]> {
   const results: any[] = []
-  for (const date of [today, tomorrow]) {
-    const res = await fetch(
-      `https://api.balldontlie.io/mma/v1/fights?date=${date}&per_page=100`,
-      { headers: { Authorization: BDL_KEY } }
-    )
-    if (!res.ok) continue
-    const data = await res.json()
-    const fights = (data.data ?? []).filter((f: any) => ['in_progress', 'completed'].includes(f.status))
-    results.push(...fights)
+  for (const eventId of eventIds) {
+    const fights = await fetchMMAFightsByEvent(eventId)
+    results.push(...fights.filter((f: any) => ['in_progress', 'completed'].includes(f.status)))
   }
   return results
 }
@@ -53,7 +55,15 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: true, skipped: true, reason: 'no active mma tournaments' })
     }
 
-    const liveFights = await fetchLiveMMAFights()
+    // Get BallDontLie event IDs from tournaments table
+    const eventIds: number[] = []
+    for (const t of activeTournaments) {
+      const { data: tData } = await supabase.from('tournaments').select('api_league_id').eq('id', t.id).single()
+      if (tData?.api_league_id) eventIds.push(tData.api_league_id)
+    }
+    if (!eventIds.length) return NextResponse.json({ ok: true, skipped: true, reason: 'no event IDs configured' })
+
+    const liveFights = await fetchLiveMMAFights(eventIds)
     if (!liveFights.length) {
       return NextResponse.json({ ok: true, live: 0, updated: 0 })
     }
