@@ -465,6 +465,11 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
               {locked && !isFinished && (
                 <div style={{ fontSize: '11px', color: '#aaa', textAlign: 'center' as const, marginBottom: 8 }}>🔒 picks locked</div>
               )}
+              {poolRules.length >= 3 && !isFinished && (
+                <div style={{ fontSize: '10px', color: '#C8102E', textAlign: 'center' as const, marginBottom: 8, fontWeight: 600 }}>
+                  🎯 get all 3 right for a +4 bonus
+                </div>
+              )}
 
               {poolRules.map(rule => {
                 const key = `${fight.id}:${rule.category_id}`

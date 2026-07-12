@@ -108,6 +108,8 @@ export async function POST(request: NextRequest) {
           .eq('pool_id', pool.id)
           .eq('fixture_id', fixture.id)
 
+        // Group preds by user for perfect fight bonus
+        const predsByUser: Record<string, any[]> = {}
         for (const pred of preds || []) {
           const rule = ruleMap[pred.category_id]
           if (!rule) continue
@@ -115,6 +117,28 @@ export async function POST(request: NextRequest) {
           await supabase.from('predictions_v2')
             .update({ points_earned: points, is_correct: points > 0 })
             .eq('id', pred.id)
+          if (!predsByUser[pred.user_id]) predsByUser[pred.user_id] = []
+          predsByUser[pred.user_id].push({ ...pred, points_earned: points })
+        }
+
+        // Perfect fight bonus — 4pts if all scored categories are correct
+        const BONUS_POINTS = 4
+        const scoredCategories = ['mma_result', 'mma_method', 'mma_round_finish'].filter(c => ruleMap[c])
+        if (scoredCategories.length > 0) {
+          for (const [userId, userPreds] of Object.entries(predsByUser)) {
+            const allCorrect = scoredCategories.every(cat => 
+              userPreds.some(p => p.category_id === cat && p.points_earned > 0)
+            )
+            if (allCorrect) {
+              // Add bonus to the result prediction
+              const resultPred = userPreds.find(p => p.category_id === 'mma_result')
+              if (resultPred) {
+                await supabase.from('predictions_v2')
+                  .update({ points_earned: (resultPred.points_earned || 0) + BONUS_POINTS })
+                  .eq('id', resultPred.id)
+              }
+            }
+          }
         }
       }
 

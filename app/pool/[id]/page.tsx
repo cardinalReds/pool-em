@@ -614,6 +614,12 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 </div>
               )
             })}
+            {pool.sport === 'mma' && poolRules.length >= 3 && (
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid #f5f5f5'}}>
+                <span style={{fontSize: '12px', color: '#555'}}>🎯 perfect fight bonus</span>
+                <span style={{fontSize: '12px', color: '#C8102E', fontWeight: 600}}>+4 pts</span>
+              </div>
+            )}
             <div style={{fontSize: '11px', color: '#aaa', marginTop: '8px'}}>
               deadline: before kickoff
             </div>
