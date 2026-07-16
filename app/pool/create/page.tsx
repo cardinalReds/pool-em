@@ -61,8 +61,9 @@ export default function CreatePoolPage() {
       const supabase = createClient()
       const { data } = await supabase
         .from('tournaments')
-        .select('id, name, sport')
+        .select('id, name, sport, end_date')
         .eq('status', 'active')
+        .gt('end_date', new Date().toISOString())
         .order('created_at', { ascending: false })
 
       const descriptions: Record<string, string> = {
