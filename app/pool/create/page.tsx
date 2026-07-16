@@ -54,7 +54,7 @@ export default function CreatePoolPage() {
     { id: 'custom', label: 'Custom', description: 'Write your own payout rules' },
   ]
 
-  const [TOURNAMENTS, setTOURNAMENTS] = useState<{id: string, name: string, sport: string, description: string}[]>([])
+  const [TOURNAMENTS, setTOURNAMENTS] = useState<{id: string, name: string, sport: string, description: string, started: boolean}[]>([])
 
   useEffect(() => {
     async function loadTournaments() {
@@ -64,17 +64,38 @@ export default function CreatePoolPage() {
         .select('id, name, sport')
         .eq('status', 'active')
         .order('created_at', { ascending: false })
-      // Map to display format
-      const map: Record<string, string> = {
-        'wc_2026': 'Group stage · Jun 12 – Jul 2',
-        'f1_2026': '23 races · Mar–Nov 2026',
-        'ufc_329': 'McGregor vs Holloway · Jul 11, T-Mobile Arena',
+
+      const descriptions: Record<string, string> = {
+        'wc_2026': 'FIFA World Cup 2026',
+        'f1_2026': 'Formula 1 2026',
+        'ufc_329': 'McGregor vs Holloway · Jul 11',
       }
+
+      // Check which tournaments have started (any non-NS fixtures)
+      const ids = (data || []).map(t => t.id)
+      const { data: startedFixtures } = await supabase
+        .from('fixtures')
+        .select('tournament_id')
+        .in('tournament_id', ids)
+        .neq('status', 'NS')
+        .limit(100)
+      const startedIds = new Set((startedFixtures || []).map(f => f.tournament_id))
+
+      // Also check f1_sessions
+      const { data: startedF1 } = await supabase
+        .from('f1_sessions')
+        .select('tournament_id')
+        .in('tournament_id', ids)
+        .eq('scored', true)
+        .limit(10)
+      for (const s of startedF1 || []) startedIds.add(s.tournament_id)
+
       setTOURNAMENTS((data || []).map(t => ({
         id: t.id,
         name: t.name,
         sport: t.sport,
-        description: map[t.id] || '',
+        description: descriptions[t.id] || '',
+        started: startedIds.has(t.id),
       })))
     }
     loadTournaments()
@@ -155,8 +176,8 @@ export default function CreatePoolPage() {
   // Step labels differ by deadline type
   const isBracket = deadlineType === 'before_tournament'
   const stepLabels = isBracket
-    ? ['name', 'tournament', 'scoring', 'buy-in']
-    : ['name', 'tournament', 'predictions', 'buy-in']
+    ? ['competition', 'name', 'scoring', 'buy-in']
+    : ['competition', 'name', 'predictions', 'buy-in']
 
   function NumberInput({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
     return (
@@ -197,73 +218,115 @@ export default function CreatePoolPage() {
           ))}
         </div>
 
-        {/* ── Step 1: Name ─────────────────────────────────────────────── */}
+        {/* ── Step 1: Competition ───────────────────────────────────────── */}
         {step === 1 && (
+          <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
+            <label style={{display: 'block', fontWeight: 600, marginBottom: '16px'}}>pick a competition</label>
+
+            {/* Group by sport, split into in progress / upcoming */}
+            {(['soccer', 'mma', 'f1'] as const).map(sportKey => {
+              const sportTournaments = TOURNAMENTS.filter(t => t.sport === sportKey)
+              if (!sportTournaments.length) return null
+              const inProgress = sportTournaments.filter(t => t.started)
+              const upcoming = sportTournaments.filter(t => !t.started)
+              const sportLabel: Record<string, string> = { soccer: '⚽ Soccer', mma: '🥊 MMA', f1: '🏎 Formula 1' }
+              return (
+                <div key={sportKey} style={{marginBottom: 20}}>
+                  <div style={{fontSize: '10px', fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8}}>{sportLabel[sportKey]}</div>
+                  {inProgress.length > 0 && (
+                    <div style={{marginBottom: 8}}>
+                      <div style={{fontSize: '10px', color: '#2d7a2d', fontWeight: 600, marginBottom: 4}}>● in progress</div>
+                      {inProgress.map(t => (
+                        <button key={t.id} onClick={() => {
+                          setTournamentId(t.id)
+                          setSport(t.sport)
+                          if (t.sport === 'f1') setDeadlineType('before_weekend' as any)
+                          else if (t.sport === 'mma') setDeadlineType('before_tournament')
+                          else setDeadlineType('before_each_game')
+                        }} style={{
+                          display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', border: '1px solid', marginBottom: 4, cursor: 'pointer',
+                          borderColor: tournamentId === t.id ? '#C8102E' : '#e0e0db',
+                          background: tournamentId === t.id ? '#fff5f5' : 'white',
+                        }}>
+                          <div style={{fontWeight: 600, color: tournamentId === t.id ? '#C8102E' : '#111'}}>{t.name}</div>
+                          {t.description && <div style={{fontSize: '11px', color: '#888', marginTop: 2}}>{t.description}</div>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {upcoming.length > 0 && (
+                    <div>
+                      {inProgress.length > 0 && <div style={{fontSize: '10px', color: '#aaa', fontWeight: 600, marginBottom: 4}}>upcoming</div>}
+                      {upcoming.map(t => (
+                        <button key={t.id} onClick={() => {
+                          setTournamentId(t.id)
+                          setSport(t.sport)
+                          if (t.sport === 'f1') setDeadlineType('before_weekend' as any)
+                          else if (t.sport === 'mma') setDeadlineType('before_tournament')
+                          else setDeadlineType('before_each_game')
+                        }} style={{
+                          display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', border: '1px solid', marginBottom: 4, cursor: 'pointer',
+                          borderColor: tournamentId === t.id ? '#C8102E' : '#e0e0db',
+                          background: tournamentId === t.id ? '#fff5f5' : 'white',
+                        }}>
+                          <div style={{fontWeight: 600, color: tournamentId === t.id ? '#C8102E' : '#111'}}>{t.name}</div>
+                          {t.description && <div style={{fontSize: '11px', color: '#888', marginTop: 2}}>{t.description}</div>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {/* Deadline type */}
+            {tournamentId && (
+              <>
+                <label style={{display: 'block', fontWeight: 600, marginBottom: '8px', marginTop: 4}}>prediction deadline</label>
+                <div style={{display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px'}}>
+                  {(sport === 'f1' ? [
+                    {id: 'before_weekend', label: 'before each race weekend', desc: 'picks lock before the qualifying session starts — one ticket per GP weekend'},
+                    {id: 'before_session', label: 'before each session', desc: 'separate tickets for qualifying and race — picks lock before each session'},
+                  ] : sport === 'mma' ? [
+                    {id: 'before_each_game', label: 'before each fight', desc: 'picks lock at fight time — predict fight by fight', hidden: true},
+                    {id: 'before_tournament', label: 'before the card', desc: 'predict all fights before the card starts — picks lock at first fight'},
+                  ] : [
+                    {id: 'before_each_game', label: 'before each game', desc: 'picks lock at kickoff — predict game by game'},
+                    {id: 'before_tournament', label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'},
+                  ]).filter((opt: any) => !opt.hidden).map((opt: any) => (
+                    <button key={opt.id} onClick={() => setDeadlineType(opt.id as any)}
+                      style={{
+                        padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer', minHeight: 60,
+                        borderColor: deadlineType === opt.id ? '#C8102E' : '#e0e0db',
+                        background: deadlineType === opt.id ? '#fff5f5' : 'white',
+                      }}>
+                      <div style={{fontWeight: 600, fontSize: '13px', color: deadlineType === opt.id ? '#C8102E' : '#111'}}>{opt.label}</div>
+                      <div style={{fontSize: '11px', color: '#aaa', marginTop: '3px'}}>{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '16px'}}>
+              <button className="btn-primary" onClick={() => setStep(2)} disabled={!tournamentId}
+                style={{padding: '10px 24px', fontSize: '14px', minHeight: 44}}>next →</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 2: Name ──────────────────────────────────────────────── */}
+        {step === 2 && (
           <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
             <label style={{display: 'block', fontWeight: 600, marginBottom: '8px'}}>what's this pool called?</label>
             <input className="input" placeholder="e.g. The Office World Cup" value={name}
               onChange={e => setName(e.target.value)} maxLength={50} autoFocus
               style={{fontSize: '16px', padding: '10px 12px'}} />
             <p style={{fontSize: '11px', color: '#aaa', marginTop: '6px'}}>your friends will see this when they join</p>
-            <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '16px'}}>
-              <button className="btn-primary" onClick={() => setStep(2)} disabled={!name.trim()}
+            <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '16px'}}>
+              <button onClick={() => setStep(1)} style={{padding: '10px 16px', fontSize: '13px', background: 'none', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit'}}>← back</button>
+              <button className="btn-primary" onClick={() => setStep(3)} disabled={!name.trim()}
                 style={{padding: '10px 24px', fontSize: '14px', minHeight: 44}}>next →</button>
-            </div>
-          </div>
-        )}
-
-        {/* ── Step 2: Tournament + deadline ────────────────────────────── */}
-        {step === 2 && (
-          <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
-            <label style={{display: 'block', fontWeight: 600, marginBottom: '12px'}}>pick a tournament</label>
-            <div style={{display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px'}}>
-              {TOURNAMENTS.map(t => (
-                <button key={t.id} onClick={() => { 
-                  setTournamentId(t.id)
-                  setSport(t.sport)
-                  // Reset deadline type to sensible default for each sport
-                  if (t.sport === 'f1') setDeadlineType('before_weekend' as any)
-                  else if (t.sport === 'mma') setDeadlineType('before_tournament')
-                  else setDeadlineType('before_each_game')
-                }}
-                  style={{
-                    textAlign: 'left', padding: '10px 12px', border: '1px solid',
-                    borderColor: tournamentId === t.id ? '#C8102E' : '#e0e0db',
-                    background: tournamentId === t.id ? '#fff5f5' : 'white', cursor: 'pointer',
-                  }}>
-                  <div style={{fontWeight: 600, color: tournamentId === t.id ? '#C8102E' : '#111'}}>{t.name}</div>
-                  <div style={{fontSize: '11px', color: '#888', marginTop: '2px'}}>{t.description}</div>
-                </button>
-              ))}
-            </div>
-
-            <label style={{display: 'block', fontWeight: 600, marginBottom: '8px'}}>prediction deadline</label>
-            <div style={{display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px'}}>
-              {(sport === 'f1' ? [
-                {id: 'before_weekend', label: 'before each race weekend', desc: 'picks lock before the qualifying session starts — one ticket per GP weekend'},
-                {id: 'before_session', label: 'before each session', desc: 'separate tickets for qualifying and race — picks lock before each session'},
-              ] : sport === 'mma' ? [
-                {id: 'before_each_game', label: 'before each fight', desc: 'picks lock at fight time — predict fight by fight', hidden: true},
-                {id: 'before_tournament', label: 'before the card', desc: 'predict all fights before the card starts — picks lock at first fight'},
-              ] : [
-                {id: 'before_each_game', label: 'before each game', desc: 'picks lock at kickoff — predict game by game'},
-                {id: 'before_tournament', label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'},
-              ]).filter(opt => !opt.hidden).map(opt => (
-                <button key={opt.id} onClick={() => setDeadlineType(opt.id as any)}
-                  style={{
-                    padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer', minHeight: 60,
-                    borderColor: deadlineType === opt.id ? '#C8102E' : '#e0e0db',
-                    background: deadlineType === opt.id ? '#fff5f5' : 'white',
-                  }}>
-                  <div style={{fontWeight: 600, fontSize: '13px', color: deadlineType === opt.id ? '#C8102E' : '#111'}}>{opt.label}</div>
-                  <div style={{fontSize: '11px', color: '#aaa', marginTop: '3px'}}>{opt.desc}</div>
-                </button>
-              ))}
-            </div>
-
-            <div style={{display: 'flex', justifyContent: 'space-between'}}>
-              <button className="btn-secondary" onClick={() => setStep(1)} style={{padding: '10px 20px', minHeight: 44}}>← back</button>
-              <button className="btn-primary" onClick={goToStep3} style={{padding: '10px 20px', minHeight: 44}}>next →</button>
             </div>
           </div>
         )}
