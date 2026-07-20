@@ -136,7 +136,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const [notFound, setNotFound] = useState(false)
   const [inviteUrl, setInviteUrl] = useState('')
   const [isMobile, setIsMobile] = useState(false)
-  const [mobilePanel, setMobilePanel] = useState<'sidebar' | 'predictions' | 'chat'>('predictions')
+  const [mobilePanel, setMobilePanel] = useState<'picks' | 'leaderboard' | 'chat' | 'settings'>('picks')
   const [chatWidth, setChatWidth] = useState(260)
   const [isResizingChat, setIsResizingChat] = useState(false)
 
@@ -667,21 +667,6 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       <div style={{background: '#111', color: 'white', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 50}}>
         <a href="/dashboard" style={{fontWeight: 700, fontSize: '13px', color: 'white', textDecoration: 'none'}}>pool'em</a>
         <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
-          {isMobile && (
-            <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
-              <button type="button" onClick={() => setMobilePanel(p => p === 'sidebar' ? 'predictions' : p === 'predictions' ? 'chat' : 'sidebar')}
-                style={{background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '18px', padding: '4px'}}>
-                ‹
-              </button>
-              <span style={{fontSize: '10px', color: '#888', minWidth: 70, textAlign: 'center' as const}}>
-                {mobilePanel === 'sidebar' ? '☰ menu' : mobilePanel === 'predictions' ? '📋 picks' : '💬 chat'}
-              </span>
-              <button type="button" onClick={() => setMobilePanel(p => p === 'sidebar' ? 'chat' : p === 'predictions' ? 'sidebar' : 'predictions')}
-                style={{background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '18px', padding: '4px'}}>
-                ›
-              </button>
-            </div>
-          )}
           <span style={{fontSize: '11px', color: '#888'}}>
             {user?.user_metadata?.display_name || user?.email?.split('@')[0]} ·{' '}
             <button type="button" onClick={async () => { const s = createClient(); await s.auth.signOut(); window.location.href = '/' }}
@@ -693,61 +678,146 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       </div>
 
       {isMobile ? (
-        // ── Mobile layout — panel navigation ─────────────────────────────
-        <div style={{minHeight: 'calc(100vh - 41px)', overflow: 'hidden'}}>
-          {mobilePanel === 'sidebar' && (
-            <div style={{background: 'white'}}>
-              {sidebarContent}
-            </div>
-          )}
-          {mobilePanel === 'predictions' && (
-            <div style={{padding: '16px'}}>
-              {/* Buy-in banner on mobile predictions panel */}
-              {!isAdmin && pool.buy_in_amount && (pool.venmo_handle || pool.zelle_handle) && !leaderboard.find(m => m.user_id === user?.id)?.is_paid && (
-                <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '12px', marginBottom: '16px'}}>
-                  <p style={{fontSize: '13px', fontWeight: 600, marginBottom: '4px'}}>💰 ${pool.buy_in_amount} buy-in due</p>
-                  <p style={{fontSize: '11px', color: '#888', marginBottom: '8px'}}>please pay before the first match kicks off.</p>
-                  {pool.payout_structure && <p style={{fontSize: '11px', color: '#666', marginBottom: '8px'}}>🏆 {pool.payout_structure}</p>}
-                  <div style={{display: 'flex', flexDirection: 'column', gap: 6}}>
-                    {pool.venmo_handle && (
-                      <a href={`https://venmo.com/${pool.venmo_handle}?txn=pay&amount=${pool.buy_in_amount}&note=${encodeURIComponent(pool.name + ' buy-in')}`} target="_blank" rel="noopener noreferrer">
-                        <button type="button" style={{width: '100%', padding: '10px', fontSize: '13px', fontWeight: 600, background: '#111', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
-                          pay @{pool.venmo_handle} via venmo →
-                        </button>
-                      </a>
-                    )}
-                    {pool.zelle_handle && (
-                      <div style={{padding: '10px', background: '#111', color: 'white', fontSize: '12px', fontWeight: 600, textAlign: 'center' as const}}>
-                        zelle: {pool.zelle_handle}
+        // ── Mobile layout — bottom tab bar ───────────────────────────────
+        <div style={{minHeight: 'calc(100vh - 41px)', display: 'flex', flexDirection: 'column' as const, paddingBottom: 60}}>
+
+          {/* Panel content */}
+          <div style={{flex: 1, overflowY: 'auto' as const}}>
+
+            {/* Picks panel */}
+            {mobilePanel === 'picks' && (
+              <div style={{padding: '16px'}}>
+                {!isAdmin && pool.buy_in_amount && (pool.venmo_handle || pool.zelle_handle) && !leaderboard.find(m => m.user_id === user?.id)?.is_paid && (
+                  <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '12px', marginBottom: '16px'}}>
+                    <p style={{fontSize: '13px', fontWeight: 600, marginBottom: '4px'}}>💰 ${pool.buy_in_amount} buy-in due</p>
+                    <p style={{fontSize: '11px', color: '#888', marginBottom: '8px'}}>please pay before the first match kicks off.</p>
+                    {pool.payout_structure && <p style={{fontSize: '11px', color: '#666', marginBottom: '8px'}}>🏆 {pool.payout_structure}</p>}
+                    <div style={{display: 'flex', flexDirection: 'column', gap: 6}}>
+                      {pool.venmo_handle && (
+                        <a href={`https://venmo.com/${pool.venmo_handle}?txn=pay&amount=${pool.buy_in_amount}&note=${encodeURIComponent(pool.name + ' buy-in')}`} target="_blank" rel="noopener noreferrer">
+                          <button type="button" style={{width: '100%', padding: '10px', fontSize: '13px', fontWeight: 600, background: '#111', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit'}}>
+                            pay @{pool.venmo_handle} via venmo →
+                          </button>
+                        </a>
+                      )}
+                      {pool.zelle_handle && (
+                        <div style={{padding: '10px', background: '#111', color: 'white', fontSize: '12px', fontWeight: 600, textAlign: 'center' as const}}>
+                          zelle: {pool.zelle_handle}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+                {user && pool.deadline_type === 'before_tournament' && pool.sport !== 'mma' ? (
+                  <>
+                    <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} isAdmin={isAdmin} tournamentId={pool.tournament_id} />
+                    {new Date() >= new Date('2026-06-11T19:00:00Z') && (
+                      <div style={{ marginTop: 32 }}>
+                        <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 16, paddingTop: 16, borderTop: '1px solid #eee' }}>everyone's picks</div>
+                        <BracketViewer poolId={pool.id} />
                       </div>
                     )}
+                  </>
+                ) : user && (
+                  pool.sport === 'f1'
+                    ? <F1SessionsList poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} />
+                    : pool.sport === 'mma'
+                    ? <MMAFightCard poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
+                    : <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />
+                )}
+              </div>
+            )}
+
+            {/* Leaderboard panel */}
+            {mobilePanel === 'leaderboard' && (
+              <div style={{background: 'white', minHeight: '100%'}}>
+                {sidebarContent}
+              </div>
+            )}
+
+            {/* Chat panel */}
+            {mobilePanel === 'chat' && user && (
+              <div style={{height: 'calc(100vh - 101px)'}}>
+                <ShitChat poolId={pool.id} userId={user.id} displayName={user.user_metadata?.display_name || user.email?.split('@')[0] || 'anon'} />
+              </div>
+            )}
+
+            {/* Settings panel */}
+            {mobilePanel === 'settings' && (
+              <div style={{padding: '16px', background: 'white', minHeight: '100%'}}>
+                <div style={{fontSize: '13px', fontWeight: 700, marginBottom: 16}}>settings</div>
+
+                {/* Invite */}
+                <div style={{marginBottom: 20}}>
+                  <div style={{fontSize: '10px', fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8}}>invite</div>
+                  <div style={{display: 'flex', gap: 8}}>
+                    <input readOnly value={`${typeof window !== 'undefined' ? window.location.origin : ''}/pool/join/${pool.invite_code}`}
+                      style={{flex: 1, border: '1px solid #e0e0db', padding: '8px', fontSize: '11px', fontFamily: 'inherit', background: '#f7f7f5', color: '#555'}} />
+                    <button type="button" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/pool/join/${pool.invite_code}`)}
+                      style={{padding: '8px 12px', background: '#111', color: 'white', border: 'none', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' as const}}>
+                      copy
+                    </button>
                   </div>
                 </div>
-              )}
-              {user && pool.deadline_type === 'before_tournament' && pool.sport !== 'mma' ? (
-                <>
-                  <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} isAdmin={isAdmin} tournamentId={pool.tournament_id} />
-                  {new Date() >= new Date('2026-06-11T19:00:00Z') && (
-                    <div style={{ marginTop: 32 }}>
-                      <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 16, paddingTop: 16, borderTop: '1px solid #eee' }}>everyone's picks</div>
-                      <BracketViewer poolId={pool.id} />
+
+                {/* Scoring rules */}
+                <div style={{marginBottom: 20}}>
+                  <div style={{fontSize: '10px', fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8}}>scoring</div>
+                  {poolRules.map((rule: any) => {
+                    const isExact = rule.category_id === 'soccer_exact_score' || rule.category_id === 'soccer_ht_exact_score'
+                    return (
+                      <div key={rule.category_id} style={{display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f5f5f5'}}>
+                        <span style={{fontSize: '12px', color: '#555'}}>{rule.ruleset_categories?.name || rule.category_id}</span>
+                        <span style={{fontSize: '12px', fontWeight: 600}}>
+                          {isExact ? `${rule.points}pt/team` : `${rule.points} pts`}
+                          {rule.category_id === 'soccer_team_to_advance' && <span style={{fontSize: '10px', color: '#aaa', fontWeight: 400}}> +2/round</span>}
+                        </span>
+                      </div>
+                    )
+                  })}
+                  {pool.sport === 'mma' && poolRules.length >= 3 && (
+                    <div style={{display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f5f5f5'}}>
+                      <span style={{fontSize: '12px', color: '#555'}}>🎯 perfect fight bonus</span>
+                      <span style={{fontSize: '12px', fontWeight: 600, color: '#C8102E'}}>+4 pts</span>
                     </div>
                   )}
-                </>
-              ) : user && (
-                pool.sport === 'f1'
-                  ? <F1SessionsList poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} />
-                  : pool.sport === 'mma'
-                  ? <MMAFightCard poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
-                  : <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />
-              )}
-            </div>
-          )}
-          {mobilePanel === 'chat' && user && (
-            <div style={{height: 'calc(100vh - 41px)'}}>
-              <ShitChat poolId={pool.id} userId={user.id} displayName={user.user_metadata?.display_name || user.email?.split('@')[0] || 'anon'} />
-            </div>
-          )}
+                </div>
+
+                {/* Reminders */}
+                {user && (
+                  <div style={{marginBottom: 20}}>
+                    <div style={{fontSize: '10px', fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8}}>reminders</div>
+                    <ReminderButton poolId={pool.id} userId={user.id} userEmail={user.email || ''} />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Bottom tab bar */}
+          <div style={{
+            position: 'fixed', bottom: 0, left: 0, right: 0, height: 60,
+            background: 'white', borderTop: '1px solid #e0e0db',
+            display: 'flex', zIndex: 100,
+          }}>
+            {([
+              { id: 'picks', label: 'picks', symbol: '📋' },
+              { id: 'leaderboard', label: 'leaderboard', symbol: '🏆' },
+              { id: 'chat', label: 'chat', symbol: '💬' },
+              { id: 'settings', label: 'settings', symbol: '⚙️' },
+            ] as const).map(tab => (
+              <button key={tab.id} type="button" onClick={() => setMobilePanel(tab.id)}
+                style={{
+                  flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center',
+                  gap: 2, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                  borderTop: mobilePanel === tab.id ? '2px solid #C8102E' : '2px solid transparent',
+                  color: mobilePanel === tab.id ? '#C8102E' : '#aaa',
+                }}>
+                <span style={{fontSize: 18}} aria-hidden="true">{tab.symbol}</span>
+                <span style={{fontSize: 10, fontWeight: mobilePanel === tab.id ? 600 : 400}}>{tab.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       ) : (
         // ── Desktop layout — 3 columns ───────────────────────────────────
