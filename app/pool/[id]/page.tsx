@@ -137,6 +137,8 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const [inviteUrl, setInviteUrl] = useState('')
   const [isMobile, setIsMobile] = useState(false)
   const [mobilePanel, setMobilePanel] = useState<'picks' | 'leaderboard' | 'chat' | 'settings'>('picks')
+  const [mobileSortMode, setMobileSortMode] = useState<'date' | 'group' | 'round'>('date')
+  const [mobileViewMode, setMobileViewMode] = useState<'pages' | 'list'>('pages')
   const [chatWidth, setChatWidth] = useState(260)
   const [isResizingChat, setIsResizingChat] = useState(false)
 
@@ -723,15 +725,109 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                     ? <F1SessionsList poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} />
                     : pool.sport === 'mma'
                     ? <MMAFightCard poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
-                    : <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />
+                    : <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} hideControls={true} externalSortMode={mobileSortMode} externalViewMode={mobileViewMode} />
                 )}
               </div>
             )}
 
             {/* Leaderboard panel */}
             {mobilePanel === 'leaderboard' && (
-              <div style={{background: 'white', minHeight: '100%'}}>
-                {sidebarContent}
+              <div style={{padding: '16px', background: 'white', minHeight: '100%'}}>
+                <div style={{fontWeight: 700, fontSize: '15px', marginBottom: 12}}>{pool.name}</div>
+                {isLive && (
+                  <div style={{display:'flex',alignItems:'center',gap:5,padding:'4px 0 8px',fontSize:'10px',fontWeight:700,color:'#2d7a2d',textTransform:'uppercase' as const,letterSpacing:'0.06em'}}>
+                    <span style={{width:6,height:6,borderRadius:'50%',background:'#2d7a2d',display:'inline-block'}}/>
+                    live scoreboard · if results hold
+                  </div>
+                )}
+                {/* H2H dropdown */}
+                {yourLeaderboard.length > 0 && (
+                  <div style={{marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8}}>
+                    <span style={{fontSize: '11px', color: '#aaa', flexShrink: 0}}>head to head:</span>
+                    <select value={h2hOpponent?.user_id || ''} onChange={e => {
+                      const opp = leaderboard.find(m => m.user_id === e.target.value)
+                      setH2hOpponent(opp || null)
+                    }} style={{fontSize: '12px', border: '1px solid #ddd', padding: '4px 8px', fontFamily: 'inherit', flex: 1, color: '#333', background: 'white'}}>
+                      <option value=''>pick a player...</option>
+                      {leaderboard.filter(m => m.user_id !== user?.id).map(m => (
+                        <option key={m.user_id} value={m.user_id}>{m.display_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {/* H2H result */}
+                {h2hOpponent && (() => {
+                  const myId = user?.id
+                  const oppId = h2hOpponent.user_id
+                  const hasValue = (p: any) => p.value_wld || p.value_text || p.value_ou || p.value_yesno !== null || p.value_number !== null
+                  const myFixtures = new Set(allPredsCached.filter(p => p.user_id === myId && hasValue(p) && finishedFixtureIds.has(p.fixture_id)).map(p => p.fixture_id))
+                  const oppFixtures = new Set(allPredsCached.filter(p => p.user_id === oppId && hasValue(p) && finishedFixtureIds.has(p.fixture_id)).map(p => p.fixture_id))
+                  const sharedFixtures = new Set([...myFixtures].filter(id => oppFixtures.has(id)))
+                  const myPts = allPredsCached.filter(p => p.user_id === myId && sharedFixtures.has(p.fixture_id)).reduce((sum, p) => sum + (p.points_earned || 0), 0)
+                  const oppPts = allPredsCached.filter(p => p.user_id === oppId && sharedFixtures.has(p.fixture_id)).reduce((sum, p) => sum + (p.points_earned || 0), 0)
+                  const myName = leaderboard.find(m => m.user_id === myId)?.display_name || 'you'
+                  const winner = myPts > oppPts ? myName : oppPts > myPts ? h2hOpponent.display_name : null
+                  return (
+                    <div style={{marginBottom: 12, padding: '10px 12px', background: '#f9f9f9', border: '1px solid #e0e0db'}}>
+                      <div style={{fontSize: '10px', color: '#aaa', marginBottom: 8}}>{sharedFixtures.size} games predicted by both</div>
+                      <div style={{display: 'flex', gap: 8}}>
+                        {[{name: myName, pts: myPts, isMe: true}, {name: h2hOpponent.display_name, pts: oppPts, isMe: false}]
+                          .sort((a, b) => b.pts - a.pts)
+                          .map((p, i) => (
+                            <div key={p.name} style={{flex: 1, padding: '8px 10px', background: 'white', border: '1px solid',
+                              borderColor: i === 0 && winner ? '#2d7a2d' : '#e0e0db',
+                              borderLeft: `3px solid ${p.isMe ? '#C8102E' : '#ddd'}`}}>
+                              <div style={{fontSize: '11px', color: p.isMe ? '#C8102E' : '#555', fontWeight: 600, marginBottom: 2}}>{p.name}{p.isMe ? ' (you)' : ''}</div>
+                              <div style={{fontSize: '20px', fontWeight: 700, color: i === 0 && winner ? '#2d7a2d' : '#888'}}>{p.pts}</div>
+                            </div>
+                          ))}
+                      </div>
+                      {winner && <div style={{fontSize: '11px', color: '#2d7a2d', marginTop: 8, textAlign: 'center' as const}}>{winner === myName ? 'you win 🎉' : `${winner} wins`}</div>}
+                      {!winner && <div style={{fontSize: '11px', color: '#aaa', marginTop: 8, textAlign: 'center' as const}}>draw</div>}
+                    </div>
+                  )
+                })()}
+                {/* Leaderboard table */}
+                <div style={{fontSize: '10px', color: '#aaa', marginBottom: '8px', display: 'flex', alignItems: 'center'}}>
+                  <span style={{flex: 1}}>player</span>
+                  <div style={{display: 'flex', gap: 12, alignItems: 'center'}}>
+                    {isAdmin && pool.buy_in_amount && <span style={{width: 40, textAlign: 'center' as const}}>paid</span>}
+                    <span style={{width: 40, textAlign: 'center' as const}}>pts</span>
+                    {pool.deadline_type === 'before_tournament' && <span style={{width: 40, textAlign: 'center' as const}}>max</span>}
+                  </div>
+                </div>
+                {leaderboard.map((member, i) => (
+                  <div key={member.id || member.user_id} style={{
+                    display: 'flex', alignItems: 'center',
+                    padding: '7px 8px', marginBottom: '1px',
+                    background: member.user_id === user?.id ? '#fff5f5' : 'transparent',
+                    borderLeft: `3px solid ${member.user_id === user?.id ? '#C8102E' : 'transparent'}`,
+                  }}>
+                    <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const}}>
+                      {i + 1}. {member.display_name}
+                    </span>
+                    <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
+                      {isAdmin && pool.buy_in_amount && (
+                        <button onClick={() => togglePaid(member.id, member.is_paid)}
+                          style={{width: 22, height: 22, borderRadius: '50%', border: '1px solid',
+                            borderColor: member.is_paid ? '#2d7a2d' : '#ddd',
+                            background: member.is_paid ? '#2d7a2d' : 'white',
+                            color: 'white', fontSize: '12px', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+                          {member.is_paid ? '✓' : ''}
+                        </button>
+                      )}
+                      <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', width: 40, textAlign: 'center' as const}}>
+                        {member.points}
+                      </span>
+                      {pool.deadline_type === 'before_tournament' && (
+                        <span style={{fontSize: '11px', color: '#bbb', width: 40, textAlign: 'center' as const}}>
+                          {member.maxPossible != null ? member.maxPossible : ''}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -747,6 +843,30 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               <div style={{padding: '16px', background: 'white', minHeight: '100%'}}>
                 <div style={{fontSize: '13px', fontWeight: 700, marginBottom: 16}}>settings</div>
 
+                {/* View options — only for soccer */}
+                {pool.sport !== 'mma' && pool.sport !== 'f1' && (
+                  <div style={{marginBottom: 20}}>
+                    <div style={{fontSize: '10px', fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8}}>sort by</div>
+                    <div style={{display: 'flex', border: '1px solid #ddd', overflow: 'hidden', marginBottom: 12}}>
+                      {(['date', 'group', 'round'] as const).map((mode, i) => (
+                        <button key={mode} type="button" onClick={() => setMobileSortMode(mode)}
+                          style={{flex: 1, padding: '10px 8px', fontSize: '12px', cursor: 'pointer', border: 'none', borderLeft: i > 0 ? '1px solid #ddd' : 'none', fontFamily: 'inherit', background: mobileSortMode === mode ? '#111' : 'white', color: mobileSortMode === mode ? 'white' : '#888', minHeight: 44}}>
+                          {mode}
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{fontSize: '10px', fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8}}>display</div>
+                    <div style={{display: 'flex', border: '1px solid #ddd', overflow: 'hidden'}}>
+                      {(['pages', 'list'] as const).map((mode, i) => (
+                        <button key={mode} type="button" onClick={() => setMobileViewMode(mode)}
+                          style={{flex: 1, padding: '10px 8px', fontSize: '12px', cursor: 'pointer', border: 'none', borderLeft: i > 0 ? '1px solid #ddd' : 'none', fontFamily: 'inherit', background: mobileViewMode === mode ? '#111' : 'white', color: mobileViewMode === mode ? 'white' : '#888', minHeight: 44}}>
+                          {mode}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Invite */}
                 <div style={{marginBottom: 20}}>
                   <div style={{fontSize: '10px', fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8}}>invite</div>
@@ -754,13 +874,13 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                     <input readOnly value={`${typeof window !== 'undefined' ? window.location.origin : ''}/pool/join/${pool.invite_code}`}
                       style={{flex: 1, border: '1px solid #e0e0db', padding: '8px', fontSize: '11px', fontFamily: 'inherit', background: '#f7f7f5', color: '#555'}} />
                     <button type="button" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/pool/join/${pool.invite_code}`)}
-                      style={{padding: '8px 12px', background: '#111', color: 'white', border: 'none', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' as const}}>
+                      style={{padding: '8px 12px', background: '#111', color: 'white', border: 'none', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit'}}>
                       copy
                     </button>
                   </div>
                 </div>
 
-                {/* Scoring rules */}
+                {/* Scoring */}
                 <div style={{marginBottom: 20}}>
                   <div style={{fontSize: '10px', fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8}}>scoring</div>
                   {poolRules.map((rule: any) => {

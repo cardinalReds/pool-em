@@ -444,7 +444,7 @@ poolRules: PoolRule[]
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-                  {FLAGS[fixture.home_team] || ''} {fixture.home_team}
+                  <Flag team={fixture.home_team} /> {fixture.home_team}
                 </span>
               </button>
               {showDraw && (
@@ -458,7 +458,7 @@ poolRules: PoolRule[]
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-                  {fixture.away_team} {FLAGS[fixture.away_team] || ''}
+                  {fixture.away_team} <Flag team={fixture.away_team} />
                 </span>
               </button>
             </div>
@@ -473,7 +473,7 @@ poolRules: PoolRule[]
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              {FLAGS[fixture.home_team] || ''} {fixture.home_team}
+              <Flag team={fixture.home_team} /> {fixture.home_team}
               {fixture.line_asian_handicap_home != null && (
                 <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: 3 }}>
                   ({fixture.line_asian_handicap_home > 0 ? '+' : ''}{fixture.line_asian_handicap_home})
@@ -485,7 +485,7 @@ poolRules: PoolRule[]
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              {fixture.away_team} {FLAGS[fixture.away_team] || ''}
+              {fixture.away_team} <Flag team={fixture.away_team} />
               {fixture.line_asian_handicap_away != null && (
                 <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: 3 }}>
                   ({fixture.line_asian_handicap_away > 0 ? '+' : ''}{fixture.line_asian_handicap_away})
@@ -503,7 +503,7 @@ poolRules: PoolRule[]
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              {FLAGS[fixture.home_team] || ''} {fixture.home_team}
+              <Flag team={fixture.home_team} /> {fixture.home_team}
             </span>
           </button>
           <button type="button" style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
@@ -515,7 +515,7 @@ poolRules: PoolRule[]
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              {fixture.away_team} {FLAGS[fixture.away_team] || ''}
+              {fixture.away_team} <Flag team={fixture.away_team} />
             </span>
           </button>
         </div>
@@ -528,7 +528,7 @@ poolRules: PoolRule[]
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              {FLAGS[fixture.home_team] || ''} {fixture.home_team}
+              <Flag team={fixture.home_team} /> {fixture.home_team}
             </span>
           </button>
           <button type="button" style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
@@ -540,7 +540,7 @@ poolRules: PoolRule[]
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              {fixture.away_team} {FLAGS[fixture.away_team] || ''}
+              {fixture.away_team} <Flag team={fixture.away_team} />
             </span>
           </button>
         </div>
@@ -731,6 +731,7 @@ poolRules: PoolRule[]
 
 export default function FixturesList({
   poolId, userId, packageId, deadlineType, tournamentId,
+  hideControls, externalSortMode, externalViewMode,
 }: {
   poolId: string
   userId: string
@@ -738,6 +739,9 @@ export default function FixturesList({
   deadlineType: string
   scope?: string
   tournamentId?: string
+  hideControls?: boolean
+  externalSortMode?: 'date' | 'group' | 'round'
+  externalViewMode?: 'pages' | 'list'
 }) {
   const [fixtures, setFixtures] = useState<Fixture[]>([])
   const [poolRules, setPoolRules] = useState<PoolRule[]>([])
@@ -756,8 +760,10 @@ export default function FixturesList({
   const [roundSpecialSaving, setRoundSpecialSaving] = useState<string | null>(null)
   const [roundSpecialSaved, setRoundSpecialSaved] = useState<Record<string, boolean>>({})
   const [braceTeamByMatchday, setBraceTeamByMatchday] = useState<Record<string, string>>({})
-  const [sortMode, setSortMode] = useState<'date' | 'group' | 'round'>('date')
-  const [viewMode, setViewMode] = useState<'pages' | 'list'>('pages')
+  const [_sortMode, setSortMode] = useState<'date' | 'group' | 'round'>('date')
+  const [_viewMode, setViewMode] = useState<'pages' | 'list'>('pages')
+  const sortMode = externalSortMode ?? _sortMode
+  const viewMode = externalViewMode ?? _viewMode
   const [currentPage, setCurrentPage] = useState(0)
 
   const isCustom = packageId?.toUpperCase() === 'CUSTOM'
@@ -1410,13 +1416,13 @@ export default function FixturesList({
             <div style={{ display: 'flex', gap: 16, padding: '6px 10px', background: '#f0fff4', borderBottom: '1px solid #d0f0d8', fontSize: '11px', color: '#2d7a2d', flexWrap: 'wrap' as const, justifyContent: 'center' as const }}>
               {hasCorners && (
                 <span>
-                  🚩 corners: {FLAGS[fixture.home_team] || ''} {fixture.live_home_corners ?? 0} – {fixture.live_away_corners ?? 0} {FLAGS[fixture.away_team] || ''}
+                  🚩 corners: <Flag team={fixture.home_team} /> {fixture.live_home_corners ?? 0} – {fixture.live_away_corners ?? 0} <Flag team={fixture.away_team} />
                   {fixture.line_total_corners && <span style={{ color: '#aaa', marginLeft: 4 }}>(line {fixture.line_total_corners})</span>}
                 </span>
               )}
               {hasCards && (
                 <span>
-                  🟨 cards: {FLAGS[fixture.home_team] || ''} {fixture.live_home_cards ?? 0} – {fixture.live_away_cards ?? 0} {FLAGS[fixture.away_team] || ''}
+                  🟨 cards: <Flag team={fixture.home_team} /> {fixture.live_home_cards ?? 0} – {fixture.live_away_cards ?? 0} <Flag team={fixture.away_team} />
                   {fixture.line_card_points && <span style={{ color: '#aaa', marginLeft: 4 }}>(line {fixture.line_card_points})</span>}
                 </span>
               )}
@@ -1591,7 +1597,7 @@ export default function FixturesList({
                             const awayCards = fixture.live_away_cards ?? 0
                             const cornResult = homeCorn > awayCorn ? 'home' : awayCorn > homeCorn ? 'away' : 'draw'
 
-                            const teamNode = (team: string) => <span style={{display:'inline-flex',alignItems:'center',gap:3}}>{FLAGS[team] || ''} {team}</span>
+                            const teamNode = (team: string) => <span style={{display:'inline-flex',alignItems:'center',gap:3}}><Flag team={team} />{team}</span>
 
                             switch (rule.category_id) {
                               case 'soccer_result': actual = result === 'home' ? teamNode(fixture.home_team) : result === 'away' ? teamNode(fixture.away_team) : 'draw'; break
@@ -1600,7 +1606,7 @@ export default function FixturesList({
                                 actual = winner ? teamNode(winner) : '—'
                                 break
                               }
-                              case 'soccer_ht_result': actual = htResult ? (htResult === 'home' ? <span style={{display:'inline-flex',alignItems:'center',gap:3}}>{FLAGS[fixture.home_team] || ''}HT</span> : htResult === 'away' ? <span style={{display:'inline-flex',alignItems:'center',gap:3}}>{FLAGS[fixture.away_team] || ''}HT</span> : 'draw HT') : '—'; break
+                              case 'soccer_ht_result': actual = htResult ? (htResult === 'home' ? <span style={{display:'inline-flex',alignItems:'center',gap:3}}><Flag team={fixture.home_team} />HT</span> : htResult === 'away' ? <span style={{display:'inline-flex',alignItems:'center',gap:3}}><Flag team={fixture.away_team} />HT</span> : 'draw HT') : '—'; break
                               case 'soccer_exact_score': actual = `${h}–${a}`; break
                               case 'soccer_ht_exact_score': actual = htH != null && htA != null ? `${htH}–${htA} HT` : '—'; break
                               case 'soccer_first_goalscorer':
@@ -1619,7 +1625,7 @@ export default function FixturesList({
                               case 'soccer_total_goals_ou': actual = `${h + a} goals`; break
                               case 'soccer_total_corners_ou': actual = `${homeCorn + awayCorn} corners`; break
                               case 'soccer_corners_winner': actual = cornResult === 'home' ? teamNode(fixture.home_team) : cornResult === 'away' ? teamNode(fixture.away_team) : 'draw'; break
-                              case 'soccer_ht_corners_winner': actual = htHomeCorn != null && htAwayCorn != null ? (htHomeCorn > htAwayCorn ? <span style={{display:'inline-flex',alignItems:'center',gap:3}}>{FLAGS[fixture.home_team] || ''}HT</span> : htAwayCorn > htHomeCorn ? <span style={{display:'inline-flex',alignItems:'center',gap:3}}>{FLAGS[fixture.away_team] || ''}HT</span> : 'draw HT') : '—'; break
+                              case 'soccer_ht_corners_winner': actual = htHomeCorn != null && htAwayCorn != null ? (htHomeCorn > htAwayCorn ? <span style={{display:'inline-flex',alignItems:'center',gap:3}}><Flag team={fixture.home_team} />HT</span> : htAwayCorn > htHomeCorn ? <span style={{display:'inline-flex',alignItems:'center',gap:3}}><Flag team={fixture.away_team} />HT</span> : 'draw HT') : '—'; break
                               case 'soccer_card_points_ou': actual = `${homeCards + awayCards} card pts`; break
                               case 'soccer_cards_home_away': actual = homeCards > awayCards ? teamNode(fixture.home_team) : awayCards > homeCards ? teamNode(fixture.away_team) : 'draw'; break
                               case 'soccer_cards_ht': {
@@ -1657,6 +1663,7 @@ export default function FixturesList({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {/* Controls */}
+      {!hideControls && (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 8, flexWrap: 'wrap' as const }}>
         <div style={{ display: 'flex', border: '1px solid #ddd', overflow: 'hidden', borderRadius: 3 }}>
           {(onlyRoundSpecials ? ['round'] : ['date', 'group', 'round'] as const).map((mode, i) => (
@@ -1675,6 +1682,7 @@ export default function FixturesList({
           ))}
         </div>
       </div>
+      )}
 
       {/* Live fixtures — always shown at top */}
       {fixtures.filter(f => f.status === 'live').length > 0 && (
