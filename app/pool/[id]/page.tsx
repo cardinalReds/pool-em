@@ -828,10 +828,21 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                     </div>
                   </div>
                 ))}
+                {/* Your leaderboard */}
+                {yourLeaderboard.length > 0 && (
+                  <div style={{marginTop: 20, borderTop: '1px solid #eee', paddingTop: 16}}>
+                    <div style={{fontSize: '11px', fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 4}}>your leaderboard</div>
+                    <div style={{fontSize: '11px', color: '#aaa', marginBottom: 10}}>Based only on the games you predicted. You've predicted {yourLeaderboardFixtureCount} out of {finishedFixtureCount} games.</div>
+                    {yourLeaderboard.map((member, i) => (
+                      <div key={member.id || member.user_id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 8px', marginBottom: '1px', background: member.user_id === user?.id ? '#fff5f5' : 'transparent', borderLeft: `3px solid ${member.user_id === user?.id ? '#C8102E' : 'transparent'}`}}>
+                        <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555', flex: 1}}>{i + 1}. {member.display_name}</span>
+                        <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888'}}>{member.points}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
-
-            {/* Chat panel */}
             {mobilePanel === 'chat' && user && (
               <div style={{height: 'calc(100vh - 101px)'}}>
                 <ShitChat poolId={pool.id} userId={user.id} displayName={user.user_metadata?.display_name || user.email?.split('@')[0] || 'anon'} />
