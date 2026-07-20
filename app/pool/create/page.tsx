@@ -24,8 +24,38 @@ export default function CreatePoolPage() {
   const [tournamentId, setTournamentId] = useState('')
   const [deadlineType, setDeadlineType] = useState<'before_each_game' | 'before_tournament' | 'before_weekend' | 'before_session'>('before_each_game')
 
-  // Step 3a — per-game ruleset (before_each_game only)
-  const [selectedRules, setSelectedRules] = useState<SelectedRule[]>([])
+  // PL-specific config (step 2b)
+  const [plSeasonProps, setPlSeasonProps] = useState(false)
+  const [plSelectedProps, setPlSelectedProps] = useState<string[]>([])
+  const [plGameMode, setPlGameMode] = useState<'every_game' | 'best5'>('every_game')
+
+  // PL prize structure (step 4 for PL)
+  const [plPrizeSeason, setPlPrizeSeason] = useState(false)
+  const [plPrizeWeekly, setPlPrizeWeekly] = useState(false)
+  const [plSeasonBuyIn, setPlSeasonBuyIn] = useState('')
+  const [plWeeklyBuyIn, setPlWeeklyBuyIn] = useState('')
+  const [plBestWeeks, setPlBestWeeks] = useState(38)
+
+  // PL prop point rules (category → points, set during ruleset step)
+  const [plPropPoints, setPlPropPoints] = useState<Record<string, number>>({
+    title_winner: 10,
+    top_4: 5,
+    top_scorer: 10,
+    top_assist: 8,
+    golden_glove: 8,
+    relegated: 5,
+  })
+
+  const PL_PROPS = [
+    { id: 'title_winner', label: 'Title winner', desc: 'Pick the Premier League champion' },
+    { id: 'top_4', label: 'Top 4', desc: 'Pick all 4 teams finishing in the top 4' },
+    { id: 'top_scorer', label: 'Top scorer', desc: 'Pick the Golden Boot winner' },
+    { id: 'top_assist', label: 'Top assist', desc: 'Pick the player with the most assists' },
+    { id: 'golden_glove', label: 'Golden Glove', desc: 'Pick the keeper with the most clean sheets' },
+    { id: 'relegated', label: 'Relegated teams', desc: 'Pick all 3 relegated teams' },
+  ]
+
+  const isPL = TOURNAMENTS.find(t => t.id === tournamentId)?.sport === 'soccer' && tournamentId.startsWith('pl_')
 
   // Step 3b — bracket settings (before_tournament only)
   const [groupFormat, setGroupFormat] = useState<'standings' | 'wld' | 'exact'>('standings')
@@ -124,16 +154,37 @@ export default function CreatePoolPage() {
       invite_code: inviteCode,
       admin_id: user.id,
       is_active: true,
-      buy_in_amount: buyIn ? parseFloat(buyIn) : null,
+      buy_in_amount: isPL ? null : (buyIn ? parseFloat(buyIn) : null),
       venmo_handle: venmoHandle.replace('@', '').trim() || null,
       zelle_handle: zelleHandle.trim() || null,
-      payout_structure: buyIn && parseFloat(buyIn) > 0
+      payout_structure: !isPL && buyIn && parseFloat(buyIn) > 0
         ? (payoutTemplate === 'custom' ? customPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description || null)
         : null,
       pick_mode: deadlineType === 'before_tournament' ? groupFormat : null,
+      // PL-specific
+      ...(isPL ? {
+        pl_game_mode: plGameMode,
+        pl_best_weeks: plBestWeeks,
+        prize_season: plPrizeSeason,
+        prize_weekly: plPrizeWeekly,
+        season_buy_in: plPrizeSeason && plSeasonBuyIn ? parseFloat(plSeasonBuyIn) : null,
+        weekly_buy_in: plPrizeWeekly && plWeeklyBuyIn ? parseFloat(plWeeklyBuyIn) : null,
+        season_props_enabled: plSeasonProps,
+      } : {}),
     }).select().single()
 
     if (poolError) { setError(poolError.message); setLoading(false); return }
+
+    // Save season prop rules for PL pools
+    if (isPL && plSeasonProps && plSelectedProps.length > 0) {
+      await supabase.from('season_prop_rules').insert(
+        plSelectedProps.map(cat => ({
+          pool_id: pool.id,
+          category: cat,
+          points: plPropPoints[cat] || 10,
+        }))
+      )
+    }
 
     // Save per-game rules (before_each_game, before_weekend, before_session pools)
     if (selectedRules.length > 0) {
@@ -174,9 +225,12 @@ export default function CreatePoolPage() {
     window.location.href = `/pool/${pool.id}`
   }
 
-  // Step labels differ by deadline type
+  // Step labels differ by pool type
   const isBracket = deadlineType === 'before_tournament'
-  const stepLabels = isBracket
+  const totalSteps = isPL ? 5 : 4
+  const stepLabels = isPL
+    ? ['competition', 'name', 'pl config', 'predictions', 'prizes']
+    : isBracket
     ? ['competition', 'name', 'scoring', 'buy-in']
     : ['competition', 'name', 'predictions', 'buy-in']
 
@@ -204,7 +258,7 @@ export default function CreatePoolPage() {
 
         {/* Step indicator */}
         <div style={{display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '20px', flexWrap: 'wrap' as const}}>
-          {[1,2,3,4].map((s, i) => (
+          {Array.from({length: totalSteps}, (_, i) => i + 1).map((s, i) => (
             <div key={s} style={{display: 'flex', alignItems: 'center', gap: '4px'}}>
               <div style={{
                 width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -214,7 +268,7 @@ export default function CreatePoolPage() {
                 border: `1px solid ${s <= step ? 'transparent' : '#ddd'}`,
               }}>{s < step ? '✓' : s}</div>
               <span style={{fontSize: '11px', color: s === step ? '#111' : '#bbb', whiteSpace: 'nowrap' as const}}>{stepLabels[i]}</span>
-              {i < 3 && <span style={{color: '#ddd', margin: '0 2px'}}>→</span>}
+              {i < totalSteps - 1 && <span style={{color: '#ddd', margin: '0 2px'}}>→</span>}
             </div>
           ))}
         </div>
@@ -332,8 +386,79 @@ export default function CreatePoolPage() {
           </div>
         )}
 
-        {/* ── Step 3a: Bracket scoring (before_tournament, soccer only) ─── */}
-        {step === 3 && isBracket && sport !== 'mma' && (
+        {/* ── Step 3: PL Config (PL pools only) ────────────────────────── */}
+        {step === 3 && isPL && (
+          <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
+            <div style={{fontWeight: 600, fontSize: '14px', marginBottom: 4}}>Premier League settings</div>
+            <div style={{fontSize: '11px', color: '#aaa', marginBottom: 20}}>configure your pool for the 2025/26 season</div>
+
+            {/* Season-long props */}
+            <div style={{marginBottom: 20}}>
+              <label style={{display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 10}}>
+                <input type="checkbox" checked={plSeasonProps} onChange={e => setPlSeasonProps(e.target.checked)}
+                  style={{width: 18, height: 18, cursor: 'pointer'}} />
+                <div>
+                  <div style={{fontWeight: 600, fontSize: '13px'}}>season-long props</div>
+                  <div style={{fontSize: '11px', color: '#aaa'}}>members predict title winner, top 4, golden boot, etc. before matchday 1</div>
+                </div>
+              </label>
+
+              {plSeasonProps && (
+                <div style={{marginLeft: 28, display: 'flex', flexDirection: 'column' as const, gap: 8}}>
+                  {PL_PROPS.map(prop => (
+                    <label key={prop.id} style={{display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '8px 10px', border: '1px solid', borderColor: plSelectedProps.includes(prop.id) ? '#C8102E' : '#e0e0db', background: plSelectedProps.includes(prop.id) ? '#fff5f5' : 'white'}}>
+                      <input type="checkbox" checked={plSelectedProps.includes(prop.id)}
+                        onChange={e => setPlSelectedProps(prev => e.target.checked ? [...prev, prop.id] : prev.filter(p => p !== prop.id))}
+                        style={{width: 16, height: 16, cursor: 'pointer', flexShrink: 0}} />
+                      <div style={{flex: 1}}>
+                        <div style={{fontWeight: 600, fontSize: '12px'}}>{prop.label}</div>
+                        <div style={{fontSize: '11px', color: '#aaa'}}>{prop.desc}</div>
+                      </div>
+                      <div style={{display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0}}>
+                        <input type="number" min="1" max="100" value={plPropPoints[prop.id] || 10}
+                          onChange={e => setPlPropPoints(prev => ({...prev, [prop.id]: parseInt(e.target.value) || 0}))}
+                          onClick={e => e.stopPropagation()}
+                          style={{width: 48, border: '1px solid #ddd', padding: '4px 6px', fontSize: '12px', fontFamily: 'inherit', textAlign: 'center'}} />
+                        <span style={{fontSize: '11px', color: '#aaa'}}>pts</span>
+                      </div>
+                    </label>
+                  ))}
+                  <div style={{fontSize: '10px', color: '#aaa', marginTop: 4}}>default points = ~10% of total matchday points available · adjust as needed</div>
+                </div>
+              )}
+            </div>
+
+            {/* Game mode */}
+            <div style={{marginBottom: 20}}>
+              <label style={{display: 'block', fontWeight: 600, marginBottom: 8}}>games per matchday</label>
+              <div style={{display: 'flex', flexDirection: 'column' as const, gap: 6}}>
+                <button type="button" onClick={() => setPlGameMode('every_game')}
+                  style={{padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer',
+                    borderColor: plGameMode === 'every_game' ? '#C8102E' : '#e0e0db',
+                    background: plGameMode === 'every_game' ? '#fff5f5' : 'white'}}>
+                  <div style={{fontWeight: 600, fontSize: '13px', color: plGameMode === 'every_game' ? '#C8102E' : '#111'}}>every game</div>
+                  <div style={{fontSize: '11px', color: '#aaa', marginTop: 3}}>predict all games each matchday — typically 10 games</div>
+                </button>
+                <button type="button" onClick={() => setPlGameMode('best5')}
+                  style={{padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer', opacity: 0.5,
+                    borderColor: plGameMode === 'best5' ? '#C8102E' : '#e0e0db',
+                    background: plGameMode === 'best5' ? '#fff5f5' : 'white'}}>
+                  <div style={{fontWeight: 600, fontSize: '13px', color: plGameMode === 'best5' ? '#C8102E' : '#111'}}>best 5 games <span style={{fontSize: '10px', fontWeight: 400, color: '#bbb'}}>coming soon</span></div>
+                  <div style={{fontSize: '11px', color: '#aaa', marginTop: 3}}>algorithm picks the 5 most predictable games each matchday</div>
+                </button>
+              </div>
+            </div>
+
+            <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '16px'}}>
+              <button onClick={() => setStep(2)} style={{padding: '10px 16px', fontSize: '13px', background: 'none', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit'}}>← back</button>
+              <button className="btn-primary" onClick={() => setStep(4)}
+                style={{padding: '10px 24px', fontSize: '14px', minHeight: 44}}>next →</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 3a/4: Bracket scoring (before_tournament, soccer only) ─── */}
+        {((isPL ? step === 4 : step === 3)) && isBracket && sport !== 'mma' && (
           <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
             <h2 style={{fontWeight: 700, fontSize: '14px', marginBottom: '4px'}}>group stage format</h2>
             <p style={{fontSize: '11px', color: '#aaa', marginBottom: '16px'}}>how do participants predict the group stage?</p>
@@ -406,27 +531,122 @@ export default function CreatePoolPage() {
             </div>
 
             <div style={{display: 'flex', justifyContent: 'space-between'}}>
-              <button className="btn-secondary" onClick={() => setStep(2)} style={{padding: '10px 20px', minHeight: 44}}>← back</button>
-              <button className="btn-primary" onClick={() => setStep(4)} style={{padding: '10px 20px', minHeight: 44}}>next →</button>
+              <button className="btn-secondary" onClick={() => setStep(isPL ? 3 : 2)} style={{padding: '10px 20px', minHeight: 44}}>← back</button>
+              <button className="btn-primary" onClick={() => setStep(isPL ? 5 : 4)} style={{padding: '10px 20px', minHeight: 44}}>next →</button>
             </div>
           </div>
         )}
 
-        {/* ── Step 3b: Ruleset builder (before_each_game or UFC before_card) */}
-        {step === 3 && (!isBracket || sport === 'mma') && (
+        {/* ── Step 3b/4: Ruleset builder (before_each_game or UFC before_card) */}
+        {(isPL ? step === 4 : step === 3) && (!isBracket || sport === 'mma') && (
           <div>
             <RulesetBuilder
               sport={sport}
-              onComplete={(rules) => { setSelectedRules(rules as SelectedRule[]); setStep(4) }}
+              onComplete={(rules) => { setSelectedRules(rules as SelectedRule[]); setStep(isPL ? 5 : 4) }}
             />
             <div style={{marginTop: '16px'}}>
-              <button className="btn-secondary" onClick={() => setStep(2)} style={{padding: '10px 20px', minHeight: 44}}>← back</button>
+              <button className="btn-secondary" onClick={() => setStep(isPL ? 3 : 2)} style={{padding: '10px 20px', minHeight: 44}}>← back</button>
             </div>
           </div>
         )}
 
-        {/* ── Step 4: Buy-in ────────────────────────────────────────────── */}
-        {step === 4 && (
+        {/* ── Step 5: PL Prizes ─────────────────────────────────────────── */}
+        {step === 5 && isPL && (
+          <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
+            <div style={{fontWeight: 600, fontSize: '14px', marginBottom: 4}}>prize structure</div>
+            <div style={{fontSize: '11px', color: '#aaa', marginBottom: 20}}>set up how winnings work — you can have both</div>
+
+            {/* Season pot */}
+            <div style={{marginBottom: 16, padding: '14px', border: '1px solid', borderColor: plPrizeSeason ? '#C8102E' : '#e0e0db', background: plPrizeSeason ? '#fff5f5' : 'white'}}>
+              <label style={{display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: plPrizeSeason ? 12 : 0}}>
+                <input type="checkbox" checked={plPrizeSeason} onChange={e => setPlPrizeSeason(e.target.checked)}
+                  style={{width: 18, height: 18, cursor: 'pointer', marginTop: 2}} />
+                <div>
+                  <div style={{fontWeight: 600, fontSize: '13px'}}>season pot</div>
+                  <div style={{fontSize: '11px', color: '#aaa'}}>collect once upfront, pay out at end of season</div>
+                </div>
+              </label>
+              {plPrizeSeason && (
+                <div style={{marginLeft: 28}}>
+                  <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12}}>
+                    <div>
+                      <div style={{fontSize: '11px', color: '#888', marginBottom: 4}}>buy-in amount ($)</div>
+                      <input type="number" min="0" placeholder="e.g. 50" value={plSeasonBuyIn}
+                        onChange={e => setPlSeasonBuyIn(e.target.value)}
+                        style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontFamily: 'inherit'}} />
+                    </div>
+                    <div>
+                      <div style={{fontSize: '11px', color: '#888', marginBottom: 4}}>best weeks counted</div>
+                      <input type="number" min="1" max="38" value={plBestWeeks}
+                        onChange={e => setPlBestWeeks(parseInt(e.target.value) || 38)}
+                        style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontFamily: 'inherit'}} />
+                    </div>
+                  </div>
+                  <div style={{fontSize: '10px', color: '#aaa'}}>
+                    only the best {plBestWeeks} of 38 matchdays will count toward the season total — missed weeks won't hurt you
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Weekly pot */}
+            <div style={{marginBottom: 20, padding: '14px', border: '1px solid', borderColor: plPrizeWeekly ? '#C8102E' : '#e0e0db', background: plPrizeWeekly ? '#fff5f5' : 'white'}}>
+              <label style={{display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: plPrizeWeekly ? 12 : 0}}>
+                <input type="checkbox" checked={plPrizeWeekly} onChange={e => setPlPrizeWeekly(e.target.checked)}
+                  style={{width: 18, height: 18, cursor: 'pointer', marginTop: 2}} />
+                <div>
+                  <div style={{fontWeight: 600, fontSize: '13px'}}>weekly pot</div>
+                  <div style={{fontSize: '11px', color: '#aaa'}}>members buy credits, allocate before each matchday, weekly winner paid out</div>
+                </div>
+              </label>
+              {plPrizeWeekly && (
+                <div style={{marginLeft: 28}}>
+                  <div style={{fontSize: '11px', color: '#888', marginBottom: 4}}>buy-in per matchday ($)</div>
+                  <input type="number" min="0" placeholder="e.g. 10" value={plWeeklyBuyIn}
+                    onChange={e => setPlWeeklyBuyIn(e.target.value)}
+                    style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontFamily: 'inherit', marginBottom: 8}} />
+                  <div style={{fontSize: '10px', color: '#aaa'}}>
+                    you issue credits to members as they pay. they allocate credits to enter each matchday. weekly winner takes the pot.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Payment handles */}
+            {(plPrizeSeason || plPrizeWeekly) && (
+              <div style={{marginBottom: 20}}>
+                <div style={{fontSize: '12px', fontWeight: 600, marginBottom: 8}}>payment handles</div>
+                <div style={{display: 'flex', flexDirection: 'column' as const, gap: 8}}>
+                  <div>
+                    <div style={{fontSize: '11px', color: '#888', marginBottom: 4}}>venmo handle</div>
+                    <input placeholder="@yourhandle" value={venmoHandle} onChange={e => setVenmoHandle(e.target.value)}
+                      style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '14px', fontFamily: 'inherit'}} />
+                  </div>
+                  <div>
+                    <div style={{fontSize: '11px', color: '#888', marginBottom: 4}}>zelle (phone or email)</div>
+                    <input placeholder="phone or email" value={zelleHandle} onChange={e => setZelleHandle(e.target.value)}
+                      style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '14px', fontFamily: 'inherit'}} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '16px'}}>
+              <button className="btn-secondary" onClick={() => setStep(4)} style={{padding: '10px 20px', minHeight: 44}}>← back</button>
+              <button className="btn-primary" onClick={handleCreate} disabled={loading || (!plPrizeSeason && !plPrizeWeekly)}
+                style={{padding: '10px 24px', fontSize: '14px', minHeight: 44}}>
+                {loading ? 'creating...' : 'create pool →'}
+              </button>
+            </div>
+            {!plPrizeSeason && !plPrizeWeekly && (
+              <div style={{fontSize: '11px', color: '#aaa', textAlign: 'center' as const, marginTop: 8}}>select at least one prize type to continue</div>
+            )}
+            {error && <p style={{fontSize: '12px', color: '#C8102E', marginTop: 8}}>{error}</p>}
+          </div>
+        )}
+
+        {/* ── Step 4/4: Buy-in (non-PL pools) ─────────────────────────────── */}
+        {step === 4 && !isPL && (
           <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
             <label style={{display: 'block', fontWeight: 600, marginBottom: '4px'}}>
               buy-in amount <span style={{fontWeight: 400, color: '#aaa'}}>(optional)</span>
