@@ -55,7 +55,7 @@ export default function CreatePoolPage() {
     { id: 'relegated', label: 'Relegated teams', desc: 'Pick all 3 relegated teams' },
   ]
 
-  const isPL = TOURNAMENTS.find(t => t.id === tournamentId)?.sport === 'soccer' && tournamentId.startsWith('pl_')
+  const isPL = tournamentId.startsWith('pl_')
 
   // Step 3b — bracket settings (before_tournament only)
   const [groupFormat, setGroupFormat] = useState<'standings' | 'wld' | 'exact'>('standings')
