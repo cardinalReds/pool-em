@@ -343,12 +343,14 @@ export default function CreatePoolPage() {
                     {id: 'before_weekend', label: 'before each race weekend', desc: 'picks lock before the qualifying session starts — one ticket per GP weekend'},
                     {id: 'before_session', label: 'before each session', desc: 'separate tickets for qualifying and race — picks lock before each session'},
                   ] : sport === 'mma' ? [
-                    {id: 'before_each_game', label: 'before each fight', desc: 'picks lock at fight time — predict fight by fight', hidden: true},
                     {id: 'before_tournament', label: 'before the card', desc: 'predict all fights before the card starts — picks lock at first fight'},
+                  ] : isPL ? [
+                    {id: 'before_weekend', label: 'before each match week', desc: 'all picks for the matchday lock before the first game kicks off'},
+                    {id: 'before_each_game', label: 'before each game', desc: 'picks lock individually at each kickoff'},
                   ] : [
                     {id: 'before_each_game', label: 'before each game', desc: 'picks lock at kickoff — predict game by game'},
                     {id: 'before_tournament', label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'},
-                  ]).filter((opt: any) => !opt.hidden).map((opt: any) => (
+                  ]).map((opt: any) => (
                     <button key={opt.id} onClick={() => setDeadlineType(opt.id as any)}
                       style={{
                         padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer', minHeight: 60,
