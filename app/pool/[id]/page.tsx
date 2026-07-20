@@ -910,6 +910,19 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                     <ReminderButton poolId={pool.id} userId={user.id} userEmail={user.email || ''} />
                   </div>
                 )}
+
+                {/* Danger zone — admin only */}
+                {isAdmin && (
+                  <div style={{marginBottom: 20}}>
+                    <div style={{fontSize: '10px', fontWeight: 700, color: '#C8102E', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8}}>danger zone</div>
+                    {pool.tournament_end_date && new Date(pool.tournament_end_date) <= new Date() && (
+                      <div style={{marginBottom: 8}}>
+                        <ArchivePool poolId={pool.id} userId={user.id} archived={!!pool.archived} />
+                      </div>
+                    )}
+                    <DeletePool poolId={pool.id} />
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -923,7 +936,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             {([
               { id: 'picks', label: 'picks', symbol: '📋' },
               { id: 'leaderboard', label: 'leaderboard', symbol: '🏆' },
-              { id: 'chat', label: 'chat', symbol: '💬' },
+              { id: 'chat', label: 'shit chat', symbol: '💬' },
               { id: 'settings', label: 'settings', symbol: '⚙️' },
             ] as const).map(tab => (
               <button key={tab.id} type="button" onClick={() => setMobilePanel(tab.id)}
