@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { RULE_PACKAGES } from '@/types'
 import FixturesList from '@/components/FixturesList'
@@ -137,6 +137,12 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const [inviteUrl, setInviteUrl] = useState('')
   const [isMobile, setIsMobile] = useState(false)
   const [mobilePanel, setMobilePanel] = useState<'picks' | 'leaderboard' | 'chat' | 'settings'>('picks')
+  const mobilePanelRef = useRef<HTMLDivElement>(null)
+
+  function switchMobilePanel(panel: 'picks' | 'leaderboard' | 'chat' | 'settings') {
+    setMobilePanel(panel)
+    setTimeout(() => mobilePanelRef.current?.scrollTo({ top: 0 }), 0)
+  }
   const [mobileSortMode, setMobileSortMode] = useState<'date' | 'group' | 'round'>('date')
   const [mobileViewMode, setMobileViewMode] = useState<'pages' | 'list'>('pages')
   const [chatWidth, setChatWidth] = useState(260)
@@ -684,7 +690,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         <div style={{minHeight: 'calc(100vh - 41px)', display: 'flex', flexDirection: 'column' as const, paddingBottom: 60}}>
 
           {/* Panel content */}
-          <div style={{flex: 1, overflowY: 'auto' as const}}>
+          <div ref={mobilePanelRef} style={{flex: 1, overflowY: 'auto' as const}}>
 
             {/* Picks panel */}
             {mobilePanel === 'picks' && (
@@ -950,7 +956,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               { id: 'chat', label: 'shit chat', symbol: '💬' },
               { id: 'settings', label: 'settings', symbol: '⚙️' },
             ] as const).map(tab => (
-              <button key={tab.id} type="button" onClick={() => setMobilePanel(tab.id)}
+              <button key={tab.id} type="button" onClick={() => switchMobilePanel(tab.id)}
                 style={{
                   flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center',
                   gap: 2, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
