@@ -55,18 +55,27 @@ function ArchivePool({ poolId, userId, archived }: { poolId: string; userId: str
   )
 }
 
+// Every table with a pool_id foreign key — must be cleared before the pools row itself can be deleted
+const POOL_CHILD_TABLES = [
+  'predictions', 'predictions_v2', 'ghost_entries', 'pool_rules', 'season_prop_rules',
+  'bracket_scoring_rules', 'bracket_picks', 'pool_changes', 'messages', 'reminders', 'pool_members',
+]
+
 function DeletePool({ poolId }: { poolId: string }) {
   const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState('')
 
   async function handleDelete() {
     setDeleting(true)
+    setError('')
     const supabase = createClient()
-    await supabase.from('predictions').delete().eq('pool_id', poolId)
-    await supabase.from('predictions_v2').delete().eq('pool_id', poolId)
-    await supabase.from('pool_members').delete().eq('pool_id', poolId)
-    await supabase.from('reminders').delete().eq('pool_id', poolId)
-    await supabase.from('pools').delete().eq('id', poolId)
+    for (const table of POOL_CHILD_TABLES) {
+      const { error: childError } = await supabase.from(table).delete().eq('pool_id', poolId)
+      if (childError) { setError(`failed to delete ${table}: ${childError.message}`); setDeleting(false); return }
+    }
+    const { error: poolError } = await supabase.from('pools').delete().eq('id', poolId)
+    if (poolError) { setError(poolError.message); setDeleting(false); return }
     window.location.href = '/dashboard'
   }
 
@@ -90,6 +99,7 @@ function DeletePool({ poolId }: { poolId: string }) {
               {deleting ? 'deleting...' : 'yes, delete'}
             </button>
           </div>
+          {error && <p style={{fontSize: '11px', color: '#C8102E', marginTop: '8px'}}>{error}</p>}
         </div>
       )}
     </div>
@@ -205,7 +215,19 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       setPool(pool)
       setInviteUrl(`${window.location.origin}/pool/join/${pool.invite_code}`)
 
-      const { data: membership } = await supabase.from('pool_members').select('id, last_seen_changes_at').eq('pool_id', pool.id).eq('user_id', currentUser.id).single()
+      const { data: fetchedMembership } = await supabase.from('pool_members').select('id, last_seen_changes_at').eq('pool_id', pool.id).eq('user_id', currentUser.id).single()
+      let membership = fetchedMembership
+      if (!membership && pool.admin_id === currentUser.id) {
+        // Admin's own membership row is missing — can happen if it failed to save at creation
+        // time (fixed separately, but pre-existing pools can still be affected). Self-heal
+        // instead of bouncing the pool's own admin to the "you've been invited" join screen.
+        const { data: healedMembership } = await supabase.from('pool_members').insert({
+          pool_id: pool.id,
+          user_id: currentUser.id,
+          display_name: currentUser.user_metadata?.display_name || currentUser.email?.split('@')[0] || 'Admin',
+        }).select('id, last_seen_changes_at').single()
+        membership = healedMembership
+      }
       if (!membership) { window.location.href = `/pool/join/${pool.invite_code}`; return }
 
       // Load changes since last seen

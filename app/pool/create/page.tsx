@@ -178,7 +178,9 @@ export default function CreatePoolPage() {
       const maxPtsPerGame = selectedRules.reduce((sum, r) => sum + (r.points || 0), 0)
       const defaultPropPts = Math.round(maxPtsPerGame * 10 * 0.10)
       const propsToSave: {category: string, points: number}[] = []
+      const hasTop4 = plSelectedProps.includes('top_4')
       for (const cat of plSelectedProps) {
+        if (cat === 'title_winner' && hasTop4) continue // top_4 branch below already adds this category
         if (cat === 'top_4') {
           propsToSave.push({ category: 'title_winner', points: plPropPoints['title_winner'] ?? defaultPropPts })
           propsToSave.push({ category: 'top_4_2nd', points: plPropPoints['top_4'] ?? defaultPropPts })
