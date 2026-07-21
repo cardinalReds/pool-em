@@ -346,7 +346,23 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         }
       })
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+
+    // Ghost entries are added from the picks tab (a different component) — subscribe
+    // so the leaderboard picks up new/removed entries without a manual page refresh.
+    const ghostChannel = supabase
+      .channel('pool-ghost-entries')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ghost_entries', filter: `pool_id=eq.${params.id}` }, (payload) => {
+        setLeaderboard(prev => prev.some(m => m.user_id === payload.new.id) ? prev : [
+          ...prev,
+          { user_id: payload.new.id, display_name: payload.new.name, is_paid: false, is_ghost: true, points: 0 },
+        ].sort((a, b) => b.points - a.points))
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'ghost_entries', filter: `pool_id=eq.${params.id}` }, (payload) => {
+        setLeaderboard(prev => prev.filter(m => m.user_id !== payload.old.id))
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel); supabase.removeChannel(ghostChannel) }
   }, [params.id])
 
   async function togglePaid(memberId: string, currentValue: boolean) {
@@ -718,7 +734,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 )}
                 {user && pool.deadline_type === 'before_tournament' && pool.sport !== 'mma' ? (
                   <>
-                    <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} isAdmin={isAdmin} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
+                    <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} isAdmin={isAdmin} tournamentId={pool.tournament_id} />
                     {new Date() >= new Date('2026-06-11T19:00:00Z') && (
                       <div style={{ marginTop: 32 }}>
                         <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 16, paddingTop: 16, borderTop: '1px solid #eee' }}>everyone's picks</div>
@@ -981,7 +997,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             <div style={{width: '100%', maxWidth: 560}}>
               {user && pool.deadline_type === 'before_tournament' && pool.sport !== 'mma' ? (
                 <>
-                  <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} isAdmin={isAdmin} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
+                  <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} isAdmin={isAdmin} tournamentId={pool.tournament_id} />
                   {new Date() >= new Date('2026-06-11T19:00:00Z') && (
                     <div style={{ marginTop: 32 }}>
                       <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 16, paddingTop: 16, borderTop: '1px solid #eee' }}>everyone's picks</div>

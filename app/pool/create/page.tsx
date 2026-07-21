@@ -131,17 +131,12 @@ export default function CreatePoolPage() {
     loadTournaments()
   }, [])
 
-  // Step 2 → step 3: bracket pools skip ruleset builder
-  function goToStep3() {
-    setStep(3)
-  }
-
   async function handleCreate() {
     setLoading(true)
     setError('')
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) { setError('you must be logged in to create a pool'); setLoading(false); return }
 
     const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase()
     const { data: pool, error: poolError } = await supabase.from('pools').insert({
@@ -192,14 +187,15 @@ export default function CreatePoolPage() {
           propsToSave.push({ category: cat, points: plPropPoints[cat] ?? defaultPropPts })
         }
       }
-      await supabase.from('season_prop_rules').insert(
+      const { error: propsError } = await supabase.from('season_prop_rules').insert(
         propsToSave.map(p => ({ pool_id: pool.id, category: p.category, points: p.points }))
       )
+      if (propsError) { setError(propsError.message); setLoading(false); return }
     }
 
     // Save per-game rules (before_each_game, before_weekend, before_session pools)
     if (selectedRules.length > 0) {
-      await supabase.from('pool_rules').insert(
+      const { error: rulesError } = await supabase.from('pool_rules').insert(
         selectedRules.map(r => ({
           pool_id: pool.id,
           category_id: r.category_id,
@@ -207,11 +203,12 @@ export default function CreatePoolPage() {
           bonus_points: r.bonus_points || 0,
         }))
       )
+      if (rulesError) { setError(rulesError.message); setLoading(false); return }
     }
 
     // Save bracket scoring rules (before_tournament soccer/f1 pools only, not MMA)
     if (deadlineType === 'before_tournament' && sport !== 'mma') {
-      await supabase.from('bracket_scoring_rules').upsert({
+      const { error: bracketError } = await supabase.from('bracket_scoring_rules').upsert({
         pool_id: pool.id,
         group_format: groupFormat,
         standings_first: bracketScoring.standings_first,
@@ -224,14 +221,16 @@ export default function CreatePoolPage() {
         sf_pts: bracketScoring.sf_pts,
         final_pts: bracketScoring.final_pts,
       }, { onConflict: 'pool_id' })
+      if (bracketError) { setError(bracketError.message); setLoading(false); return }
     }
 
     // Add admin as member
-    await supabase.from('pool_members').insert({
+    const { error: memberError } = await supabase.from('pool_members').insert({
       pool_id: pool.id,
       user_id: user.id,
       display_name: user.user_metadata?.display_name || 'Admin',
     })
+    if (memberError) { setError(memberError.message); setLoading(false); return }
 
     window.location.href = `/pool/${pool.id}`
   }
