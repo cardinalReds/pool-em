@@ -266,7 +266,7 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
 
 // CategoryInput is defined outside FixturesList to prevent remounting on parent re-renders
 // (which would close PlayerDropdown's open state). All closure vars are passed as props.
-function CategoryInput({ fixture, rule, pred, locked, finished, updateLocal, scoreInputs, setScoreInputs, predsRef, poolRules }: {
+function CategoryInput({ fixture, rule, pred, locked, finished, updateLocal, scoreInputs, setScoreInputs, predsRef, poolRules, isPL }: {
 fixture: Fixture
 rule: PoolRule
 pred: PredV2 | undefined
@@ -277,6 +277,7 @@ scoreInputs: Record<string, string>
 setScoreInputs: React.Dispatch<React.SetStateAction<Record<string, string>>>
 predsRef: React.MutableRefObject<Record<string, PredV2>>
 poolRules: PoolRule[]
+isPL?: boolean
 }) {
   const key = `${fixture.id}:${rule.category_id}`
   // pred passed as prop
@@ -1521,6 +1522,7 @@ export default function FixturesList({
                 setScoreInputs={setScoreInputs}
                 predsRef={predsRef}
                 poolRules={poolRules}
+                isPL={isPL}
               />
             ))}
             {!locked && !finished && (
