@@ -8,6 +8,7 @@
     { "path": "/api/mma/score", "schedule": "* * * * *" },
     { "path": "/api/reminders", "schedule": "*/30 * * * *" },
     { "path": "/api/odds", "schedule": "0 */6 * * *" },
-    { "path": "/api/score-bracket", "schedule": "*/5 * * * *" }
+    { "path": "/api/score-bracket", "schedule": "*/5 * * * *" },
+    { "path": "/api/pl/squads", "schedule": "0 6 * * *" }
   ]
 }
