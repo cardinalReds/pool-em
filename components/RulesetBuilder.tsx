@@ -35,6 +35,19 @@ const EXAMPLE_FIXTURE = {
   handicap_line: -0.5,
 }
 
+const EXAMPLE_FIXTURE_PL = {
+  home_team: 'Arsenal',
+  away_team: 'Chelsea',
+  home_flag: '🔴',
+  away_flag: '🔵',
+  date: 'Aug 16 · 3:00 PM BST',
+  round: 'Matchday 1',
+  goals_line: 2.5,
+  corners_line: 9.5,
+  card_pts_line: 30,
+  handicap_line: -0.5,
+}
+
 const EXAMPLE_FIXTURE_MMA = {
   home_team: 'Ilia Topuria',
   away_team: 'Justin Gaethje',
@@ -188,7 +201,7 @@ function checkCorrect(categoryId: string, pick: any, result: ReturnType<typeof g
 }
 
 const CATEGORY_GROUPS = [
-  { label: 'Match Outcome', ids: ['soccer_result', 'soccer_team_to_advance', 'soccer_ht_result', 'soccer_asian_handicap'] },
+  { label: 'Match Outcome', ids: ['soccer_result', 'soccer_team_to_advance', 'soccer_ht_result', 'soccer_asian_handicap'], plExclude: ['soccer_team_to_advance'] },
   { label: 'Goals', ids: ['soccer_exact_score', 'soccer_ht_exact_score', 'soccer_btts', 'soccer_total_goals_ou', 'soccer_first_team_score', 'soccer_first_goalscorer', 'soccer_anytime_goalscorer'] },
   { label: 'Corners', ids: ['soccer_corners_winner', 'soccer_ht_corners_winner', 'soccer_total_corners_ou'] },
   { label: 'Cards', ids: ['soccer_card_points_ou', 'soccer_cards_home_away', 'soccer_cards_ht', 'soccer_first_yellow_team'] },
@@ -303,11 +316,12 @@ const F1_GRID_PREVIEW = [
   { name: 'Cadillac', color: '#CC0000', drivers: ['Sergio Pérez', 'Valtteri Bottas'] },
 ]
 
-export default function RulesetBuilder({ sport, onComplete }: {
+export default function RulesetBuilder({ sport, onComplete, isPL }: {
   sport: string
   onComplete: (rules: SelectedRule[]) => void
+  isPL?: boolean
 }) {
-  const fixture = sport === 'mma' ? EXAMPLE_FIXTURE_MMA : sport === 'f1' ? EXAMPLE_FIXTURE_F1 : EXAMPLE_FIXTURE
+  const fixture = sport === 'mma' ? EXAMPLE_FIXTURE_MMA : sport === 'f1' ? EXAMPLE_FIXTURE_F1 : isPL ? EXAMPLE_FIXTURE_PL : EXAMPLE_FIXTURE
   const [categories, setCategories] = useState<Category[]>([])
   const [rules, setRules] = useState<Record<string, SelectedRule>>({})
   const [loading, setLoading] = useState(true)
@@ -788,7 +802,11 @@ export default function RulesetBuilder({ sport, onComplete }: {
       </div>
 
       {CATEGORY_GROUPS.map(group => {
-        const groupCats = categories.filter(c => group.ids.includes(c.id))
+        const groupCats = categories.filter(c => {
+          if (!group.ids.includes(c.id)) return false
+          if (isPL && (group as any).plExclude?.includes(c.id)) return false
+          return true
+        })
         if (groupCats.length === 0) return null
         return (
           <div key={group.label} style={{ marginBottom: '20px' }}>
@@ -838,7 +856,7 @@ export default function RulesetBuilder({ sport, onComplete }: {
       </div>
     </div>
   ) : (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'start' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: '24px', alignItems: 'start' }}>
       {rulesPanel}
       {/* RIGHT: Ticket emulator — scrollable, max height so it doesn't go off screen */}
       <div style={{ position: 'sticky', top: 70, maxHeight: 'calc(100vh - 90px)', display: 'flex', flexDirection: 'column' }}>

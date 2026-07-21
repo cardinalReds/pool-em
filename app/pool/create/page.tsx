@@ -532,6 +532,7 @@ export default function CreatePoolPage() {
           <div>
             <RulesetBuilder
               sport={sport}
+              isPL={isPL}
               onComplete={(rules) => { setSelectedRules(rules as SelectedRule[]); setStep(isPL ? 5 : 4) }}
             />
             <div style={{marginTop: '16px'}}>
