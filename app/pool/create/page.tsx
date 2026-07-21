@@ -52,6 +52,7 @@ export default function CreatePoolPage() {
   ]
 
   const isPL = tournamentId.startsWith('pl_')
+  const defaultPropPts = Math.round(selectedRules.reduce((sum, r) => sum + (r.points || 0), 0) * 10 * 0.10)
 
   // Step 3b — bracket settings (before_tournament only)
   const [groupFormat, setGroupFormat] = useState<'standings' | 'wld' | 'exact'>('standings')
@@ -548,14 +549,10 @@ export default function CreatePoolPage() {
           </div>
         )}
 
-        {/* ── Step 5: PL Prizes ─────────────────────────────────────────── */}
-        {step === 5 && isPL && (() => {
-          // Calculate default prop points = 10% of max possible game points per game × 10 games
-          const maxPtsPerGame = selectedRules.reduce((sum, r) => sum + (r.points || 0), 0)
-          const defaultPropPts = Math.round(maxPtsPerGame * 10 * 0.10)
-          return (
+        {/* ── Step 5: PL Buy-in rules ───────────────────────────────────── */}
+        {step === 5 && isPL && (
           <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
-            <div style={{fontWeight: 600, fontSize: '14px', marginBottom: 4}}>prize structure</div>
+            <div style={{fontWeight: 600, fontSize: '14px', marginBottom: 4}}>buy-in rules</div>
             <div style={{fontSize: '11px', color: '#aaa', marginBottom: 20}}>set up how winnings work — you can have both</div>
 
             {/* Season pot */}
@@ -676,7 +673,7 @@ export default function CreatePoolPage() {
             )}
             {error && <p style={{fontSize: '12px', color: '#C8102E', marginTop: 8}}>{error}</p>}
           </div>
-        )})}
+        )}
 
         {/* ── Step 4/4: Buy-in (non-PL pools) ─────────────────────────────── */}
         {step === 4 && !isPL && (
