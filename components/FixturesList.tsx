@@ -809,7 +809,7 @@ export default function FixturesList({
   const [activeEntryId, setActiveEntryId] = useState<string>(userId)
   const [newGhostName, setNewGhostName] = useState('')
   const [addingGhost, setAddingGhost] = useState(false)
-  const [_sortMode, setSortMode] = useState<'date' | 'group' | 'round'>(deadlineType === 'before_weekend' ? 'group' : 'date')
+  const [_sortMode, setSortMode] = useState<'date' | 'group' | 'round'>('group')
   const [_viewMode, setViewMode] = useState<'pages' | 'list'>('pages')
   const sortMode = externalSortMode ?? _sortMode
   const viewMode = externalViewMode ?? _viewMode
