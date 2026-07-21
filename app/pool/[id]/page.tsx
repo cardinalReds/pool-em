@@ -143,7 +143,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
     setMobilePanel(panel)
     setTimeout(() => mobilePanelRef.current?.scrollTo({ top: 0 }), 0)
   }
-  const [mobileSortMode, setMobileSortMode] = useState<'date' | 'group' | 'round'>('date')
+  const [mobileSortMode, setMobileSortMode] = useState<'date' | 'group' | 'round'>(pool?.deadline_type === 'before_weekend' ? 'round' : 'date')
   const [mobileViewMode, setMobileViewMode] = useState<'pages' | 'list'>('pages')
   const [chatWidth, setChatWidth] = useState(260)
   const [isResizingChat, setIsResizingChat] = useState(false)
