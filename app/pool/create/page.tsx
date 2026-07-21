@@ -149,15 +149,22 @@ export default function CreatePoolPage() {
       invite_code: inviteCode,
       admin_id: user.id,
       is_active: true,
-      buy_in_amount: isPL ? null : (buyIn ? parseFloat(buyIn) : null),
+      // PL season pot reuses the generic buy_in_amount/payout_structure fields so the same
+      // collection-tracking UI (badge, paid pills, buy-in-due banner) works for it too —
+      // otherwise that money is only ever written here and never shown anywhere again.
+      buy_in_amount: isPL
+        ? (plPrizeSeason && plSeasonBuyIn ? parseFloat(plSeasonBuyIn) : null)
+        : (buyIn ? parseFloat(buyIn) : null),
       venmo_handle: venmoHandle.replace('@', '').trim() || null,
       zelle_handle: zelleHandle.trim() || null,
       bank_sort_code: sortCode.trim() || null,
       bank_account_number: accountNumber.trim() || null,
       allow_member_invites: allowMemberInvites,
-      payout_structure: !isPL && buyIn && parseFloat(buyIn) > 0
-        ? (payoutTemplate === 'custom' ? customPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description || null)
-        : null,
+      payout_structure: isPL
+        ? (plPrizeSeason && plSeasonBuyIn ? `season pot · best ${plBestWeeks} of 38 matchdays counted` : null)
+        : (buyIn && parseFloat(buyIn) > 0
+          ? (payoutTemplate === 'custom' ? customPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description || null)
+          : null),
       pick_mode: deadlineType === 'before_tournament' ? groupFormat : null,
       // PL-specific
       ...(isPL ? {
