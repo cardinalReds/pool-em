@@ -780,7 +780,7 @@ export default function FixturesList({
   const [activeEntryId, setActiveEntryId] = useState<string>(userId)
   const [newGhostName, setNewGhostName] = useState('')
   const [addingGhost, setAddingGhost] = useState(false)
-  const [_sortMode, setSortMode] = useState<'date' | 'group' | 'round'>(deadlineType === 'before_weekend' ? 'round' : 'date')
+  const [_sortMode, setSortMode] = useState<'date' | 'group' | 'round'>(deadlineType === 'before_weekend' ? 'group' : 'date')
   const [_viewMode, setViewMode] = useState<'pages' | 'list'>('pages')
   const sortMode = externalSortMode ?? _sortMode
   const viewMode = externalViewMode ?? _viewMode
@@ -1136,7 +1136,19 @@ export default function FixturesList({
 
   function isLocked(f: Fixture) {
     if (deadlineType === 'before_tournament') return false
+    if (deadlineType === 'before_weekend') {
+      // Lock when the first game of this matchday starts
+      const matchdayFixtures = fixtures.filter(x => x.round === f.round)
+      const firstKickoff = Math.min(...matchdayFixtures.map(x => new Date(x.date).getTime()))
+      return Date.now() >= firstKickoff
+    }
     return new Date(f.date) <= new Date()
+  }
+
+  function matchdayLockTime(round: string): Date | null {
+    const matchdayFixtures = fixtures.filter(x => x.round === round)
+    if (!matchdayFixtures.length) return null
+    return new Date(Math.min(...matchdayFixtures.map(x => new Date(x.date).getTime())))
   }
 
   function totalPointsForFixture(fixtureId: number): number | null {
@@ -1444,6 +1456,13 @@ export default function FixturesList({
               </span>
             )}
             {locked && !finished && <span style={{ color: '#aaa' }}>locked</span>}
+            {!locked && !finished && deadlineType === 'before_weekend' && (() => {
+              const lockTime = matchdayLockTime(fixture.round)
+              return lockTime ? <span style={{ color: '#bbb' }}>locks {formatPT(lockTime.toISOString())}</span> : null
+            })()}
+            {!locked && !finished && deadlineType === 'before_each_game' && (
+              <span style={{ color: '#bbb' }}>locks at kickoff</span>
+            )}
           </div>
         )}
 
@@ -1793,7 +1812,7 @@ export default function FixturesList({
           {(onlyRoundSpecials ? ['round'] : ['date', 'group', 'round'] as const).map((mode, i) => (
             <button type="button" key={mode} onClick={() => { setSortMode(mode as any); setCurrentPage(0) }}
               style={{ padding: '8px 16px', fontSize: '12px', cursor: 'pointer', border: 'none', borderLeft: i > 0 ? '1px solid #ddd' : 'none', fontFamily: 'inherit', background: sortMode === mode ? '#111' : 'white', color: sortMode === mode ? 'white' : '#888', minHeight: 44 }}>
-              by {mode}
+              {mode === 'group' && isPL ? 'by matchday' : `by ${mode}`}
             </button>
           ))}
         </div>
