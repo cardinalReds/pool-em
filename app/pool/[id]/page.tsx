@@ -518,7 +518,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           </div>
         </div>
         {leaderboard.map((member, i) => (
-          <div key={member.id} style={{
+          <div key={member.id || member.user_id} style={{
             display: 'flex', alignItems: 'center',
             padding: '7px 8px', marginBottom: '1px',
             background: member.user_id === user?.id ? '#fff5f5' : 'transparent',
@@ -575,7 +575,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           <div style={{fontSize: '11px', color: '#aaa', marginBottom: '4px'}}>Based only on the games you predicted.</div>
           <div style={{fontSize: '11px', color: '#aaa', marginBottom: '10px'}}>You've predicted {yourLeaderboardFixtureCount} out of {finishedFixtureCount} games.</div>
           {yourLeaderboard.map((member, i) => (
-            <div key={member.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 8px', marginBottom: '1px', background: member.user_id === user?.id ? '#fff5f5' : 'transparent', borderLeft: `3px solid ${member.user_id === user?.id ? '#C8102E' : 'transparent'}`}}>
+            <div key={member.id || member.user_id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 8px', marginBottom: '1px', background: member.user_id === user?.id ? '#fff5f5' : 'transparent', borderLeft: `3px solid ${member.user_id === user?.id ? '#C8102E' : 'transparent'}`}}>
               <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555', flex: 1}}>{i + 1}. {member.display_name}</span>
               <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', minWidth: 24, textAlign: 'right' as const}}>{member.points}</span>
             </div>
@@ -658,8 +658,8 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         )}
       </Section>
 
-      {/* Invite */}
-      {isAdmin && (
+      {/* Invite — admins always, members too if the pool allows it */}
+      {(isAdmin || pool.allow_member_invites) && (
         <Section title="invite" defaultOpen={!isMobile}>
           <InvitePanel poolName={pool.name} inviteUrl={inviteUrl} buyInAmount={pool.buy_in_amount} inviterName={user?.user_metadata?.display_name || user?.email?.split('@')[0] || null} />
         </Section>
@@ -704,6 +704,40 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       {isMobile ? (
         // ── Mobile layout — bottom tab bar ───────────────────────────────
         <div style={{minHeight: 'calc(100vh - 41px)', display: 'flex', flexDirection: 'column' as const, paddingBottom: 60}}>
+
+          {/* Always-visible summary/notices — mirrors desktop sidebar, shown regardless of active tab */}
+          <div style={{padding: '12px 16px 0'}}>
+            {isAdmin && new Date() < new Date('2026-06-12T19:00:00Z') && (
+              <a href={`/pool/${pool.id}/edit`}>
+                <button style={{fontSize: '11px', color: '#888', background: 'none', border: '1px solid #ddd', padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '12px'}}>
+                  ✏️ edit pool
+                </button>
+              </a>
+            )}
+            {isAdmin && pool.buy_in_amount && pool.payout_structure && (
+              <div style={{background: '#f9f9f9', border: '1px solid #eee', padding: '10px 12px', marginBottom: '12px', fontSize: '12px', color: '#555'}}>
+                💰 ${pool.buy_in_amount} buy-in · 🏆 {pool.payout_structure}
+              </div>
+            )}
+            {!isAdmin && recentChanges.length > 0 && !changesDismissed && (
+              <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '10px 12px', marginBottom: '12px', fontSize: '11px'}}>
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px'}}>
+                  <span style={{fontWeight: 600, color: '#888'}}>pool was updated</span>
+                  <button onClick={() => setChangesDismissed(true)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', fontSize: '14px', padding: 0}}>×</button>
+                </div>
+                {recentChanges.map((c, i) => (
+                  <div key={i} style={{marginBottom: i < recentChanges.length - 1 ? 4 : 0}}>
+                    <span style={{color: '#aaa', fontSize: '10px'}}>{new Date(c.changed_at).toLocaleDateString()} · </span>
+                    {Object.entries(c.changes as Record<string, any>).map(([key, val]: [string, any]) => (
+                      <span key={key} style={{display: 'block', color: '#555', marginLeft: '8px'}}>
+                        • {key.replace(/_/g, ' ')}: {val.from ?? 'none'} → {val.to ?? 'none'}
+                      </span>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Panel content */}
           <div ref={mobilePanelRef} style={{flex: 1, overflowY: 'auto' as const}}>
@@ -826,9 +860,20 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                     borderLeft: `3px solid ${member.user_id === user?.id ? '#C8102E' : 'transparent'}`,
                   }}>
                     <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const}}>
-                      {i + 1}. {member.display_name}
+                      {i + 1}. {member.display_name}{member.is_ghost ? <span style={{fontSize: '10px', color: '#bbb', marginLeft: 4}}>ghost</span> : ''}
                     </span>
                     <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
+                      {isAdmin && member.is_ghost && (
+                        <button onClick={async () => {
+                          if (!confirm(`Delete ${member.display_name}?`)) return
+                          const supabase = (await import('@/lib/supabase/client')).createClient()
+                          await supabase.from('predictions_v2').delete().eq('pool_id', pool.id).eq('user_id', member.user_id)
+                          await supabase.from('ghost_entries').delete().eq('id', member.user_id)
+                          setLeaderboard(prev => prev.filter(m => m.user_id !== member.user_id))
+                        }} style={{fontSize: '11px', color: '#C8102E', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit'}}>
+                          delete
+                        </button>
+                      )}
                       {isAdmin && pool.buy_in_amount && (
                         <button onClick={() => togglePaid(member.id, member.is_paid)}
                           style={{width: 22, height: 22, borderRadius: '50%', border: '1px solid',
@@ -838,6 +883,11 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                             display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
                           {member.is_paid ? '✓' : ''}
                         </button>
+                      )}
+                      {!isAdmin && pool.buy_in_amount && (
+                        <span style={{fontSize: '11px', color: member.is_paid ? '#2d7a2d' : '#ddd', width: 22, textAlign: 'center' as const}}>
+                          {member.is_paid ? '✓' : '○'}
+                        </span>
                       )}
                       <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', width: 40, textAlign: 'center' as const}}>
                         {member.points}
@@ -900,18 +950,20 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                   </div>
                 )}
 
-                {/* Invite */}
-                <div style={{marginBottom: 20}}>
-                  <div style={{fontSize: '10px', fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8}}>invite</div>
-                  <div style={{display: 'flex', gap: 8}}>
-                    <input readOnly value={`${typeof window !== 'undefined' ? window.location.origin : ''}/pool/join/${pool.invite_code}`}
-                      style={{flex: 1, border: '1px solid #e0e0db', padding: '8px', fontSize: '11px', fontFamily: 'inherit', background: '#f7f7f5', color: '#555'}} />
-                    <button type="button" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/pool/join/${pool.invite_code}`)}
-                      style={{padding: '8px 12px', background: '#111', color: 'white', border: 'none', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit'}}>
-                      copy
-                    </button>
+                {/* Invite — admins always, members too if the pool allows it */}
+                {(isAdmin || pool.allow_member_invites) && (
+                  <div style={{marginBottom: 20}}>
+                    <div style={{fontSize: '10px', fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8}}>invite</div>
+                    <div style={{display: 'flex', gap: 8}}>
+                      <input readOnly value={`${typeof window !== 'undefined' ? window.location.origin : ''}/pool/join/${pool.invite_code}`}
+                        style={{flex: 1, border: '1px solid #e0e0db', padding: '8px', fontSize: '11px', fontFamily: 'inherit', background: '#f7f7f5', color: '#555'}} />
+                      <button type="button" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/pool/join/${pool.invite_code}`)}
+                        style={{padding: '8px 12px', background: '#111', color: 'white', border: 'none', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit'}}>
+                        copy
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Scoring */}
                 <div style={{marginBottom: 20}}>

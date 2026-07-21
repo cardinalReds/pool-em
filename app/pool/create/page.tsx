@@ -18,6 +18,7 @@ export default function CreatePoolPage() {
 
   // Step 1 — name
   const [name, setName] = useState('')
+  const [allowMemberInvites, setAllowMemberInvites] = useState(false)
 
   // Step 2 — tournament + deadline
   const [sport, setSport] = useState('soccer')
@@ -153,6 +154,7 @@ export default function CreatePoolPage() {
       zelle_handle: zelleHandle.trim() || null,
       bank_sort_code: sortCode.trim() || null,
       bank_account_number: accountNumber.trim() || null,
+      allow_member_invites: allowMemberInvites,
       payout_structure: !isPL && buyIn && parseFloat(buyIn) > 0
         ? (payoutTemplate === 'custom' ? customPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description || null)
         : null,
@@ -392,7 +394,17 @@ export default function CreatePoolPage() {
               onChange={e => setName(e.target.value)} maxLength={50} autoFocus
               style={{fontSize: '16px', padding: '10px 12px'}} />
             <p style={{fontSize: '11px', color: '#aaa', marginTop: '6px'}}>your friends will see this when they join</p>
-            <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '16px'}}>
+
+            <label style={{display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginTop: '20px'}}>
+              <input type="checkbox" checked={allowMemberInvites} onChange={e => setAllowMemberInvites(e.target.checked)}
+                style={{width: 18, height: 18, cursor: 'pointer'}} />
+              <div>
+                <div style={{fontWeight: 600, fontSize: '13px'}}>allow invitees to invite other users?</div>
+                <div style={{fontSize: '11px', color: '#aaa'}}>if off, only you can share the invite link</div>
+              </div>
+            </label>
+
+            <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '20px'}}>
               <button onClick={() => setStep(1)} style={{padding: '10px 16px', fontSize: '13px', background: 'none', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit'}}>← back</button>
               <button className="btn-primary" onClick={() => setStep(3)} disabled={!name.trim()}
                 style={{padding: '10px 24px', fontSize: '14px', minHeight: 44}}>next →</button>
