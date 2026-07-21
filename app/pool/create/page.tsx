@@ -401,7 +401,7 @@ export default function CreatePoolPage() {
         {step === 3 && isPL && (
           <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
             <div style={{fontWeight: 600, fontSize: '14px', marginBottom: 4}}>Premier League settings</div>
-            <div style={{fontSize: '11px', color: '#aaa', marginBottom: 20}}>configure your pool for the 2025/26 season</div>
+            <div style={{fontSize: '11px', color: '#aaa', marginBottom: 20}}>configure your pool for the 2026/27 season</div>
 
             {/* Season-long props */}
             <div style={{marginBottom: 20}}>
