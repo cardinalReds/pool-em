@@ -739,7 +739,8 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
     )
   }
 
-  const perRoundCats = categories.filter(c => ROUND_SPECIALS.includes(c.id) && rules[c.id]?.enabled)
+  const allRoundCats = categories.filter(c => ROUND_SPECIALS.includes(c.id))
+  const perRoundCats = allRoundCats.filter(c => rules[c.id]?.enabled)
   const perGameCats = categories.filter(c => !ROUND_SPECIALS.includes(c.id) && rules[c.id]?.enabled)
 
   const PL_TEAMS = ['Arsenal', 'Aston Villa', 'Bournemouth', 'Brentford', 'Brighton', 'Chelsea', 'Coventry', 'Crystal Palace', 'Everton', 'Fulham', 'Hull City', 'Ipswich', 'Leeds', 'Liverpool', 'Manchester City', 'Manchester United', 'Newcastle', 'Nottingham Forest', 'Sunderland', 'Tottenham']
@@ -874,7 +875,7 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
         )
       })}
 
-      {perRoundCats.length > 0 && (
+      {allRoundCats.length > 0 && (
         <div style={{ marginBottom: '20px' }}>
           <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '4px', paddingBottom: '4px', borderBottom: '1px solid #eee' }}>
             round specials
@@ -882,12 +883,15 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
               — one pick per matchday, per group
             </span>
           </div>
-          {perRoundCats.map(cat => <RuleRow key={cat.id} cat={cat} />)}
+          {allRoundCats.map(cat => <RuleRow key={cat.id} cat={cat} />)}
         </div>
       )}
 
       <button
-        onClick={() => onComplete(Object.values(rules).filter(r => r.enabled))}
+        onClick={() => {
+          const enabled = Object.values(rules).filter(r => r.enabled)
+          if (enabled.length > 0) onComplete(enabled)
+        }}
         disabled={enabledCount === 0}
         style={{
           padding: '12px 24px', background: enabledCount > 0 ? '#111' : '#ddd',
