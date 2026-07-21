@@ -868,7 +868,7 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
       </div>
     </div>
   ) : (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: '24px', alignItems: 'start' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) 300px', gap: '24px', alignItems: 'start' }}>
       {rulesPanel}
       {/* RIGHT: Ticket emulator — scrollable, max height so it doesn't go off screen */}
       <div style={{ position: 'sticky', top: 70, maxHeight: 'calc(100vh - 90px)', display: 'flex', flexDirection: 'column' }}>

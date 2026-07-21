@@ -246,7 +246,7 @@ export default function CreatePoolPage() {
         <a href="/dashboard" style={{fontWeight: 700, fontSize: '13px', color: 'white', textDecoration: 'none'}}>pool'em</a>
       </div>
 
-      <div style={{maxWidth: step === 3 && (!isBracket || sport === 'mma' || sport === 'f1') ? 1100 : 520, margin: '0 auto', padding: '24px 16px'}}>
+      <div style={{maxWidth: (step === 3 && (!isBracket || sport === 'mma' || sport === 'f1')) || (isPL && step === 4) ? 1100 : 520, margin: '0 auto', padding: '24px 16px'}}>
         <div style={{marginBottom: '16px'}}>
           <h1 style={{fontWeight: 700, fontSize: '15px', marginBottom: '2px'}}>new pool</h1>
         </div>
