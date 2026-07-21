@@ -510,40 +510,37 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
       color: pick === val ? 'white' : '#555',
     })
 
-    // Round specials: show interactive team/player picker
+    // Round specials: show same UI pattern as FixturesList
     if (isRound) {
       const isPlayer = cat.id === 'soccer_brace_round'
-      const sampleTeams = isPL
-        ? ['Arsenal', 'Chelsea', 'Liverpool', 'Man City', 'Man Utd', 'Tottenham']
-        : ['France', 'Spain', 'England', 'Argentina', 'Brazil', 'Germany']
-      const samplePlayers = isPL
-        ? ['B. Saka', 'E. Haaland', 'M. Salah', 'C. Palmer', 'H. Kane', 'A. Isak']
-        : ['K. Mbappé', 'V. Jr.', 'H. Kane', 'J. Bellingham', 'L. Messi', 'K. Benzema']
-      const options = isPlayer ? samplePlayers : sampleTeams
 
       return (
         <div style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #f0f0f0' }}>
           <div style={{ fontSize: '10px', fontWeight: 600, color: '#555', marginBottom: '5px', display: 'flex', justifyContent: 'space-between' }}>
-            <span>{cat.name}</span>
+            <span>{cat.name} <span style={{ fontSize: '9px', color: '#888', border: '1px solid #ddd', padding: '1px 4px', marginLeft: 4 }}>ROUND</span></span>
             <span style={{ color: '#C8102E' }}>{rule.points} pt{rule.points > 1 ? 's' : ''}</span>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 4 }}>
-            {options.map(opt => (
-              <button key={opt} style={{
-                padding: '4px 8px', fontSize: '10px', border: '1px solid',
-                cursor: 'pointer', fontFamily: 'inherit',
-                borderColor: pick === opt ? '#C8102E' : '#ddd',
-                background: pick === opt ? '#C8102E' : 'white',
-                color: pick === opt ? 'white' : '#555',
-              }}
-                onClick={() => setUserPicks(p => ({ ...p, [cat.id]: opt }))}>
-                {opt}
-              </button>
-            ))}
-          </div>
-          <div style={{ fontSize: '9px', color: '#bbb', marginTop: 4 }}>
-            {isPlayer ? 'full player list shown on pool page' : 'full team list shown on pool page'} · once per matchday
-          </div>
+          {isPlayer ? (
+            <div style={{ position: 'relative' }}>
+              <input
+                placeholder="search player..."
+                value={typeof pick === 'string' ? pick : ''}
+                onChange={e => setUserPicks(p => ({ ...p, [cat.id]: e.target.value }))}
+                style={{ width: '100%', padding: '7px 10px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', boxSizing: 'border-box' as const }}
+              />
+            </div>
+          ) : (
+            <select
+              value={typeof pick === 'string' ? pick : ''}
+              onChange={e => setUserPicks(p => ({ ...p, [cat.id]: e.target.value }))}
+              style={{ width: '100%', padding: '7px 10px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', background: 'white' }}
+            >
+              <option value=''>select a team...</option>
+              <option value={fixture.home_team}>{fixture.home_team}</option>
+              <option value={fixture.away_team}>{fixture.away_team}</option>
+            </select>
+          )}
+          <div style={{ fontSize: '9px', color: '#bbb', marginTop: 4 }}>one pick per matchday · not per game</div>
         </div>
       )
     }
