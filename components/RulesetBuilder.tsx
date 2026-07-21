@@ -316,10 +316,11 @@ const F1_GRID_PREVIEW = [
   { name: 'Cadillac', color: '#CC0000', drivers: ['Sergio Pérez', 'Valtteri Bottas'] },
 ]
 
-export default function RulesetBuilder({ sport, onComplete, isPL }: {
+export default function RulesetBuilder({ sport, onComplete, isPL, plSelectedProps }: {
   sport: string
-  onComplete: (rules: SelectedRule[]) => void
+  onComplete: (rules: SelectedRule[], propPoints?: Record<string, number>) => void
   isPL?: boolean
+  plSelectedProps?: string[]
 }) {
   const fixture = sport === 'mma' ? EXAMPLE_FIXTURE_MMA : sport === 'f1' ? EXAMPLE_FIXTURE_F1 : isPL ? EXAMPLE_FIXTURE_PL : EXAMPLE_FIXTURE
   const [categories, setCategories] = useState<Category[]>([])
@@ -330,8 +331,33 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
   const [isMobile, setIsMobile] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [plPlayers, setPlPlayers] = useState<Record<string, {id: number, name: string, position: string}[]>>({})
+  const [propOverrides, setPropOverrides] = useState<Record<string, number>>({})
 
-  useEffect(() => {
+  // Calculate max possible game points from current rules
+  const maxGamePoints = Object.values(rules).filter(r => r.enabled).reduce((sum, r) => {
+    if (r.category_id === 'soccer_exact_score') return sum + (r.points || 0) * 2 + (r.bonus_points || 0)
+    return sum + (r.points || 0)
+  }, 0) * (isPL ? 380 : 64)
+
+  // Base unit Y = round(maxGamePoints * 0.10 / 39), min 1
+  const Y = Math.max(1, Math.round(maxGamePoints * 0.10 / 39))
+
+  // Default prop points using your ratios
+  const PROP_DEFAULTS: Record<string, number> = {
+    title_winner:    Y * 6,
+    top_4:           Y * 4, // 2nd exact (shown as combined label)
+    top_4_3rd:       Y * 3,
+    top_4_4th:       Y * 2,
+    top_4_consolation: Y * 1,
+    top_scorer:      Y * 4,
+    top_assist:      Y * 4,
+    golden_glove:    Y * 4,
+    relegated:       Y * 4, // per team
+  }
+
+  function getPropPts(key: string) {
+    return propOverrides[key] ?? PROP_DEFAULTS[key] ?? 0
+  }
     if (!isPL) return
     async function loadPlPlayers() {
       const supabase = createClient()
@@ -761,6 +787,31 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
 
   const allRoundCats = categories.filter(c => ROUND_SPECIALS.includes(c.id))
   const perRoundCats = allRoundCats.filter(c => rules[c.id]?.enabled)
+
+  function PropRow({ label, propKey, desc }: { label: string, propKey: string, desc: string }) {
+    const val = getPropPts(propKey)
+    const isOverridden = propOverrides[propKey] !== undefined
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid #f0f0f0', gap: 8 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: '12px', fontWeight: 600 }}>{label}</div>
+          <div style={{ fontSize: '10px', color: '#aaa' }}>{desc}</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {isOverridden && (
+            <button type="button" onClick={() => setPropOverrides(p => { const n = {...p}; delete n[propKey]; return n })}
+              style={{ fontSize: '10px', color: '#aaa', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', fontFamily: 'inherit' }}>
+              reset
+            </button>
+          )}
+          <input type="number" min="0" max="999" value={val}
+            onChange={e => setPropOverrides(p => ({ ...p, [propKey]: parseInt(e.target.value) || 0 }))}
+            style={{ width: 52, border: '1px solid', borderColor: isOverridden ? '#C8102E' : '#ddd', padding: '5px 6px', fontSize: '13px', fontFamily: 'inherit', textAlign: 'center' as const }} />
+          <span style={{ fontSize: '11px', color: '#aaa', width: 20 }}>pts</span>
+        </div>
+      </div>
+    )
+  }
   const perGameCats = categories.filter(c => !ROUND_SPECIALS.includes(c.id) && rules[c.id]?.enabled)
 
   const PL_TEAMS = ['Arsenal', 'Aston Villa', 'Bournemouth', 'Brentford', 'Brighton', 'Chelsea', 'Coventry', 'Crystal Palace', 'Everton', 'Fulham', 'Hull City', 'Ipswich', 'Leeds', 'Liverpool', 'Manchester City', 'Manchester United', 'Newcastle', 'Nottingham Forest', 'Sunderland', 'Tottenham']
@@ -929,11 +980,69 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
         </div>
       )}
 
+      {/* Season props point calculator — PL only, shown when props selected */}
+      {isPL && plSelectedProps && plSelectedProps.length > 0 && (
+        <div style={{ marginTop: 24, padding: '16px', border: '1px solid #e0e0db', background: '#fafafa' }}>
+          <div style={{ fontWeight: 700, fontSize: '13px', marginBottom: 4 }}>season-long prop points</div>
+          <div style={{ fontSize: '11px', color: '#888', marginBottom: 12 }}>
+            based on {maxGamePoints} total possible game points this season — props defaulted to ~10% ({Math.round(maxGamePoints * 0.10)} pts).
+            {' '}these are defaults you can override.
+          </div>
+
+          {plSelectedProps.includes('title_winner') && (
+            <PropRow label="title winner" propKey="title_winner" desc="correct winner" />
+          )}
+
+          {plSelectedProps.includes('top_4') && (
+            <>
+              <PropRow label="top 4 — 2nd place" propKey="top_4" desc="correct 2nd place team" />
+              <PropRow label="top 4 — 3rd place" propKey="top_4_3rd" desc="correct 3rd place team" />
+              <PropRow label="top 4 — 4th place" propKey="top_4_4th" desc="correct 4th place team" />
+              <PropRow label="top 4 — consolation" propKey="top_4_consolation" desc="team in top 4 but wrong position" />
+            </>
+          )}
+
+          {plSelectedProps.includes('top_scorer') && (
+            <PropRow label="top scorer" propKey="top_scorer" desc="golden boot winner" />
+          )}
+
+          {plSelectedProps.includes('top_assist') && (
+            <PropRow label="top assist" propKey="top_assist" desc="most assists" />
+          )}
+
+          {plSelectedProps.includes('golden_glove') && (
+            <PropRow label="golden glove" propKey="golden_glove" desc="most clean sheets" />
+          )}
+
+          {plSelectedProps.includes('relegated') && (
+            <PropRow label="relegated" propKey="relegated" desc="per correct relegated team (×3)" />
+          )}
+
+          <div style={{ fontSize: '10px', color: '#bbb', marginTop: 8, borderTop: '1px solid #eee', paddingTop: 8 }}>
+            scale factor: {Y}× base · title winner uses 6× · scorer/assist/glove/relegation use 4× · 2nd/3rd/4th use 4×/3×/2×
+          </div>
+        </div>
+      )}
+
       <button
         type="button"
         onClick={() => {
           const enabled = Object.values(rules).filter(r => r.enabled)
-          if (enabled.length > 0) onComplete(enabled)
+          if (enabled.length > 0) {
+            const propPoints: Record<string, number> = {}
+            if (isPL && plSelectedProps) {
+              for (const prop of plSelectedProps) {
+                propPoints[prop] = getPropPts(prop)
+              }
+              // also pass positional breakdown for top_4
+              if (plSelectedProps.includes('top_4')) {
+                propPoints['top_4_3rd'] = getPropPts('top_4_3rd')
+                propPoints['top_4_4th'] = getPropPts('top_4_4th')
+                propPoints['top_4_consolation'] = getPropPts('top_4_consolation')
+              }
+            }
+            onComplete(enabled, isPL ? propPoints : undefined)
+          }
         }}
         disabled={enabledCount === 0}
         style={{

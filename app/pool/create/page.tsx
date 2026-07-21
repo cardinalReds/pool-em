@@ -176,12 +176,20 @@ export default function CreatePoolPage() {
     if (isPL && plSeasonProps && plSelectedProps.length > 0) {
       const maxPtsPerGame = selectedRules.reduce((sum, r) => sum + (r.points || 0), 0)
       const defaultPropPts = Math.round(maxPtsPerGame * 10 * 0.10)
+      const propsToSave: {category: string, points: number}[] = []
+      for (const cat of plSelectedProps) {
+        if (cat === 'top_4') {
+          propsToSave.push({ category: 'title_winner', points: plPropPoints['title_winner'] ?? defaultPropPts })
+          propsToSave.push({ category: 'top_4_2nd', points: plPropPoints['top_4'] ?? defaultPropPts })
+          propsToSave.push({ category: 'top_4_3rd', points: plPropPoints['top_4_3rd'] ?? defaultPropPts })
+          propsToSave.push({ category: 'top_4_4th', points: plPropPoints['top_4_4th'] ?? defaultPropPts })
+          propsToSave.push({ category: 'top_4_consolation', points: plPropPoints['top_4_consolation'] ?? 1 })
+        } else {
+          propsToSave.push({ category: cat, points: plPropPoints[cat] ?? defaultPropPts })
+        }
+      }
       await supabase.from('season_prop_rules').insert(
-        plSelectedProps.map(cat => ({
-          pool_id: pool.id,
-          category: cat,
-          points: plPropPoints[cat] ?? defaultPropPts,
-        }))
+        propsToSave.map(p => ({ pool_id: pool.id, category: p.category, points: p.points }))
       )
     }
 
@@ -537,9 +545,11 @@ export default function CreatePoolPage() {
             <RulesetBuilder
               sport={sport}
               isPL={isPL}
-              onComplete={(rules) => { 
+              plSelectedProps={plSelectedProps}
+              onComplete={(rules, propPoints) => { 
                 const r = rules as SelectedRule[]
                 setSelectedRules(r)
+                if (propPoints) setPlPropPoints(propPoints)
                 setStep(isPL ? 5 : 4) 
               }}
             />
