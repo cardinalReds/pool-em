@@ -406,7 +406,11 @@ export default function CreatePoolPage() {
             {/* Season-long props */}
             <div style={{marginBottom: 20}}>
               <label style={{display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 10}}>
-                <input type="checkbox" checked={plSeasonProps} onChange={e => setPlSeasonProps(e.target.checked)}
+                <input type="checkbox" checked={plSeasonProps} onChange={e => {
+                  setPlSeasonProps(e.target.checked)
+                  if (e.target.checked) setPlSelectedProps(PL_PROPS.map(p => p.id))
+                  else setPlSelectedProps([])
+                }}
                   style={{width: 18, height: 18, cursor: 'pointer'}} />
                 <div>
                   <div style={{fontWeight: 600, fontSize: '13px'}}>season-long props</div>
