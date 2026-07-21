@@ -673,14 +673,11 @@ export default function CreatePoolPage() {
 
             <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '16px'}}>
               <button className="btn-secondary" onClick={() => setStep(4)} style={{padding: '10px 20px', minHeight: 44}}>← back</button>
-              <button className="btn-primary" onClick={handleCreate} disabled={loading || (!plPrizeSeason && !plPrizeWeekly)}
+              <button className="btn-primary" onClick={handleCreate} disabled={loading}
                 style={{padding: '10px 24px', fontSize: '14px', minHeight: 44}}>
                 {loading ? 'creating...' : 'create pool →'}
               </button>
             </div>
-            {!plPrizeSeason && !plPrizeWeekly && (
-              <div style={{fontSize: '11px', color: '#aaa', textAlign: 'center' as const, marginTop: 8}}>select at least one prize type to continue</div>
-            )}
             {error && <p style={{fontSize: '12px', color: '#C8102E', marginTop: 8}}>{error}</p>}
           </div>
         )}
