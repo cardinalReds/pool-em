@@ -358,6 +358,8 @@ export default function RulesetBuilder({ sport, onComplete, isPL, plSelectedProp
   function getPropPts(key: string) {
     return propOverrides[key] ?? PROP_DEFAULTS[key] ?? 0
   }
+
+  useEffect(() => {
     if (!isPL) return
     async function loadPlPlayers() {
       const supabase = createClient()
