@@ -37,14 +37,7 @@ export default function CreatePoolPage() {
   const [plBestWeeks, setPlBestWeeks] = useState(38)
 
   // PL prop point rules (category → points, set during ruleset step)
-  const [plPropPoints, setPlPropPoints] = useState<Record<string, number>>({
-    title_winner: 10,
-    top_4: 5,
-    top_scorer: 10,
-    top_assist: 8,
-    golden_glove: 8,
-    relegated: 5,
-  })
+  const [plPropPoints, setPlPropPoints] = useState<Record<string, number>>({})
 
   const PL_PROPS = [
     { id: 'title_winner', label: 'Title winner', desc: 'Pick the Premier League champion' },
@@ -177,11 +170,13 @@ export default function CreatePoolPage() {
 
     // Save season prop rules for PL pools
     if (isPL && plSeasonProps && plSelectedProps.length > 0) {
+      const maxPtsPerGame = selectedRules.reduce((sum, r) => sum + (r.points || 0), 0)
+      const defaultPropPts = Math.round(maxPtsPerGame * 10 * 0.10)
       await supabase.from('season_prop_rules').insert(
         plSelectedProps.map(cat => ({
           pool_id: pool.id,
           category: cat,
-          points: plPropPoints[cat] || 10,
+          points: plPropPoints[cat] ?? defaultPropPts,
         }))
       )
     }
@@ -416,16 +411,9 @@ export default function CreatePoolPage() {
                         <div style={{fontWeight: 600, fontSize: '12px'}}>{prop.label}</div>
                         <div style={{fontSize: '11px', color: '#aaa'}}>{prop.desc}</div>
                       </div>
-                      <div style={{display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0}}>
-                        <input type="number" min="1" max="100" value={plPropPoints[prop.id] || 10}
-                          onChange={e => setPlPropPoints(prev => ({...prev, [prop.id]: parseInt(e.target.value) || 0}))}
-                          onClick={e => e.stopPropagation()}
-                          style={{width: 48, border: '1px solid #ddd', padding: '4px 6px', fontSize: '12px', fontFamily: 'inherit', textAlign: 'center'}} />
-                        <span style={{fontSize: '11px', color: '#aaa'}}>pts</span>
-                      </div>
                     </label>
                   ))}
-                  <div style={{fontSize: '10px', color: '#aaa', marginTop: 4}}>default points = ~10% of total matchday points available · adjust as needed</div>
+                  <div style={{fontSize: '10px', color: '#aaa', marginTop: 4}}>point values will be set after you configure your scoring rules</div>
                 </div>
               )}
             </div>
@@ -553,7 +541,11 @@ export default function CreatePoolPage() {
         )}
 
         {/* ── Step 5: PL Prizes ─────────────────────────────────────────── */}
-        {step === 5 && isPL && (
+        {step === 5 && isPL && (() => {
+          // Calculate default prop points = 10% of max possible game points per game × 10 games
+          const maxPtsPerGame = selectedRules.reduce((sum, r) => sum + (r.points || 0), 0)
+          const defaultPropPts = Math.round(maxPtsPerGame * 10 * 0.10)
+          return (
           <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
             <div style={{fontWeight: 600, fontSize: '14px', marginBottom: 4}}>prize structure</div>
             <div style={{fontSize: '11px', color: '#aaa', marginBottom: 20}}>set up how winnings work — you can have both</div>
@@ -633,6 +625,37 @@ export default function CreatePoolPage() {
               </div>
             )}
 
+            {/* Season prop point values */}
+            {plSeasonProps && plSelectedProps.length > 0 && (
+              <div style={{marginBottom: 20}}>
+                <div style={{fontWeight: 600, fontSize: '13px', marginBottom: 4}}>season prop points</div>
+                <div style={{fontSize: '11px', color: '#aaa', marginBottom: 10}}>
+                  default = 10% of max game points per matchday ({defaultPropPts} pts) · adjust as needed
+                </div>
+                <div style={{display: 'flex', flexDirection: 'column' as const, gap: 6}}>
+                  {plSelectedProps.map(catId => {
+                    const prop = PL_PROPS.find(p => p.id === catId)
+                    if (!prop) return null
+                    const val = plPropPoints[catId] ?? defaultPropPts
+                    return (
+                      <div key={catId} style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', border: '1px solid #e0e0db'}}>
+                        <div>
+                          <div style={{fontWeight: 600, fontSize: '12px'}}>{prop.label}</div>
+                          <div style={{fontSize: '11px', color: '#aaa'}}>{prop.desc}</div>
+                        </div>
+                        <div style={{display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0}}>
+                          <input type="number" min="1" max="500" value={val}
+                            onChange={e => setPlPropPoints(prev => ({...prev, [catId]: parseInt(e.target.value) || 0}))}
+                            style={{width: 56, border: '1px solid #ddd', padding: '6px', fontSize: '14px', fontFamily: 'inherit', textAlign: 'center'}} />
+                          <span style={{fontSize: '11px', color: '#aaa'}}>pts</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '16px'}}>
               <button className="btn-secondary" onClick={() => setStep(4)} style={{padding: '10px 20px', minHeight: 44}}>← back</button>
               <button className="btn-primary" onClick={handleCreate} disabled={loading || (!plPrizeSeason && !plPrizeWeekly)}
@@ -645,7 +668,7 @@ export default function CreatePoolPage() {
             )}
             {error && <p style={{fontSize: '12px', color: '#C8102E', marginTop: 8}}>{error}</p>}
           </div>
-        )}
+        )})}
 
         {/* ── Step 4/4: Buy-in (non-PL pools) ─────────────────────────────── */}
         {step === 4 && !isPL && (
