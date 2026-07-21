@@ -125,6 +125,14 @@ function formatPT(dateStr: string) {
   })
 }
 
+function formatLockTime(dateStr: string) {
+  return new Date(dateStr).toLocaleString('en-US', {
+    timeZone: USER_TZ,
+    weekday: 'short', month: 'short', day: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  })
+}
+
 function formatDatePT(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('en-US', {
     timeZone: USER_TZ,
@@ -1458,10 +1466,10 @@ export default function FixturesList({
             {locked && !finished && <span style={{ color: '#aaa' }}>locked</span>}
             {!locked && !finished && deadlineType === 'before_weekend' && (() => {
               const lockTime = matchdayLockTime(fixture.round)
-              return lockTime ? <span style={{ color: '#bbb' }}>locks {formatPT(lockTime.toISOString())}</span> : null
+              return lockTime ? <span style={{ color: '#bbb' }}>locks {formatLockTime(lockTime.toISOString())}</span> : null
             })()}
             {!locked && !finished && deadlineType === 'before_each_game' && (
-              <span style={{ color: '#bbb' }}>locks at kickoff</span>
+              <span style={{ color: '#bbb' }}>locks at kickoff · {formatLockTime(fixture.date)}</span>
             )}
           </div>
         )}
@@ -1809,7 +1817,7 @@ export default function FixturesList({
       {!hideControls && (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 8, flexWrap: 'wrap' as const }}>
         <div style={{ display: 'flex', border: '1px solid #ddd', overflow: 'hidden', borderRadius: 3 }}>
-          {(onlyRoundSpecials ? ['round'] : ['date', 'group', 'round'] as const).map((mode, i) => (
+          {(onlyRoundSpecials ? ['round'] : (isPL ? ['date', 'group'] : ['date', 'group', 'round']) as const).map((mode, i) => (
             <button type="button" key={mode} onClick={() => { setSortMode(mode as any); setCurrentPage(0) }}
               style={{ padding: '8px 16px', fontSize: '12px', cursor: 'pointer', border: 'none', borderLeft: i > 0 ? '1px solid #ddd' : 'none', fontFamily: 'inherit', background: sortMode === mode ? '#111' : 'white', color: sortMode === mode ? 'white' : '#888', minHeight: 44 }}>
               {mode === 'group' && isPL ? 'by matchday' : `by ${mode}`}
