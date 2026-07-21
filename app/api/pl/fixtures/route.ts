@@ -29,9 +29,10 @@ export async function GET(request: NextRequest) {
     const fixtures = data.response || []
 
     let upserted = 0
+    const failures: { id: number; error: string }[] = []
     for (const f of fixtures) {
       const round = f.league.round.replace('Regular Season - ', 'Matchday ')
-      await supabase.from('fixtures').upsert({
+      const { error } = await supabase.from('fixtures').upsert({
         id: f.fixture.id,
         tournament_id: TOURNAMENT_ID,
         round,
@@ -40,15 +41,23 @@ export async function GET(request: NextRequest) {
         date: f.fixture.date,
         api_fixture_id: f.fixture.id,
         status: f.fixture.status.short,
-        venue: f.fixture.venue?.name || null,
+        // API-Football sometimes has no venue name yet (e.g. venue TBD) — city or a
+        // placeholder keeps this from violating the not-null constraint and silently
+        // dropping the fixture entirely.
+        venue: f.fixture.venue?.name || f.fixture.venue?.city || 'TBD',
         city: f.fixture.venue?.city || null,
         home_score: f.goals?.home ?? null,
         away_score: f.goals?.away ?? null,
       }, { onConflict: 'id' })
-      upserted++
+      if (error) {
+        failures.push({ id: f.fixture.id, error: error.message })
+      } else {
+        upserted++
+      }
     }
 
-    return NextResponse.json({ ok: true, upserted })
+    if (failures.length > 0) console.error('PL fixtures sync — failed rows:', failures)
+    return NextResponse.json({ ok: true, upserted, failed: failures.length, failures: failures.slice(0, 10) })
   } catch (err) {
     console.error('PL fixtures sync error:', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })
