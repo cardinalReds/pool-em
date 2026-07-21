@@ -752,6 +752,26 @@ isPL?: boolean
 }
 
 
+// Build round-special picks (no fixture_id) + restored brace team per matchday from a set of predictions_v2 rows
+function buildRoundSpecialState(preds: any[]) {
+  const roundPicks: Record<string, Record<string, string>> = {}
+  const braceTeams: Record<string, string> = {}
+  preds.filter((p: any) => !p.fixture_id && p.matchday).forEach((p: any) => {
+    if (!roundPicks[p.matchday]) roundPicks[p.matchday] = {}
+    roundPicks[p.matchday][p.category_id] = p.value_text || p.value_wld || ''
+    // Restore brace team from saved player name
+    if (p.category_id === 'soccer_brace_round' && p.value_text) {
+      for (const [team, players] of Object.entries(WC_SQUADS)) {
+        if ((players as any[]).some((pl: any) => pl.name === p.value_text)) {
+          braceTeams[p.matchday] = team
+          break
+        }
+      }
+    }
+  })
+  return { roundPicks, braceTeams }
+}
+
 export default function FixturesList({
   poolId, userId, packageId, deadlineType, tournamentId,
   hideControls, externalSortMode, externalViewMode, isAdmin,
@@ -778,6 +798,7 @@ export default function FixturesList({
   const [saving, setSaving] = useState<number | null>(null)
   const [saved, setSaved] = useState<Record<number, boolean>>({})
   const autoSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
+  const roundSpecialTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const [roundSpecialPicks, setRoundSpecialPicks] = useState<Record<string, Record<string, string>>>({})
   const [roundFacts, setRoundFacts] = useState<Record<string, any>>({}) // matchday → facts
   const [showMemberPicksMap, setShowMemberPicksMap] = useState<Record<number, boolean>>({})
@@ -922,22 +943,7 @@ export default function FixturesList({
         } catch {}
 
         // Load round special picks (no fixture_id)
-        const roundPicks: Record<string, Record<string, string>> = {}
-        const braceTeams: Record<string, string> = {}
-        ;(v2preds || []).filter((p: any) => !p.fixture_id && p.matchday).forEach((p: any) => {
-          if (!roundPicks[p.matchday]) roundPicks[p.matchday] = {}
-          roundPicks[p.matchday][p.category_id] = p.value_text || p.value_wld || ''
-          // Restore brace team from saved player name
-          if (p.category_id === 'soccer_brace_round' && p.value_text) {
-            // Find which team this player belongs to
-            for (const [team, players] of Object.entries(WC_SQUADS)) {
-              if ((players as any[]).some((pl: any) => pl.name === p.value_text)) {
-                braceTeams[p.matchday] = team
-                break
-              }
-            }
-          }
-        })
+        const { roundPicks, braceTeams } = buildRoundSpecialState(v2preds || [])
         setRoundSpecialPicks(roundPicks)
         setBraceTeamByMatchday(braceTeams)
 
@@ -1024,14 +1030,37 @@ export default function FixturesList({
 
   // Use a ref for saveFixture so updateLocal always calls the latest version
   const saveFixtureRef = useRef<(fixtureId: number) => Promise<void>>(async () => {})
+  const saveRoundSpecialsRef = useRef<(matchday: string) => Promise<void>>(async () => {})
 
   async function switchEntry(entryId: string) {
+    // Flush any pending debounced saves for the outgoing entry first, so a pick
+    // made just before switching gets attributed to the right person instead of
+    // racing the switch.
+    const pendingFixtureIds = Object.keys(autoSaveTimers.current).map(Number)
+    for (const fixtureId of pendingFixtureIds) {
+      clearTimeout(autoSaveTimers.current[fixtureId])
+      delete autoSaveTimers.current[fixtureId]
+    }
+    await Promise.all(pendingFixtureIds.map(fixtureId => saveFixtureRef.current(fixtureId)))
+
+    const pendingMatchdays = Object.keys(roundSpecialTimers.current)
+    for (const matchday of pendingMatchdays) {
+      clearTimeout(roundSpecialTimers.current[matchday])
+      delete roundSpecialTimers.current[matchday]
+    }
+    await Promise.all(pendingMatchdays.map(matchday => saveRoundSpecialsRef.current(matchday)))
+
     setActiveEntryId(entryId)
     const supabase = createClient()
     const { data } = await supabase.from('predictions_v2').select('*').eq('pool_id', poolId).eq('user_id', entryId)
     const predMap: PredMap = {}
     for (const p of data || []) predMap[`${p.fixture_id}:${p.category_id}`] = p
     setPreds(predMap)
+
+    // Round specials (fixture_id is null) are in the same result set — rebuild per-entry state
+    const { roundPicks, braceTeams } = buildRoundSpecialState(data || [])
+    setRoundSpecialPicks(roundPicks)
+    setBraceTeamByMatchday(braceTeams)
   }
 
   async function addGhostEntry() {
@@ -1084,7 +1113,7 @@ export default function FixturesList({
     autoSaveTimers.current[fixtureId] = setTimeout(() => {
       saveFixtureRef.current(fixtureId)
     }, 800)
-  }, [poolId, userId, LS_KEY])
+  }, [poolId, userId, activeEntryId, LS_KEY])
 
   const saveFixture = useCallback(async (fixtureId: number) => {
     setSaving(fixtureId)
@@ -1119,7 +1148,7 @@ export default function FixturesList({
     setSaving(null)
     setSaved(prev => ({ ...prev, [fixtureId]: true }))
     setTimeout(() => setSaved(prev => ({ ...prev, [fixtureId]: false })), 3000)
-  }, [poolId, userId, poolRules])
+  }, [poolId, userId, activeEntryId, poolRules])
 
   // Keep saveFixtureRef in sync
   useEffect(() => { saveFixtureRef.current = saveFixture }, [saveFixture])
@@ -1225,7 +1254,7 @@ export default function FixturesList({
   const safePage = Math.min(currentPage, Math.max(0, totalPages - 1))
 
   // ── Round specials save ────────────────────────────────────────────────────
-  async function saveRoundSpecials(matchday: string) {
+  const saveRoundSpecials = useCallback(async (matchday: string) => {
     setRoundSpecialSaving(matchday)
     const supabase = createClient()
     const picks = roundSpecialPicks[matchday] || {}
@@ -1248,7 +1277,10 @@ export default function FixturesList({
     setRoundSpecialSaving(null)
     setRoundSpecialSaved(prev => ({ ...prev, [matchday]: true }))
     setTimeout(() => setRoundSpecialSaved(prev => ({ ...prev, [matchday]: false })), 3000)
-  }
+  }, [poolId, activeEntryId, roundSpecialPicks])
+
+  // Keep saveRoundSpecialsRef in sync
+  useEffect(() => { saveRoundSpecialsRef.current = saveRoundSpecials }, [saveRoundSpecials])
 
   // ── Round Specials Card ────────────────────────────────────────────────────
   function RoundSpecialsCard({ matchday, locked }: { matchday: string; locked: boolean }) {
@@ -1262,8 +1294,11 @@ export default function FixturesList({
 
     function updatePick(categoryId: string, value: string) {
       setRoundSpecialPicks(prev => ({ ...prev, [matchday]: { ...(prev[matchday] || {}), [categoryId]: value } }))
-      // Auto-save after short delay
-      setTimeout(() => saveRoundSpecials(matchday), 500)
+      // Auto-save after short delay — debounced + cancelable so switching entries can flush it first
+      if (roundSpecialTimers.current[matchday]) clearTimeout(roundSpecialTimers.current[matchday])
+      roundSpecialTimers.current[matchday] = setTimeout(() => {
+        saveRoundSpecialsRef.current(matchday)
+      }, 500)
     }
 
     return (
