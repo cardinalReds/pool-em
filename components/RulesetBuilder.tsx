@@ -739,9 +739,12 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
     )
   }
 
-  const perRoundCats = categories.filter(c => ROUND_SPECIALS.includes(c.id))
+  const perRoundCats = categories.filter(c => ROUND_SPECIALS.includes(c.id) && rules[c.id]?.enabled)
+  const perGameCats = categories.filter(c => !ROUND_SPECIALS.includes(c.id) && rules[c.id]?.enabled)
 
-  const ticketPreview = (
+  const PL_TEAMS = ['Arsenal', 'Aston Villa', 'Bournemouth', 'Brentford', 'Brighton', 'Chelsea', 'Coventry', 'Crystal Palace', 'Everton', 'Fulham', 'Hull City', 'Ipswich', 'Leeds', 'Liverpool', 'Manchester City', 'Manchester United', 'Newcastle', 'Nottingham Forest', 'Sunderland', 'Tottenham']
+
+  const gameTicket = (
     <div style={{ background: 'white', border: '1px solid #e0e0db', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       {/* Fixed header */}
       <div style={{ background: '#111', color: 'white', padding: '10px 12px', flexShrink: 0 }}>
@@ -772,13 +775,13 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
       </div>
 
       {/* Scrollable body */}
-      {enabledCount === 0 ? (
+      {perGameCats.length === 0 ? (
         <div style={{ padding: '20px', textAlign: 'center', color: '#aaa', fontSize: '12px' }}>
           toggle on predictions to see the ticket
         </div>
       ) : (
         <div style={{ overflowY: 'auto', flex: 1, padding: '10px 12px', maxHeight: isMobile ? 400 : undefined }}>
-          {categories.filter(c => rules[c.id]?.enabled).map(cat => (
+          {perGameCats.map(cat => (
             <TicketInput key={cat.id} cat={cat} />
           ))}
           <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #eee' }}>
@@ -798,6 +801,50 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
           </div>
         </div>
       )}
+    </div>
+  )
+
+  const matchdayTicket = perRoundCats.length > 0 ? (
+    <div style={{ background: 'white', border: '1px solid #e0e0db', marginTop: 16 }}>
+      <div style={{ background: '#111', color: 'white', padding: '10px 12px' }}>
+        <div style={{ fontSize: '10px', color: '#888', marginBottom: '2px' }}>round specials · once per matchday</div>
+        <div style={{ fontWeight: 700, fontSize: '13px' }}>Matchday 1</div>
+      </div>
+      <div style={{ padding: '10px 12px' }}>
+        {perRoundCats.map(cat => {
+          const rule = rules[cat.id]
+          const isPlayer = cat.id === 'soccer_brace_round'
+          const teamList = isPL ? PL_TEAMS : Object.keys(WC_SQUADS || {}).sort()
+          return (
+            <div key={cat.id} style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #f0f0f0' }}>
+              <div style={{ fontSize: '10px', fontWeight: 600, color: '#555', marginBottom: '5px', display: 'flex', justifyContent: 'space-between' }}>
+                <span>{cat.name}</span>
+                <span style={{ color: '#C8102E' }}>{rule?.points} pts</span>
+              </div>
+              {isPlayer ? (
+                <input
+                  placeholder="search player..."
+                  style={{ width: '100%', padding: '7px 10px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', boxSizing: 'border-box' as const }}
+                />
+              ) : (
+                <select
+                  style={{ width: '100%', padding: '7px 10px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', background: 'white' }}
+                >
+                  <option value=''>select a team...</option>
+                  {teamList.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  ) : null
+
+  const ticketPreview = (
+    <div>
+      {gameTicket}
+      {matchdayTicket}
     </div>
   )
 
