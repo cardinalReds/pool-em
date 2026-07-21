@@ -41,9 +41,11 @@ export default function EditPoolPage() {
       const { data: poolData } = await supabase.from('pools').select('*').eq('id', poolId).single()
       if (!poolData || poolData.admin_id !== user.id) { router.push('/dashboard'); return }
 
-      // Block editing if tournament has started
-      const tournamentStart = new Date('2026-06-12T19:00:00Z')
-      if (new Date() >= tournamentStart) { router.push(`/pool/${poolId}`); return }
+      // Block editing once the tournament has ended (per-pool, not a fixed global date)
+      if (poolData.tournament_id) {
+        const { data: tournament } = await supabase.from('tournaments').select('end_date').eq('id', poolData.tournament_id).maybeSingle()
+        if (tournament?.end_date && new Date() >= new Date(tournament.end_date)) { router.push(`/pool/${poolId}`); return }
+      }
 
       setPool(poolData)
       setName(poolData.name || '')

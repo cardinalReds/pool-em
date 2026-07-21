@@ -458,7 +458,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* Edit button — admin only, before tournament starts */}
-      {isAdmin && new Date() < new Date('2026-06-12T19:00:00Z') && (
+      {isAdmin && (!pool.tournament_end_date || new Date() < new Date(pool.tournament_end_date)) && (
         <a href={`/pool/${pool.id}/edit`}>
           <button style={{fontSize: '11px', color: '#888', background: 'none', border: '1px solid #ddd', padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '12px'}}>
             ✏️ edit pool
@@ -757,7 +757,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
           {/* Always-visible summary/notices — mirrors desktop sidebar, shown regardless of active tab */}
           <div style={{padding: '12px 16px 0'}}>
-            {isAdmin && new Date() < new Date('2026-06-12T19:00:00Z') && (
+            {isAdmin && (!pool.tournament_end_date || new Date() < new Date(pool.tournament_end_date)) && (
               <a href={`/pool/${pool.id}/edit`}>
                 <button style={{fontSize: '11px', color: '#888', background: 'none', border: '1px solid #ddd', padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '12px'}}>
                   ✏️ edit pool
