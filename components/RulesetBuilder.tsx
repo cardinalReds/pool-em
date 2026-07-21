@@ -329,6 +329,26 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
   const [userPicks, setUserPicks] = useState<Record<string, any>>({})
   const [isMobile, setIsMobile] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
+  const [plPlayers, setPlPlayers] = useState<Record<string, {id: number, name: string, position: string}[]>>({})
+
+  useEffect(() => {
+    if (!isPL) return
+    async function loadPlPlayers() {
+      const supabase = createClient()
+      const { data } = await supabase.from('pl_players').select('id, name, team_id, position').eq('season', 2026).order('position').order('name')
+      const { data: teams } = await supabase.from('pl_teams').select('id, name').eq('season', 2026)
+      const teamMap: Record<number, string> = {}
+      for (const t of teams || []) teamMap[t.id] = t.name
+      const byTeam: Record<string, {id: number, name: string, position: string}[]> = {}
+      for (const p of data || []) {
+        const teamName = teamMap[p.team_id] || ''
+        if (!byTeam[teamName]) byTeam[teamName] = []
+        byTeam[teamName].push({ id: p.id, name: p.name, position: p.position })
+      }
+      setPlPlayers(byTeam)
+    }
+    loadPlPlayers()
+  }, [isPL])
 
   useEffect(() => {
     function checkMobile() { setIsMobile(window.innerWidth < 1024) }
@@ -832,11 +852,22 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
                     <option value=''>select a team...</option>
                     {teamList.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
-                  <input
-                    placeholder={(userPicks as any)[`${cat.id}_team`] ? 'search player...' : 'select a team first'}
-                    disabled={!(userPicks as any)[`${cat.id}_team`]}
-                    style={{ width: '100%', padding: '7px 10px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', boxSizing: 'border-box' as const, background: (userPicks as any)[`${cat.id}_team`] ? 'white' : '#f9f9f9', color: (userPicks as any)[`${cat.id}_team`] ? '#111' : '#bbb' }}
-                  />
+                  {(userPicks as any)[`${cat.id}_team`] ? (
+                    <select
+                      value={typeof (userPicks as any)[cat.id] === 'string' ? (userPicks as any)[cat.id] : ''}
+                      onChange={e => setUserPicks(p => ({ ...p, [cat.id]: e.target.value }))}
+                      style={{ width: '100%', padding: '7px 10px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', background: 'white' }}
+                    >
+                      <option value=''>select a player...</option>
+                      {(plPlayers[(userPicks as any)[`${cat.id}_team`]] || []).map(p => (
+                        <option key={p.id} value={p.name}>{p.name} ({p.position[0]})</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <select disabled style={{ width: '100%', padding: '7px 10px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', background: '#f9f9f9', color: '#bbb' }}>
+                      <option>select a team first</option>
+                    </select>
+                  )}
                 </div>
               ) : (
                 <select

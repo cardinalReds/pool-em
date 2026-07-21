@@ -24,6 +24,9 @@ export default function CreatePoolPage() {
   const [tournamentId, setTournamentId] = useState('')
   const [deadlineType, setDeadlineType] = useState<'before_each_game' | 'before_tournament' | 'before_weekend' | 'before_session'>('before_each_game')
 
+  // Per-game ruleset
+  const [selectedRules, setSelectedRules] = useState<SelectedRule[]>([])
+
   // PL-specific config (step 2b)
   const [plSeasonProps, setPlSeasonProps] = useState(false)
   const [plSelectedProps, setPlSelectedProps] = useState<string[]>([])
