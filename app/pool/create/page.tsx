@@ -161,7 +161,9 @@ export default function CreatePoolPage() {
       bank_account_number: accountNumber.trim() || null,
       allow_member_invites: allowMemberInvites,
       payout_structure: isPL
-        ? (plPrizeSeason && plSeasonBuyIn ? `season pot · best ${plBestWeeks} of 38 matchdays counted` : null)
+        ? (plPrizeSeason && plSeasonBuyIn
+          ? `${payoutTemplate === 'custom' ? customPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description || ''} · best ${plBestWeeks} of 38 matchdays counted`
+          : null)
         : (buyIn && parseFloat(buyIn) > 0
           ? (payoutTemplate === 'custom' ? customPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description || null)
           : null),
@@ -644,9 +646,32 @@ export default function CreatePoolPage() {
                         style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontFamily: 'inherit'}} />
                     </div>
                   </div>
-                  <div style={{fontSize: '10px', color: '#aaa'}}>
+                  <div style={{fontSize: '10px', color: '#aaa', marginBottom: 14}}>
                     only the best {plBestWeeks} of 38 matchdays will count toward the season total — missed weeks won't hurt you
                   </div>
+
+                  <div style={{fontSize: '11px', fontWeight: 600, marginBottom: 8}}>how does the season pot get paid out?</div>
+                  <div style={{display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10}}>
+                    {PAYOUT_TEMPLATES.map(t => (
+                      <button key={t.id} type="button" onClick={() => setPayoutTemplate(t.id)}
+                        style={{
+                          textAlign: 'left', padding: '10px 12px', border: '1px solid', cursor: 'pointer', fontFamily: 'inherit',
+                          borderColor: payoutTemplate === t.id ? '#C8102E' : '#e0e0db',
+                          background: payoutTemplate === t.id ? '#fff5f5' : 'white',
+                        }}>
+                        <span style={{fontWeight: 600, fontSize: '12px', color: payoutTemplate === t.id ? '#C8102E' : '#111'}}>{t.label}</span>
+                        {t.id !== 'custom' && <span style={{fontSize: '11px', color: '#888', marginLeft: 8}}>{t.description}</span>}
+                      </button>
+                    ))}
+                  </div>
+                  {payoutTemplate === 'custom' && (
+                    <textarea
+                      placeholder="e.g. 1st: 50%, 2nd: 30%, 3rd: 20%"
+                      value={customPayout}
+                      onChange={e => setCustomPayout(e.target.value)}
+                      rows={3}
+                      style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '13px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' as const}} />
+                  )}
                 </div>
               )}
             </div>
