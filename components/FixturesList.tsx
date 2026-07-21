@@ -731,7 +731,7 @@ poolRules: PoolRule[]
 
 export default function FixturesList({
   poolId, userId, packageId, deadlineType, tournamentId,
-  hideControls, externalSortMode, externalViewMode,
+  hideControls, externalSortMode, externalViewMode, isAdmin,
 }: {
   poolId: string
   userId: string
@@ -742,6 +742,7 @@ export default function FixturesList({
   hideControls?: boolean
   externalSortMode?: 'date' | 'group' | 'round'
   externalViewMode?: 'pages' | 'list'
+  isAdmin?: boolean
 }) {
   const [fixtures, setFixtures] = useState<Fixture[]>([])
   const [poolRules, setPoolRules] = useState<PoolRule[]>([])
@@ -760,6 +761,10 @@ export default function FixturesList({
   const [roundSpecialSaving, setRoundSpecialSaving] = useState<string | null>(null)
   const [roundSpecialSaved, setRoundSpecialSaved] = useState<Record<string, boolean>>({})
   const [braceTeamByMatchday, setBraceTeamByMatchday] = useState<Record<string, string>>({})
+  const [ghostEntries, setGhostEntries] = useState<{ id: string; name: string }[]>([])
+  const [activeEntryId, setActiveEntryId] = useState<string>(userId)
+  const [newGhostName, setNewGhostName] = useState('')
+  const [addingGhost, setAddingGhost] = useState(false)
   const [_sortMode, setSortMode] = useState<'date' | 'group' | 'round'>('date')
   const [_viewMode, setViewMode] = useState<'pages' | 'list'>('pages')
   const sortMode = externalSortMode ?? _sortMode
@@ -919,6 +924,14 @@ export default function FixturesList({
           .eq('pool_id', poolId)
         const memberMap: Record<string, string> = {}
         ;(memberRows || []).forEach((m: any) => { memberMap[m.user_id] = m.display_name })
+
+        // Fetch ghost entries and merge into members
+        const { data: ghosts } = await supabase
+          .from('ghost_entries')
+          .select('id, name')
+          .eq('pool_id', poolId)
+        ;(ghosts || []).forEach((g: any) => { memberMap[g.id] = g.name })
+        setGhostEntries(ghosts || [])
         setMembers(memberMap)
 
         // Fetch all members' picks for locked/finished fixtures (everyone's picks, not just ours)
@@ -962,7 +975,7 @@ export default function FixturesList({
         ;(legacyPreds || []).forEach((p: any) => {
           if (p.predicted_result) {
             predMap[`${p.fixture_id}:legacy_result`] = {
-              pool_id: poolId, user_id: userId, fixture_id: p.fixture_id,
+              pool_id: poolId, user_id: activeEntryId, fixture_id: p.fixture_id,
               category_id: 'legacy_result',
               value_wld: p.predicted_result, value_number: null, value_text: null,
               value_ou: null, value_yesno: null,
@@ -988,6 +1001,28 @@ export default function FixturesList({
   // Use a ref for saveFixture so updateLocal always calls the latest version
   const saveFixtureRef = useRef<(fixtureId: number) => Promise<void>>(async () => {})
 
+  async function switchEntry(entryId: string) {
+    setActiveEntryId(entryId)
+    const { data } = await supabase.from('predictions_v2').select('*').eq('pool_id', poolId).eq('user_id', entryId)
+    const predMap: PredMap = {}
+    for (const p of data || []) predMap[`${p.fixture_id}:${p.category_id}`] = p
+    setPreds(predMap)
+  }
+
+  async function addGhostEntry() {
+    if (!newGhostName.trim()) return
+    const { data } = await supabase.from('ghost_entries').insert({
+      pool_id: poolId, name: newGhostName.trim(), created_by: userId
+    }).select().single()
+    if (data) {
+      setGhostEntries(prev => [...prev, data])
+      setMembers(prev => ({ ...prev, [data.id]: data.name }))
+      await switchEntry(data.id)
+      setNewGhostName('')
+      setAddingGhost(false)
+    }
+  }
+
   const updateLocal = useCallback((
     fixtureId: number,
     categoryId: string,
@@ -1000,7 +1035,7 @@ export default function FixturesList({
       const updated = {
         ...prev,
         [key]: {
-          ...(prev[key] || { pool_id: poolId, user_id: userId, fixture_id: fixtureId, category_id: categoryId, points_earned: null, is_correct: null }),
+          ...(prev[key] || { pool_id: poolId, user_id: activeEntryId, fixture_id: fixtureId, category_id: categoryId, points_earned: null, is_correct: null }),
           ...fields,
         } as PredV2,
       }
@@ -1035,7 +1070,7 @@ export default function FixturesList({
       const pred = currentPreds[key]
       return {
         pool_id: poolId,
-        user_id: userId,
+        user_id: activeEntryId,
         fixture_id: fixtureId,
         category_id: rule.category_id,
         value_wld: pred?.value_wld ?? null,
@@ -1160,7 +1195,7 @@ export default function FixturesList({
       .filter(([, value]) => value)
       .map(([categoryId, value]) => ({
         pool_id: poolId,
-        user_id: userId,
+        user_id: activeEntryId,
         fixture_id: null,
         category_id: categoryId,
         matchday,
@@ -1662,6 +1697,52 @@ export default function FixturesList({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Ghost entry switcher — admin only */}
+      {isAdmin && (
+        <div style={{ padding: '10px 12px', background: '#f9f9f9', border: '1px solid #e0e0db' }}>
+          <div style={{ fontSize: '10px', fontWeight: 600, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>making picks for</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginBottom: addingGhost ? 8 : 0 }}>
+            <button type="button" onClick={() => switchEntry(userId)}
+              style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
+                borderColor: activeEntryId === userId ? '#C8102E' : '#ddd',
+                background: activeEntryId === userId ? '#C8102E' : 'white',
+                color: activeEntryId === userId ? 'white' : '#555', fontWeight: activeEntryId === userId ? 700 : 400 }}>
+              you
+            </button>
+            {ghostEntries.map(g => (
+              <button key={g.id} type="button" onClick={() => switchEntry(g.id)}
+                style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
+                  borderColor: activeEntryId === g.id ? '#C8102E' : '#ddd',
+                  background: activeEntryId === g.id ? '#C8102E' : 'white',
+                  color: activeEntryId === g.id ? 'white' : '#555', fontWeight: activeEntryId === g.id ? 700 : 400 }}>
+                {g.name}
+              </button>
+            ))}
+            {!addingGhost && (
+              <button type="button" onClick={() => setAddingGhost(true)}
+                style={{ padding: '5px 10px', fontSize: '12px', border: '1px dashed #ddd', background: 'white', color: '#aaa', cursor: 'pointer', fontFamily: 'inherit' }}>
+                + add entry
+              </button>
+            )}
+          </div>
+          {addingGhost && (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input autoFocus value={newGhostName} onChange={e => setNewGhostName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addGhostEntry()}
+                placeholder="entry name..."
+                style={{ flex: 1, padding: '6px 8px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit' }} />
+              <button type="button" onClick={addGhostEntry}
+                style={{ padding: '6px 12px', background: '#111', color: 'white', border: 'none', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer' }}>
+                add
+              </button>
+              <button type="button" onClick={() => { setAddingGhost(false); setNewGhostName('') }}
+                style={{ padding: '6px 10px', background: 'none', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer', color: '#aaa' }}>
+                cancel
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {/* Controls */}
       {!hideControls && (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 8, flexWrap: 'wrap' as const }}>

@@ -718,7 +718,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 )}
                 {user && pool.deadline_type === 'before_tournament' && pool.sport !== 'mma' ? (
                   <>
-                    <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} isAdmin={isAdmin} tournamentId={pool.tournament_id} />
+                    <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} isAdmin={isAdmin} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
                     {new Date() >= new Date('2026-06-11T19:00:00Z') && (
                       <div style={{ marginTop: 32 }}>
                         <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 16, paddingTop: 16, borderTop: '1px solid #eee' }}>everyone's picks</div>
@@ -728,10 +728,10 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                   </>
                 ) : user && (
                   pool.sport === 'f1'
-                    ? <F1SessionsList poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} />
+                    ? <F1SessionsList poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
                     : pool.sport === 'mma'
                     ? <MMAFightCard poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
-                    : <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} hideControls={true} externalSortMode={mobileSortMode} externalViewMode={mobileViewMode} />
+                    : <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} hideControls={true} externalSortMode={mobileSortMode} externalViewMode={mobileViewMode} isAdmin={isAdmin} />
                 )}
               </div>
             )}
@@ -981,7 +981,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             <div style={{width: '100%', maxWidth: 560}}>
               {user && pool.deadline_type === 'before_tournament' && pool.sport !== 'mma' ? (
                 <>
-                  <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} isAdmin={isAdmin} tournamentId={pool.tournament_id} />
+                  <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} isAdmin={isAdmin} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
                   {new Date() >= new Date('2026-06-11T19:00:00Z') && (
                     <div style={{ marginTop: 32 }}>
                       <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 16, paddingTop: 16, borderTop: '1px solid #eee' }}>everyone's picks</div>
@@ -991,10 +991,10 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 </>
               ) : user && (
                 pool.sport === 'f1'
-                  ? <F1SessionsList poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} />
+                  ? <F1SessionsList poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
                   : pool.sport === 'mma'
                   ? <MMAFightCard poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
-                  : <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} />
+                  : <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
               )}
             </div>
           </div>
