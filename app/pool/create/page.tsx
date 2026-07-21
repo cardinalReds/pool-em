@@ -43,12 +43,12 @@ export default function CreatePoolPage() {
   const [plPropPoints, setPlPropPoints] = useState<Record<string, number>>({})
 
   const PL_PROPS = [
-    { id: 'title_winner', label: 'Title winner', desc: 'Pick the Premier League champion' },
-    { id: 'top_4', label: 'Top 4', desc: 'Pick all 4 teams finishing in the top 4' },
+    { id: 'title_winner', label: 'Title winner', desc: 'Pick the Premier League champion. Just 1 team.' },
+    { id: 'top_4', label: 'Top 4', desc: 'Pick 4 teams in finishing order. 1st = champion (scores separately if Title winner is also enabled). Points for exact position + 1pt consolation for top 4 in wrong spot.' },
     { id: 'top_scorer', label: 'Top scorer', desc: 'Pick the Golden Boot winner' },
     { id: 'top_assist', label: 'Top assist', desc: 'Pick the player with the most assists' },
     { id: 'golden_glove', label: 'Golden Glove', desc: 'Pick the keeper with the most clean sheets' },
-    { id: 'relegated', label: 'Relegated teams', desc: 'Pick all 3 relegated teams' },
+    { id: 'relegated', label: 'Relegated teams', desc: 'Pick all 3 relegated teams (no order needed)' },
   ]
 
   const isPL = tournamentId.startsWith('pl_')

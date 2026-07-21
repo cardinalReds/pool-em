@@ -992,11 +992,12 @@ export default function RulesetBuilder({ sport, onComplete, isPL, plSelectedProp
           </div>
 
           {plSelectedProps.includes('title_winner') && (
-            <PropRow label="title winner" propKey="title_winner" desc="correct winner" />
+            <PropRow label="title winner" propKey="title_winner" desc="correct champion" />
           )}
 
           {plSelectedProps.includes('top_4') && (
             <>
+              <PropRow label="top 4 — 1st place" propKey="title_winner" desc="correct champion (also scores title winner if enabled)" />
               <PropRow label="top 4 — 2nd place" propKey="top_4" desc="correct 2nd place team" />
               <PropRow label="top 4 — 3rd place" propKey="top_4_3rd" desc="correct 3rd place team" />
               <PropRow label="top 4 — 4th place" propKey="top_4_4th" desc="correct 4th place team" />
@@ -1073,11 +1074,13 @@ export default function RulesetBuilder({ sport, onComplete, isPL, plSelectedProp
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) 300px', gap: '24px', alignItems: 'start' }}>
       {rulesPanel}
       {/* RIGHT: Ticket emulator — scrollable, max height so it doesn't go off screen */}
-      <div style={{ position: 'sticky', top: 70, maxHeight: 'calc(100vh - 90px)', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ position: 'sticky', top: 70, maxHeight: 'calc(100vh - 90px)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '8px', flexShrink: 0 }}>
           ticket preview — example fixture
         </div>
-        {ticketPreview}
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {ticketPreview}
+        </div>
       </div>
     </div>
   )
