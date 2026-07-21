@@ -331,7 +331,7 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
   const [showPreview, setShowPreview] = useState(false)
 
   useEffect(() => {
-    function checkMobile() { setIsMobile(window.innerWidth < 768) }
+    function checkMobile() { setIsMobile(window.innerWidth < 1024) }
     checkMobile()
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)
@@ -510,12 +510,16 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
       color: pick === val ? 'white' : '#555',
     })
 
-    // Round specials: just show a "not yet picked" notice in the emulator
+    // Round specials: show interactive team/player picker
     if (isRound) {
-      const roundLabel =
-        cat.id === 'soccer_clean_sheet_round' ? 'Clean Sheet' :
-        cat.id === 'soccer_brace_round' ? 'Brace Scorer' :
-        cat.id === 'soccer_red_card_round' ? 'Red Card Team' : 'Penalty Team'
+      const isPlayer = cat.id === 'soccer_brace_round'
+      const sampleTeams = isPL
+        ? ['Arsenal', 'Chelsea', 'Liverpool', 'Man City', 'Man Utd', 'Tottenham']
+        : ['France', 'Spain', 'England', 'Argentina', 'Brazil', 'Germany']
+      const samplePlayers = isPL
+        ? ['B. Saka', 'E. Haaland', 'M. Salah', 'C. Palmer', 'H. Kane', 'A. Isak']
+        : ['K. Mbappé', 'V. Jr.', 'H. Kane', 'J. Bellingham', 'L. Messi', 'K. Benzema']
+      const options = isPlayer ? samplePlayers : sampleTeams
 
       return (
         <div style={{ marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #f0f0f0' }}>
@@ -523,14 +527,22 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
             <span>{cat.name}</span>
             <span style={{ color: '#C8102E' }}>{rule.points} pt{rule.points > 1 ? 's' : ''}</span>
           </div>
-          <div style={{ fontSize: '10px', color: '#aaa', fontStyle: 'italic', padding: '6px 8px', background: '#fafafa', border: '1px solid #f0f0f0' }}>
-            {cat.id === 'soccer_clean_sheet_round'
-              ? 'Pick 1 team per group, per matchday — shown on the pool page'
-              : cat.id === 'soccer_brace_round'
-              ? 'Pick any player in the tournament — searchable list shown on the pool page'
-              : 'Pick any team in the tournament — shown on the pool page'
-            }
-            <div style={{ marginTop: '3px', color: '#ccc' }}>Made once per matchday, not per game.</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 4 }}>
+            {options.map(opt => (
+              <button key={opt} style={{
+                padding: '4px 8px', fontSize: '10px', border: '1px solid',
+                cursor: 'pointer', fontFamily: 'inherit',
+                borderColor: pick === opt ? '#C8102E' : '#ddd',
+                background: pick === opt ? '#C8102E' : 'white',
+                color: pick === opt ? 'white' : '#555',
+              }}
+                onClick={() => setUserPicks(p => ({ ...p, [cat.id]: opt }))}>
+                {opt}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: '9px', color: '#bbb', marginTop: 4 }}>
+            {isPlayer ? 'full player list shown on pool page' : 'full team list shown on pool page'} · once per matchday
           </div>
         </div>
       )
