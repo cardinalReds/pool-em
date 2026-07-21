@@ -899,6 +899,7 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
       )}
 
       <button
+        type="button"
         onClick={() => {
           const enabled = Object.values(rules).filter(r => r.enabled)
           if (enabled.length > 0) onComplete(enabled)

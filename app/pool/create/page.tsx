@@ -533,7 +533,11 @@ export default function CreatePoolPage() {
             <RulesetBuilder
               sport={sport}
               isPL={isPL}
-              onComplete={(rules) => { setSelectedRules(rules as SelectedRule[]); setStep(isPL ? 5 : 4) }}
+              onComplete={(rules) => { 
+                const r = rules as SelectedRule[]
+                setSelectedRules(r)
+                setStep(isPL ? 5 : 4) 
+              }}
             />
             <div style={{marginTop: '16px'}}>
               <button className="btn-secondary" onClick={() => setStep(isPL ? 3 : 2)} style={{padding: '10px 20px', minHeight: 44}}>← back</button>
