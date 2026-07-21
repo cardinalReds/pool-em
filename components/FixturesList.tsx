@@ -38,6 +38,8 @@ interface Fixture {
   ht_home_card_pts: number | null
   ht_away_card_pts: number | null
   line_total_rounds: number | null
+  home_logo: string | null
+  away_logo: string | null
 }
 
 // One row per category per fixture in predictions_v2
@@ -443,8 +445,11 @@ poolRules: PoolRule[]
               <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-                  <Flag team={fixture.home_team} /> {fixture.home_team}
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                  {isPL && fixture.home_logo
+                    ? <img src={fixture.home_logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain', flexShrink: 0 }} />
+                    : <Flag team={fixture.home_team} />
+                  } {fixture.home_team}
                 </span>
               </button>
               {showDraw && (
@@ -457,8 +462,11 @@ poolRules: PoolRule[]
               <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
                 disabled={locked || finished}
                 onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-                  {fixture.away_team} <Flag team={fixture.away_team} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                  {isPL && fixture.away_logo
+                    ? <img src={fixture.away_logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain', flexShrink: 0 }} />
+                    : <Flag team={fixture.away_team} />
+                  } {fixture.away_team}
                 </span>
               </button>
             </div>
@@ -472,8 +480,11 @@ poolRules: PoolRule[]
           <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              <Flag team={fixture.home_team} /> {fixture.home_team}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', gap: 4 }}>
+              {isPL && fixture.home_logo
+                ? <img src={fixture.home_logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain', flexShrink: 0 }} />
+                : <Flag team={fixture.home_team} />
+              } {fixture.home_team}
               {fixture.line_asian_handicap_home != null && (
                 <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: 3 }}>
                   ({fixture.line_asian_handicap_home > 0 ? '+' : ''}{fixture.line_asian_handicap_home})
@@ -484,8 +495,11 @@ poolRules: PoolRule[]
           <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              {fixture.away_team} <Flag team={fixture.away_team} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', gap: 4 }}>
+              {isPL && fixture.away_logo
+                ? <img src={fixture.away_logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain', flexShrink: 0 }} />
+                : <Flag team={fixture.away_team} />
+              } {fixture.away_team}
               {fixture.line_asian_handicap_away != null && (
                 <span style={{ fontSize: '10px', opacity: 0.7, marginLeft: 3 }}>
                   ({fixture.line_asian_handicap_away > 0 ? '+' : ''}{fixture.line_asian_handicap_away})
@@ -502,8 +516,8 @@ poolRules: PoolRule[]
           <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              <Flag team={fixture.home_team} /> {fixture.home_team}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+              {isPL && fixture.home_logo ? <img src={fixture.home_logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} /> : <Flag team={fixture.home_team} />} {fixture.home_team}
             </span>
           </button>
           <button type="button" style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
@@ -514,8 +528,8 @@ poolRules: PoolRule[]
           <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              {fixture.away_team} <Flag team={fixture.away_team} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+              {isPL && fixture.away_logo ? <img src={fixture.away_logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} /> : <Flag team={fixture.away_team} />} {fixture.away_team}
             </span>
           </button>
         </div>
@@ -527,8 +541,8 @@ poolRules: PoolRule[]
           <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              <Flag team={fixture.home_team} /> {fixture.home_team}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+              {isPL && fixture.home_logo ? <img src={fixture.home_logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} /> : <Flag team={fixture.home_team} />} {fixture.home_team}
             </span>
           </button>
           <button type="button" style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
@@ -539,8 +553,8 @@ poolRules: PoolRule[]
           <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>
-              {fixture.away_team} <Flag team={fixture.away_team} />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+              {isPL && fixture.away_logo ? <img src={fixture.away_logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} /> : <Flag team={fixture.away_team} />} {fixture.away_team}
             </span>
           </button>
         </div>
@@ -773,6 +787,7 @@ export default function FixturesList({
 
   const isCustom = packageId?.toUpperCase() === 'CUSTOM'
   const isMMA = tournamentId?.startsWith('ufc_') || tournamentId?.includes('mma')
+  const isPL = tournamentId?.startsWith('pl_')
   const hasPerGame = poolRules.some(r => r.prediction_type === 'per_game')
   const hasPerRound = poolRules.some(r => r.prediction_type === 'per_round')
   const onlyRoundSpecials = isCustom && hasPerRound && !hasPerGame
@@ -1432,6 +1447,31 @@ export default function FixturesList({
         )}
 
         {/* Team/Fighter header */}
+        {isPL ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 10px', borderBottom: perGameRules.length > 0 ? '1px solid #f5f5f5' : 'none', gap: 4 }}>
+            {/* Home */}
+            <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', flex: 1, gap: 4 }}>
+              {fixture.home_logo
+                ? <img src={fixture.home_logo} alt={fixture.home_team} style={{ width: 44, height: 44, objectFit: 'contain' }} />
+                : <span style={{ fontSize: '28px' }}>{FLAGS[fixture.home_team] || '⚽'}</span>
+              }
+              <span style={{ fontWeight: 700, fontSize: '11px', textAlign: 'center' as const, lineHeight: 1.2 }}>{fixture.home_team}</span>
+            </div>
+            {/* Score or VS */}
+            {(finished || isLive)
+              ? <span style={{ fontWeight: 700, fontSize: isLive ? '22px' : '18px', color: isLive ? '#2d7a2d' : '#111', flexShrink: 0, padding: '0 8px' }}>{fixture.home_score} – {fixture.away_score}</span>
+              : <span style={{ fontSize: '12px', color: '#ccc', flexShrink: 0, padding: '0 8px' }}>vs</span>
+            }
+            {/* Away */}
+            <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', flex: 1, gap: 4 }}>
+              {fixture.away_logo
+                ? <img src={fixture.away_logo} alt={fixture.away_team} style={{ width: 44, height: 44, objectFit: 'contain' }} />
+                : <span style={{ fontSize: '28px' }}>{FLAGS[fixture.away_team] || '⚽'}</span>
+              }
+              <span style={{ fontWeight: 700, fontSize: '11px', textAlign: 'center' as const, lineHeight: 1.2 }}>{fixture.away_team}</span>
+            </div>
+          </div>
+        ) : (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderBottom: perGameRules.length > 0 ? '1px solid #f5f5f5' : 'none', gap: 4 }}>
           <span style={{ fontWeight: 700, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1 }}>{isMMA ? '' : FLAGS[fixture.home_team]} {fixture.home_team}</span>
           {(finished || isLive)
@@ -1440,6 +1480,7 @@ export default function FixturesList({
           }
           <span style={{ fontWeight: 700, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1, textAlign: 'right' as const }}>{fixture.away_team} {isMMA ? '' : FLAGS[fixture.away_team]}</span>
         </div>
+        )}
 
         {/* Per-game predictions */}
         {/* Live stats bar — corners and cards */}
