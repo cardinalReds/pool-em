@@ -282,19 +282,22 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
         setAllPredsCached(allPreds || [])
 
-        // Total fixtures in this tournament
+        // F1 pools store picks against f1_sessions, not fixtures — predictions_v2.fixture_id
+        // holds the session id in that case, so "finished" has to be looked up in the right table.
+        const isF1 = pool.sport === 'f1'
+        const gameTable = isF1 ? 'f1_sessions' : 'fixtures'
+
+        // Total games in this tournament
         const { count: fixtureCount } = await supabase
-          .from('fixtures')
+          .from(gameTable)
           .select('id', { count: 'exact', head: true })
           .eq('tournament_id', pool.tournament_id)
         setTotalFixtureCount(fixtureCount || 0)
 
-        // Only count finished fixtures for the predicted count display
-        const { data: finishedFixtures } = await supabase
-          .from('fixtures')
-          .select('id')
-          .eq('tournament_id', pool.tournament_id)
-          .eq('status', 'FT')
+        // Only count finished games for the predicted count display
+        const { data: finishedFixtures } = isF1
+          ? await supabase.from(gameTable).select('id').eq('tournament_id', pool.tournament_id).eq('scored', true)
+          : await supabase.from(gameTable).select('id').eq('tournament_id', pool.tournament_id).eq('status', 'FT')
         const finishedIds = new Set((finishedFixtures || []).map((f: any) => f.id))
         setFinishedFixtureIds(finishedIds)
         setFinishedFixtureCount(finishedFixtures?.length || 0)
