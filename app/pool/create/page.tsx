@@ -304,6 +304,7 @@ export default function CreatePoolPage() {
                           setSport(t.sport)
                           if (t.sport === 'f1') setDeadlineType('before_weekend' as any)
                           else if (t.sport === 'mma') setDeadlineType('before_tournament')
+                          else if (t.id.startsWith('pl_')) setDeadlineType('before_weekend' as any)
                           else setDeadlineType('before_each_game')
                         }} style={{
                           display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', border: '1px solid', marginBottom: 4, cursor: 'pointer',
@@ -325,6 +326,7 @@ export default function CreatePoolPage() {
                           setSport(t.sport)
                           if (t.sport === 'f1') setDeadlineType('before_weekend' as any)
                           else if (t.sport === 'mma') setDeadlineType('before_tournament')
+                          else if (t.id.startsWith('pl_')) setDeadlineType('before_weekend' as any)
                           else setDeadlineType('before_each_game')
                         }} style={{
                           display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', border: '1px solid', marginBottom: 4, cursor: 'pointer',
