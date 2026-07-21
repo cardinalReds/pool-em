@@ -1027,6 +1027,7 @@ export default function FixturesList({
 
   async function switchEntry(entryId: string) {
     setActiveEntryId(entryId)
+    const supabase = createClient()
     const { data } = await supabase.from('predictions_v2').select('*').eq('pool_id', poolId).eq('user_id', entryId)
     const predMap: PredMap = {}
     for (const p of data || []) predMap[`${p.fixture_id}:${p.category_id}`] = p
@@ -1035,6 +1036,7 @@ export default function FixturesList({
 
   async function addGhostEntry() {
     if (!newGhostName.trim()) return
+    const supabase = createClient()
     const { data } = await supabase.from('ghost_entries').insert({
       pool_id: poolId, name: newGhostName.trim(), created_by: userId
     }).select().single()
