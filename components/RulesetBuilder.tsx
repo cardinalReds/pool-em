@@ -823,10 +823,21 @@ export default function RulesetBuilder({ sport, onComplete, isPL }: {
                 <span style={{ color: '#C8102E' }}>{rule?.points} pts</span>
               </div>
               {isPlayer ? (
-                <input
-                  placeholder="search player..."
-                  style={{ width: '100%', padding: '7px 10px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', boxSizing: 'border-box' as const }}
-                />
+                <div>
+                  <select
+                    value={typeof (userPicks as any)[`${cat.id}_team`] === 'string' ? (userPicks as any)[`${cat.id}_team`] : ''}
+                    onChange={e => setUserPicks(p => ({ ...p, [`${cat.id}_team`]: e.target.value, [cat.id]: '' }))}
+                    style={{ width: '100%', padding: '7px 10px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', background: 'white', marginBottom: 4 }}
+                  >
+                    <option value=''>select a team...</option>
+                    {teamList.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  <input
+                    placeholder={(userPicks as any)[`${cat.id}_team`] ? 'search player...' : 'select a team first'}
+                    disabled={!(userPicks as any)[`${cat.id}_team`]}
+                    style={{ width: '100%', padding: '7px 10px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', boxSizing: 'border-box' as const, background: (userPicks as any)[`${cat.id}_team`] ? 'white' : '#f9f9f9', color: (userPicks as any)[`${cat.id}_team`] ? '#111' : '#bbb' }}
+                  />
+                </div>
               ) : (
                 <select
                   style={{ width: '100%', padding: '7px 10px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', background: 'white' }}
