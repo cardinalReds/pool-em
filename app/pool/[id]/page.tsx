@@ -411,6 +411,43 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const pkg = RULE_PACKAGES[pool.package_id as keyof typeof RULE_PACKAGES]
   const isAdmin = pool.admin_id === user?.id
 
+  // Buy-in collection summary — how much of the pot has actually been collected so far
+  const payingMembers = leaderboard.filter(m => !m.is_ghost)
+  const paidCount = payingMembers.filter(m => m.is_paid).length
+  const totalCollected = paidCount * (pool.buy_in_amount || 0)
+  const totalDue = payingMembers.length * (pool.buy_in_amount || 0)
+
+  function CollectionSummary() {
+    if (!isAdmin || !pool.buy_in_amount || payingMembers.length === 0) return null
+    return (
+      <div style={{fontSize: '11px', color: '#555', marginTop: 4}}>
+        ${totalCollected} of ${totalDue} collected · {paidCount} of {payingMembers.length} paid
+      </div>
+    )
+  }
+
+  function PaidPill({ member }: { member: any }) {
+    if (isAdmin) {
+      return (
+        <button onClick={() => togglePaid(member.id, member.is_paid)}
+          style={{fontSize: '10px', fontWeight: 600, padding: '3px 8px', borderRadius: 10, border: '1px solid',
+            borderColor: member.is_paid ? '#2d7a2d' : '#ddd',
+            background: member.is_paid ? '#2d7a2d' : 'white',
+            color: member.is_paid ? 'white' : '#888', cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0}}>
+          {member.is_paid ? 'paid' : 'mark paid'}
+        </button>
+      )
+    }
+    return (
+      <span style={{fontSize: '10px', fontWeight: 600, padding: '3px 8px', borderRadius: 10, border: '1px solid',
+        borderColor: member.is_paid ? '#2d7a2d' : '#ddd',
+        background: member.is_paid ? '#e8f5e9' : '#fafafa',
+        color: member.is_paid ? '#2d7a2d' : '#aaa', flexShrink: 0}}>
+        {member.is_paid ? 'paid' : 'unpaid'}
+      </span>
+    )
+  }
+
   const sidebarContent = (
     <div style={{padding: isMobile ? '16px' : '40px 24px', maxWidth: isMobile ? '100%' : 280, margin: isMobile ? 0 : '0 auto', width: '100%'}}>
 
@@ -471,9 +508,10 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           </div>
         </div>
       )}
-      {isAdmin && pool.buy_in_amount && pool.payout_structure && (
+      {isAdmin && pool.buy_in_amount && (
         <div style={{background: '#f9f9f9', border: '1px solid #eee', padding: '10px 12px', marginBottom: '16px', fontSize: '12px', color: '#555'}}>
-          💰 ${pool.buy_in_amount} buy-in · 🏆 {pool.payout_structure}
+          💰 ${pool.buy_in_amount} buy-in{pool.payout_structure ? ` · 🏆 ${pool.payout_structure}` : ''}
+          <CollectionSummary />
         </div>
       )}
 
@@ -537,7 +575,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         <div style={{fontSize: '10px', color: '#aaa', marginBottom: '8px', display: 'flex', alignItems: 'center'}}>
           <span style={{flex: 1, minWidth: 0, textAlign: 'left' as const}}>player</span>
           <div style={{display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0}}>
-            {isAdmin && pool.buy_in_amount && <span style={{width: 40, textAlign: 'center' as const, flexShrink: 0}}>paid</span>}
+            {pool.buy_in_amount && <span style={{width: 68, textAlign: 'center' as const, flexShrink: 0}}>paid</span>}
             <span style={{width: 40, textAlign: 'center' as const, flexShrink: 0}}>pts</span>
             {pool.deadline_type === 'before_tournament' && <span style={{width: 40, textAlign: 'center' as const, flexShrink: 0}}>max possible</span>}
           </div>
@@ -564,23 +602,10 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                   delete
                 </button>
               )}
-              {isAdmin && pool.buy_in_amount && (
-                <div style={{width: 40, display: 'flex', justifyContent: 'center', flexShrink: 0}}>
-                  <button onClick={() => togglePaid(member.id, member.is_paid)}
-                    title={member.is_paid ? 'mark as unpaid' : 'mark as paid'}
-                    style={{width: 22, height: 22, borderRadius: '50%', border: '1px solid',
-                      borderColor: member.is_paid ? '#2d7a2d' : '#ddd',
-                      background: member.is_paid ? '#2d7a2d' : 'white',
-                      color: 'white', fontSize: '12px', cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0}}>
-                    {member.is_paid ? '✓' : ''}
-                  </button>
+              {pool.buy_in_amount && (
+                <div style={{width: 68, display: 'flex', justifyContent: 'center', flexShrink: 0}}>
+                  <PaidPill member={member} />
                 </div>
-              )}
-              {!isAdmin && pool.buy_in_amount && (
-                <span style={{fontSize: '11px', color: member.is_paid ? '#2d7a2d' : '#ddd', width: 40, textAlign: 'center' as const, flexShrink: 0}}>
-                  {member.is_paid ? '✓' : '○'}
-                </span>
               )}
               <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', width: 40, textAlign: 'center' as const, flexShrink: 0}}>
                 {member.points}
@@ -739,9 +764,10 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 </button>
               </a>
             )}
-            {isAdmin && pool.buy_in_amount && pool.payout_structure && (
+            {isAdmin && pool.buy_in_amount && (
               <div style={{background: '#f9f9f9', border: '1px solid #eee', padding: '10px 12px', marginBottom: '12px', fontSize: '12px', color: '#555'}}>
-                💰 ${pool.buy_in_amount} buy-in · 🏆 {pool.payout_structure}
+                💰 ${pool.buy_in_amount} buy-in{pool.payout_structure ? ` · 🏆 ${pool.payout_structure}` : ''}
+                <CollectionSummary />
               </div>
             )}
             {!isAdmin && recentChanges.length > 0 && !changesDismissed && (
@@ -872,7 +898,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 <div style={{fontSize: '10px', color: '#aaa', marginBottom: '8px', display: 'flex', alignItems: 'center'}}>
                   <span style={{flex: 1}}>player</span>
                   <div style={{display: 'flex', gap: 12, alignItems: 'center'}}>
-                    {isAdmin && pool.buy_in_amount && <span style={{width: 40, textAlign: 'center' as const}}>paid</span>}
+                    {pool.buy_in_amount && <span style={{width: 68, textAlign: 'center' as const}}>paid</span>}
                     <span style={{width: 40, textAlign: 'center' as const}}>pts</span>
                     {pool.deadline_type === 'before_tournament' && <span style={{width: 40, textAlign: 'center' as const}}>max</span>}
                   </div>
@@ -899,20 +925,10 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                           delete
                         </button>
                       )}
-                      {isAdmin && pool.buy_in_amount && (
-                        <button onClick={() => togglePaid(member.id, member.is_paid)}
-                          style={{width: 22, height: 22, borderRadius: '50%', border: '1px solid',
-                            borderColor: member.is_paid ? '#2d7a2d' : '#ddd',
-                            background: member.is_paid ? '#2d7a2d' : 'white',
-                            color: 'white', fontSize: '12px', cursor: 'pointer',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-                          {member.is_paid ? '✓' : ''}
-                        </button>
-                      )}
-                      {!isAdmin && pool.buy_in_amount && (
-                        <span style={{fontSize: '11px', color: member.is_paid ? '#2d7a2d' : '#ddd', width: 22, textAlign: 'center' as const}}>
-                          {member.is_paid ? '✓' : '○'}
-                        </span>
+                      {pool.buy_in_amount && (
+                        <div style={{width: 68, display: 'flex', justifyContent: 'center', flexShrink: 0}}>
+                          <PaidPill member={member} />
+                        </div>
                       )}
                       <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', width: 40, textAlign: 'center' as const}}>
                         {member.points}
