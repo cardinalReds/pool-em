@@ -991,16 +991,16 @@ export default function RulesetBuilder({ sport, onComplete, isPL, plSelectedProp
             {' '}these are defaults you can override.
           </div>
 
-          {plSelectedProps.includes('title_winner') && (
-            <PropRow label="title winner" propKey="title_winner" desc="correct champion" />
+          {plSelectedProps.includes('title_winner') && !plSelectedProps.includes('top_4') && (
+            <PropRow label="winner" propKey="title_winner" desc="correct champion" />
           )}
 
           {plSelectedProps.includes('top_4') && (
             <>
-              <PropRow label="top 4 — 1st place" propKey="title_winner" desc="correct champion (also scores title winner if enabled)" />
-              <PropRow label="top 4 — 2nd place" propKey="top_4" desc="correct 2nd place team" />
-              <PropRow label="top 4 — 3rd place" propKey="top_4_3rd" desc="correct 3rd place team" />
-              <PropRow label="top 4 — 4th place" propKey="top_4_4th" desc="correct 4th place team" />
+              <PropRow label="winner" propKey="title_winner" desc="correct champion" />
+              <PropRow label="second place" propKey="top_4" desc="correct 2nd place team" />
+              <PropRow label="third place" propKey="top_4_3rd" desc="correct 3rd place team" />
+              <PropRow label="fourth place" propKey="top_4_4th" desc="correct 4th place team" />
               <PropRow label="top 4 — consolation" propKey="top_4_consolation" desc="team in top 4 but wrong position" />
             </>
           )}

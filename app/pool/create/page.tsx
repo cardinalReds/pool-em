@@ -70,6 +70,8 @@ export default function CreatePoolPage() {
   const [buyIn, setBuyIn] = useState('')
   const [venmoHandle, setVenmoHandle] = useState('')
   const [zelleHandle, setZelleHandle] = useState('')
+  const [sortCode, setSortCode] = useState('')
+  const [accountNumber, setAccountNumber] = useState('')
   const [payoutTemplate, setPayoutTemplate] = useState<string>('winner')
   const [customPayout, setCustomPayout] = useState('')
 
@@ -154,6 +156,8 @@ export default function CreatePoolPage() {
       buy_in_amount: isPL ? null : (buyIn ? parseFloat(buyIn) : null),
       venmo_handle: venmoHandle.replace('@', '').trim() || null,
       zelle_handle: zelleHandle.trim() || null,
+      bank_sort_code: sortCode.trim() || null,
+      bank_account_number: accountNumber.trim() || null,
       payout_structure: !isPL && buyIn && parseFloat(buyIn) > 0
         ? (payoutTemplate === 'custom' ? customPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description || null)
         : null,
@@ -418,22 +422,45 @@ export default function CreatePoolPage() {
                 </div>
               </label>
 
-              {plSeasonProps && (
-                <div style={{marginLeft: 28, display: 'flex', flexDirection: 'column' as const, gap: 8}}>
-                  {PL_PROPS.map(prop => (
-                    <label key={prop.id} style={{display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', padding: '8px 10px', border: '1px solid', borderColor: plSelectedProps.includes(prop.id) ? '#C8102E' : '#e0e0db', background: plSelectedProps.includes(prop.id) ? '#fff5f5' : 'white'}}>
-                      <input type="checkbox" checked={plSelectedProps.includes(prop.id)}
-                        onChange={e => setPlSelectedProps(prev => e.target.checked ? [...prev, prop.id] : prev.filter(p => p !== prop.id))}
-                        style={{width: 16, height: 16, cursor: 'pointer', flexShrink: 0}} />
+              {plSeasonProps && (() => {
+                const winner = PL_PROPS.find(p => p.id === 'title_winner')!
+                const top4 = PL_PROPS.find(p => p.id === 'top_4')!
+                const rest = PL_PROPS.filter(p => p.id !== 'title_winner' && p.id !== 'top_4')
+                const top4Selected = plSelectedProps.includes('top_4')
+
+                function PropCheckbox({ prop, checked, disabled, onToggle }: { prop: typeof PL_PROPS[number]; checked: boolean; disabled?: boolean; onToggle: (checked: boolean) => void }) {
+                  return (
+                    <label style={{display: 'flex', alignItems: 'center', gap: 10, cursor: disabled ? 'default' : 'pointer', padding: '8px 10px', border: '1px solid', flex: 1, borderColor: checked ? '#C8102E' : '#e0e0db', background: checked ? '#fff5f5' : 'white', opacity: disabled ? 0.7 : 1}}>
+                      <input type="checkbox" checked={checked} disabled={disabled}
+                        onChange={e => onToggle(e.target.checked)}
+                        style={{width: 16, height: 16, cursor: disabled ? 'default' : 'pointer', flexShrink: 0}} />
                       <div style={{flex: 1}}>
                         <div style={{fontWeight: 600, fontSize: '12px'}}>{prop.label}</div>
                         <div style={{fontSize: '11px', color: '#aaa'}}>{prop.desc}</div>
                       </div>
                     </label>
-                  ))}
-                  <div style={{fontSize: '10px', color: '#aaa', marginTop: 4}}>point values will be set after you configure your scoring rules</div>
-                </div>
-              )}
+                  )
+                }
+
+                return (
+                  <div style={{marginLeft: 28, display: 'flex', flexDirection: 'column' as const, gap: 8}}>
+                    <div style={{display: 'flex', gap: 8}}>
+                      <PropCheckbox prop={winner} checked={top4Selected || plSelectedProps.includes('title_winner')} disabled={top4Selected}
+                        onToggle={checked => setPlSelectedProps(prev => checked ? [...prev, 'title_winner'] : prev.filter(p => p !== 'title_winner'))} />
+                      <PropCheckbox prop={top4} checked={top4Selected}
+                        onToggle={checked => setPlSelectedProps(prev => {
+                          if (checked) return Array.from(new Set([...prev, 'top_4', 'title_winner']))
+                          return prev.filter(p => p !== 'top_4')
+                        })} />
+                    </div>
+                    {rest.map(prop => (
+                      <PropCheckbox key={prop.id} prop={prop} checked={plSelectedProps.includes(prop.id)}
+                        onToggle={checked => setPlSelectedProps(prev => checked ? [...prev, prop.id] : prev.filter(p => p !== prop.id))} />
+                    ))}
+                    <div style={{fontSize: '10px', color: '#aaa', marginTop: 4}}>point values will be set after you configure your scoring rules</div>
+                  </div>
+                )
+              })()}
             </div>
 
             {/* Game mode */}
@@ -642,37 +669,15 @@ export default function CreatePoolPage() {
                     <input placeholder="phone or email" value={zelleHandle} onChange={e => setZelleHandle(e.target.value)}
                       style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '14px', fontFamily: 'inherit'}} />
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Season prop point values */}
-            {plSeasonProps && plSelectedProps.length > 0 && (
-              <div style={{marginBottom: 20}}>
-                <div style={{fontWeight: 600, fontSize: '13px', marginBottom: 4}}>season prop points</div>
-                <div style={{fontSize: '11px', color: '#aaa', marginBottom: 10}}>
-                  default = 10% of max game points per matchday ({defaultPropPts} pts) · adjust as needed
-                </div>
-                <div style={{display: 'flex', flexDirection: 'column' as const, gap: 6}}>
-                  {plSelectedProps.map(catId => {
-                    const prop = PL_PROPS.find(p => p.id === catId)
-                    if (!prop) return null
-                    const val = plPropPoints[catId] ?? defaultPropPts
-                    return (
-                      <div key={catId} style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', border: '1px solid #e0e0db'}}>
-                        <div>
-                          <div style={{fontWeight: 600, fontSize: '12px'}}>{prop.label}</div>
-                          <div style={{fontSize: '11px', color: '#aaa'}}>{prop.desc}</div>
-                        </div>
-                        <div style={{display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0}}>
-                          <input type="number" min="1" max="500" value={val}
-                            onChange={e => setPlPropPoints(prev => ({...prev, [catId]: parseInt(e.target.value) || 0}))}
-                            style={{width: 56, border: '1px solid #ddd', padding: '6px', fontSize: '14px', fontFamily: 'inherit', textAlign: 'center'}} />
-                          <span style={{fontSize: '11px', color: '#aaa'}}>pts</span>
-                        </div>
-                      </div>
-                    )
-                  })}
+                  <div>
+                    <div style={{fontSize: '11px', color: '#888', marginBottom: 4}}>bank transfer <span style={{color: '#bbb'}}>(UK only)</span></div>
+                    <div style={{display: 'flex', gap: 8}}>
+                      <input placeholder="sort code" value={sortCode} onChange={e => setSortCode(e.target.value)}
+                        style={{flex: 1, border: '1px solid #ddd', padding: '8px', fontSize: '14px', fontFamily: 'inherit'}} />
+                      <input placeholder="account number" value={accountNumber} onChange={e => setAccountNumber(e.target.value)}
+                        style={{flex: 1, border: '1px solid #ddd', padding: '8px', fontSize: '14px', fontFamily: 'inherit'}} />
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -722,6 +727,18 @@ export default function CreatePoolPage() {
                   <input type="text" placeholder="phone or email" value={zelleHandle}
                     onChange={e => setZelleHandle(e.target.value)}
                     style={{border: '1px solid #ddd', padding: '8px 10px', fontSize: '16px', width: '100%', fontFamily: 'inherit', minHeight: 44, boxSizing: 'border-box' as const}} />
+                </div>
+
+                <div style={{marginBottom: '16px'}}>
+                  <label style={{display: 'block', fontWeight: 600, marginBottom: '6px'}}>bank transfer <span style={{fontWeight: 400, color: '#aaa'}}>(UK only, optional)</span></label>
+                  <div style={{display: 'flex', gap: '8px'}}>
+                    <input type="text" placeholder="sort code" value={sortCode}
+                      onChange={e => setSortCode(e.target.value)}
+                      style={{border: '1px solid #ddd', padding: '8px 10px', fontSize: '16px', flex: 1, fontFamily: 'inherit', minHeight: 44}} />
+                    <input type="text" placeholder="account number" value={accountNumber}
+                      onChange={e => setAccountNumber(e.target.value)}
+                      style={{border: '1px solid #ddd', padding: '8px 10px', fontSize: '16px', flex: 1, fontFamily: 'inherit', minHeight: 44}} />
+                  </div>
                 </div>
 
                 <div style={{marginBottom: '16px'}}>

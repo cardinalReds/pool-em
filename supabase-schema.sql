@@ -47,6 +47,10 @@ create table if not exists public.pools (
   created_at timestamptz default now()
 );
 
+-- Bank transfer payment details (UK only)
+alter table public.pools add column if not exists bank_sort_code text;
+alter table public.pools add column if not exists bank_account_number text;
+
 alter table public.pools enable row level security;
 create policy "Members can view their pools" on public.pools for select
   using (
