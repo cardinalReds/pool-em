@@ -12,6 +12,7 @@ interface NFLFixture {
   away_logo: string | null
   date: string
   status: string
+  city: string | null
   home_score: number | null
   away_score: number | null
   line_asian_handicap_home: number | null
@@ -238,6 +239,12 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
       {/* Games for this week */}
       {weekGames.map(game => {
         const locked = isGameLocked(game)
+        const finished = game.status === 'FT'
+        const isLive = game.status === 'live'
+        const hasAnyPick = enabledRules.some(r => {
+          const p = preds[`${game.id}:${r.category_id}`]
+          return p?.value_wld || p?.value_ou
+        })
         const btnStyle = (active: boolean): React.CSSProperties => ({
           flex: 1, padding: '8px 4px', fontSize: '11px', border: '1px solid',
           cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit',
@@ -247,28 +254,43 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
         })
 
         return (
-          <div key={game.id} style={{ marginBottom: 20, border: '1px solid #e0e0db', background: 'white' }}>
-            <div style={{ background: '#111', color: 'white', padding: '10px 12px' }}>
-              <div style={{ fontSize: '10px', color: '#888', marginBottom: 4 }}>{fmt(game.date)}{locked ? ' · locked' : ''}</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: '13px' }}>
-                  {game.away_logo && <img src={game.away_logo} alt="" width={20} height={20} style={{ objectFit: 'contain' as const }} />}
-                  {game.away_team}
-                </span>
-                <span style={{ color: '#555', fontSize: '11px' }}>@</span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: '13px' }}>
-                  {game.home_team}
-                  {game.home_logo && <img src={game.home_logo} alt="" width={20} height={20} style={{ objectFit: 'contain' as const }} />}
-                </span>
-              </div>
-              {game.status === 'FT' && (
-                <div style={{ textAlign: 'center' as const, marginTop: 6, fontWeight: 700, fontSize: '15px' }}>
-                  {game.away_score} – {game.home_score}
-                </div>
-              )}
+          <div key={game.id} style={{
+            marginBottom: 12,
+            background: 'white',
+            border: isLive ? '2px solid #2d7a2d' : '1px solid #e0e0db',
+            borderLeft: isLive ? '4px solid #2d7a2d' : hasAnyPick ? '3px solid #C8102E' : '1px solid #e0e0db',
+          }}>
+            {/* Meta row */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 10px', borderBottom: '1px solid #f0f0f0', fontSize: '10px', color: '#aaa' }}>
+              <span>{fmt(game.date)}</span>
+              {game.city && <span>{game.city}</span>}
+              {isLive
+                ? <span style={{ color: '#2d7a2d', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2d7a2d', display: 'inline-block' }} /> LIVE
+                  </span>
+                : locked && !finished ? <span>locked</span> : null}
             </div>
 
-            <div style={{ padding: '10px 12px' }}>
+            {/* Team header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 10px', gap: 4 }}>
+              <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', flex: 1, gap: 4 }}>
+                {game.away_logo
+                  ? <img src={game.away_logo} alt={game.away_team} style={{ width: 44, height: 44, objectFit: 'contain' as const }} />
+                  : <span style={{ fontSize: '28px' }}>🏈</span>}
+                <span style={{ fontWeight: 700, fontSize: '11px', textAlign: 'center' as const, lineHeight: 1.2 }}>{game.away_team}</span>
+              </div>
+              {(finished || isLive)
+                ? <span style={{ fontWeight: 700, fontSize: isLive ? '22px' : '18px', color: isLive ? '#2d7a2d' : '#111', flexShrink: 0, padding: '0 8px' }}>{game.away_score} – {game.home_score}</span>
+                : <span style={{ fontSize: '12px', color: '#ccc', flexShrink: 0, padding: '0 8px' }}>@</span>}
+              <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', flex: 1, gap: 4 }}>
+                {game.home_logo
+                  ? <img src={game.home_logo} alt={game.home_team} style={{ width: 44, height: 44, objectFit: 'contain' as const }} />
+                  : <span style={{ fontSize: '28px' }}>🏈</span>}
+                <span style={{ fontWeight: 700, fontSize: '11px', textAlign: 'center' as const, lineHeight: 1.2 }}>{game.home_team}</span>
+              </div>
+            </div>
+
+            <div style={{ padding: '10px 12px', borderTop: '1px solid #f5f5f5' }}>
               {enabledRules.length === 0 && (
                 <div style={{ fontSize: '11px', color: '#aaa', textAlign: 'center' as const, padding: 8 }}>no predictions configured for this pool</div>
               )}
@@ -286,22 +308,29 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
                       <span style={{ color: '#C8102E' }}>{rule.points} pt{rule.points > 1 ? 's' : ''}</span>
                     </div>
 
-                    {rule.input_type === 'wld' && (rule.category_id === 'nfl_spread' || rule.category_id === 'nfl_ht_spread') && (
-                      <div style={{ display: 'flex', gap: 0 }}>
-                        <button style={{ ...btnStyle(pick?.value_wld === 'away'), borderRight: 'none' }} disabled={locked}
-                          onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'away' })}>
-                          {game.away_team}{spreadLine != null ? ` (${spreadLine > 0 ? '+' : ''}${-spreadLine})` : ''}
-                        </button>
-                        <button style={{ ...btnStyle(pick?.value_wld === 'draw'), borderRight: 'none' }} disabled={locked}
-                          onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'draw' })}>
-                          push
-                        </button>
-                        <button style={btnStyle(pick?.value_wld === 'home')} disabled={locked}
-                          onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'home' })}>
-                          {game.home_team}{spreadLine != null ? ` (${spreadLine > 0 ? '+' : ''}${spreadLine})` : ''}
-                        </button>
-                      </div>
-                    )}
+                    {rule.input_type === 'wld' && (rule.category_id === 'nfl_spread' || rule.category_id === 'nfl_ht_spread') && (() => {
+                      // A push is only possible when the line is a whole number — half-point
+                      // spreads (the vast majority) can never tie, so don't offer that option.
+                      const canPush = spreadLine != null && Number.isInteger(spreadLine)
+                      return (
+                        <div style={{ display: 'flex', gap: 0 }}>
+                          <button style={{ ...btnStyle(pick?.value_wld === 'away'), borderRight: 'none' }} disabled={locked}
+                            onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'away' })}>
+                            {game.away_team}{spreadLine != null ? ` (${spreadLine > 0 ? '+' : ''}${-spreadLine})` : ''}
+                          </button>
+                          {canPush && (
+                            <button style={{ ...btnStyle(pick?.value_wld === 'draw'), borderRight: 'none' }} disabled={locked}
+                              onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'draw' })}>
+                              push
+                            </button>
+                          )}
+                          <button style={btnStyle(pick?.value_wld === 'home')} disabled={locked}
+                            onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'home' })}>
+                            {game.home_team}{spreadLine != null ? ` (${spreadLine > 0 ? '+' : ''}${spreadLine})` : ''}
+                          </button>
+                        </div>
+                      )
+                    })()}
 
                     {rule.input_type === 'wld' && rule.category_id !== 'nfl_spread' && rule.category_id !== 'nfl_ht_spread' && (
                       <div style={{ display: 'flex', gap: 0 }}>
