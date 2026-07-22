@@ -155,6 +155,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
     setTimeout(() => mobilePanelRef.current?.scrollTo({ top: 0 }), 0)
   }
   const [mobileSortMode, setMobileSortMode] = useState<'date' | 'group' | 'round'>('group')
+  const [seasonPropsLocked, setSeasonPropsLocked] = useState(false)
   const [mobileViewMode, setMobileViewMode] = useState<'pages' | 'list'>('pages')
   const [chatWidth, setChatWidth] = useState(260)
   const [isResizingChat, setIsResizingChat] = useState(false)
@@ -846,8 +847,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                     : pool.sport === 'mma'
                     ? <MMAFightCard poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
                     : <>
-                        {pool.season_props_enabled && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} />}
+                        {pool.season_props_enabled && !seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
                         <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} hideControls={true} externalSortMode={mobileSortMode} externalViewMode={mobileViewMode} isAdmin={isAdmin} />
+                        {pool.season_props_enabled && seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
                       </>
                 )}
               </div>
@@ -1120,8 +1122,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                   : pool.sport === 'mma'
                   ? <MMAFightCard poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
                   : <>
-                      {pool.season_props_enabled && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} />}
+                      {pool.season_props_enabled && !seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
                       <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
+                      {pool.season_props_enabled && seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
                     </>
               )}
             </div>

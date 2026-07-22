@@ -112,7 +112,9 @@ function TeamPlayerPicker({ value, onChange, teams, playersByTeam, disabled, goa
   )
 }
 
-export default function SeasonPropsTicket({ poolId, userId, tournamentId }: { poolId: string; userId: string; tournamentId: string }) {
+export default function SeasonPropsTicket({ poolId, userId, tournamentId, onLockChange }: {
+  poolId: string; userId: string; tournamentId: string; onLockChange?: (locked: boolean) => void
+}) {
   const [loading, setLoading] = useState(true)
   const [enabledCategories, setEnabledCategories] = useState<string[]>([])
   const [picks, setPicks] = useState<Record<string, Pick>>({})
@@ -159,7 +161,11 @@ export default function SeasonPropsTicket({ poolId, userId, tournamentId }: { po
       setPlayersByTeam(byTeam)
 
       const dates = (fixturesRes.data || []).map((f: any) => new Date(f.date).getTime())
-      if (dates.length > 0) setLockTime(new Date(Math.min(...dates)))
+      if (dates.length > 0) {
+        const lt = new Date(Math.min(...dates))
+        setLockTime(lt)
+        onLockChange?.(Date.now() >= lt.getTime())
+      }
 
       setLoading(false)
     }
