@@ -32,6 +32,7 @@ export default function CreatePoolPage() {
   const [plSeasonProps, setPlSeasonProps] = useState(false)
   const [plSelectedProps, setPlSelectedProps] = useState<string[]>([])
   const [plGameMode, setPlGameMode] = useState<'every_game' | 'best5'>('every_game')
+  const [plBest5Override, setPlBest5Override] = useState(false)
 
   // PL prize structure (step 4 for PL)
   const [plPrizeSeason, setPlPrizeSeason] = useState(false)
@@ -181,6 +182,7 @@ export default function CreatePoolPage() {
       // PL-specific
       ...(isPL ? {
         pl_game_mode: plGameMode,
+        pl_best5_admin_override: plGameMode === 'best5' ? plBest5Override : false,
         pl_best_weeks: plBestWeeks,
         prize_season: plPrizeSeason,
         prize_weekly: plPrizeWeekly,
@@ -549,13 +551,22 @@ export default function CreatePoolPage() {
                   <div style={{fontSize: '11px', color: '#aaa', marginTop: 3}}>predict all games each matchday — typically 10 games</div>
                 </button>
                 <button type="button" onClick={() => setPlGameMode('best5')}
-                  style={{padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer', opacity: 0.5,
+                  style={{padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer',
                     borderColor: plGameMode === 'best5' ? '#C8102E' : '#e0e0db',
                     background: plGameMode === 'best5' ? '#fff5f5' : 'white'}}>
-                  <div style={{fontWeight: 600, fontSize: '13px', color: plGameMode === 'best5' ? '#C8102E' : '#111'}}>best 5 games <span style={{fontSize: '10px', fontWeight: 400, color: '#bbb'}}>coming soon</span></div>
-                  <div style={{fontSize: '11px', color: '#aaa', marginTop: 3}}>algorithm picks the 5 most predictable games each matchday</div>
+                  <div style={{fontWeight: 600, fontSize: '13px', color: plGameMode === 'best5' ? '#C8102E' : '#111'}}>best 5 games</div>
+                  <div style={{fontSize: '11px', color: '#aaa', marginTop: 3}}>algorithm picks 5 marquee games each matchday — one per kickoff slot, prioritizing derbies and table-defining clashes</div>
                 </button>
               </div>
+              {plGameMode === 'best5' && (
+                <label style={{display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 8, padding: '10px 12px', border: '1px solid #e0e0db', cursor: 'pointer'}}>
+                  <input type="checkbox" checked={plBest5Override} onChange={e => setPlBest5Override(e.target.checked)} style={{marginTop: 2}} />
+                  <span>
+                    <div style={{fontWeight: 600, fontSize: '13px'}}>allow admin override</div>
+                    <div style={{fontSize: '11px', color: '#aaa', marginTop: 3}}>let yourself swap out any auto-picked game for a different one from that matchday, before it locks</div>
+                  </span>
+                </label>
+              )}
             </div>
 
             <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '16px'}}>

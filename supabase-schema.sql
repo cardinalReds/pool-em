@@ -270,3 +270,68 @@ create policy "Users can insert own predictions" on public.predictions for inser
   with check (auth.uid() = user_id);
 create policy "Users can update own predictions" on public.predictions for update
   using (auth.uid() = user_id);
+
+-- PL "best 5 games" matchweek selection. pl_game_mode already existed on pools but was
+-- never read anywhere — this is what actually implements it.
+
+-- pl_teams was previously just a name/logo directory (no standings). Adding real table
+-- position here — needed as a tiebreaker signal for game selection, and useful for a
+-- standings UI later regardless.
+alter table public.pl_teams add column if not exists position int;
+alter table public.pl_teams add column if not exists points int;
+alter table public.pl_teams add column if not exists played int;
+alter table public.pl_teams add column if not exists won int;
+alter table public.pl_teams add column if not exists drawn int;
+alter table public.pl_teams add column if not exists lost int;
+alter table public.pl_teams add column if not exists goals_for int;
+alter table public.pl_teams add column if not exists goals_against int;
+alter table public.pl_teams add column if not exists goal_difference int;
+
+-- Gates whether the admin override control shows at all for a best5 pool — off by
+-- default, matching "predictions lock to the admin's judgment" being an opt-in, not
+-- the default trust model.
+alter table public.pools add column if not exists pl_best5_admin_override boolean not null default false;
+
+-- One row per selected fixture per pool per matchweek. Stored per-pool (not shared across
+-- pools even though the auto-selection algorithm is pool-agnostic) so an admin override in
+-- one pool never affects another, and so a pool's selection stays stable once computed —
+-- it must never silently change under members who've already predicted on it.
+create table if not exists public.pool_matchweek_selections (
+  id uuid default gen_random_uuid() primary key,
+  pool_id uuid references public.pools(id) on delete cascade not null,
+  round text not null,
+  fixture_id bigint not null,
+  source text not null default 'auto' check (source in ('auto', 'admin')),
+  created_at timestamptz default now(),
+  unique(pool_id, round, fixture_id)
+);
+
+alter table public.pool_matchweek_selections enable row level security;
+create policy "Pool members can view matchweek selections" on public.pool_matchweek_selections for select
+  using (
+    exists (
+      select 1 from public.pool_members
+      where pool_members.pool_id = pool_matchweek_selections.pool_id
+      and pool_members.user_id = auth.uid()
+    )
+  );
+-- Only the admin can write from the browser (the override swap). The initial 'auto'
+-- population is done by /api/pl/best5-select using the service-role key, which bypasses
+-- RLS entirely — same pattern as every cron route in this file.
+create policy "Pool admins can insert matchweek selections" on public.pool_matchweek_selections for insert
+  with check (
+    exists (
+      select 1 from public.pools
+      where pools.id = pool_matchweek_selections.pool_id
+      and pools.admin_id = auth.uid()
+    )
+  );
+create policy "Pool admins can delete matchweek selections" on public.pool_matchweek_selections for delete
+  using (
+    exists (
+      select 1 from public.pools
+      where pools.id = pool_matchweek_selections.pool_id
+      and pools.admin_id = auth.uid()
+    )
+  );
+grant select, insert, delete on public.pool_matchweek_selections to authenticated;

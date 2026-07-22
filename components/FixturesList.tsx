@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { WC_SQUADS } from '@/lib/wc_squads'
+import Best5Selector from '@/components/Best5Selector'
 
 interface Fixture {
   id: number
@@ -782,6 +783,7 @@ function buildRoundSpecialState(preds: any[]) {
 export default function FixturesList({
   poolId, userId, packageId, deadlineType, tournamentId,
   hideControls, externalSortMode, externalViewMode, isAdmin,
+  plGameMode, plBest5AdminOverride,
 }: {
   poolId: string
   userId: string
@@ -793,6 +795,8 @@ export default function FixturesList({
   externalSortMode?: 'date' | 'group' | 'round'
   externalViewMode?: 'pages' | 'list'
   isAdmin?: boolean
+  plGameMode?: string
+  plBest5AdminOverride?: boolean
 }) {
   const [fixtures, setFixtures] = useState<Fixture[]>([])
   const [poolRules, setPoolRules] = useState<PoolRule[]>([])
@@ -821,10 +825,12 @@ export default function FixturesList({
   const sortMode = externalSortMode ?? _sortMode
   const viewMode = externalViewMode ?? _viewMode
   const [currentPage, setCurrentPage] = useState(0)
+  const [best5Selections, setBest5Selections] = useState<Record<string, number[]>>({})
 
   const isCustom = packageId?.toUpperCase() === 'CUSTOM'
   const isMMA = tournamentId?.startsWith('ufc_') || tournamentId?.includes('mma')
   const isPL = tournamentId?.startsWith('pl_')
+  const isBest5Active = isPL && plGameMode === 'best5'
   const hasPerGame = poolRules.some(r => r.prediction_type === 'per_game')
   const hasPerRound = poolRules.some(r => r.prediction_type === 'per_round')
   const onlyRoundSpecials = isCustom && hasPerRound && !hasPerGame
@@ -842,6 +848,34 @@ export default function FixturesList({
       const res = await fetch(`/api/fixtures?tournament_id=${tournamentId || 'wc_2026'}`)
       const data = await res.json()
       setFixtures(data.fixtures || [])
+
+      // best5 pools: fetch whatever's already selected, then compute-and-store any round
+      // that hasn't been picked yet (only happens once per round, ever — after that it's
+      // a single cheap select). Awaited before pages get built below so nothing flashes
+      // the full unfiltered fixture list first.
+      if (isPL && plGameMode === 'best5' && data.fixtures?.length > 0) {
+        const { data: existingRows } = await supabase
+          .from('pool_matchweek_selections')
+          .select('round, fixture_id')
+          .eq('pool_id', poolId)
+        const selMap: Record<string, number[]> = {}
+        for (const r of existingRows || []) {
+          (selMap[r.round] ??= []).push(r.fixture_id)
+        }
+        const rounds = [...new Set((data.fixtures as any[]).map(f => f.round))]
+        const missingRounds = rounds.filter(r => !selMap[r])
+        if (missingRounds.length > 0) {
+          const computed = await Promise.all(missingRounds.map(round =>
+            fetch('/api/pl/best5-select', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ poolId, round }),
+            }).then(r => r.json()).then(j => ({ round, fixtureIds: j.fixtureIds || [] }))
+          ))
+          for (const { round, fixtureIds } of computed) selMap[round] = fixtureIds
+        }
+        setBest5Selections(selMap)
+      }
 
       // Set initial page to next upcoming or live fixture (in PT timezone)
       if (data.fixtures?.length > 0) {
@@ -1237,7 +1271,13 @@ export default function FixturesList({
   }
 
   // ── Sorted + paged ──────────────────────────────────────────────────────
-  const sorted = [...fixtures].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  // best5: fall back to showing everything for a round whose selection hasn't loaded yet
+  // (shouldn't happen — load() awaits computing every round before this ever renders —
+  // but never silently hide a whole matchweek if something's missing).
+  const visibleFixtures = isBest5Active
+    ? fixtures.filter(f => !best5Selections[f.round] || best5Selections[f.round].includes(f.id))
+    : fixtures
+  const sorted = [...visibleFixtures].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
   const dateMap: Record<string, Fixture[]> = {}
   const dateIsoMap: Record<string, string> = {}
   const groupMap: Record<string, Fixture[]> = {}
@@ -1911,6 +1951,26 @@ export default function FixturesList({
             style={{ background: 'none', border: '1px solid #ddd', padding: '8px 16px', cursor: safePage === totalPages - 1 ? 'default' : 'pointer', fontSize: '18px', color: safePage === totalPages - 1 ? '#ddd' : '#555', minHeight: 44 }}>›</button>
         </div>
       )}
+
+      {isBest5Active && plBest5AdminOverride && isAdmin && pages[safePage] && (() => {
+        const round = pages[safePage].label
+        const lockTime = matchdayLockTime(round)
+        const locked = lockTime ? Date.now() >= lockTime.getTime() : false
+        const roundFixtures = fixtures.filter(f => f.round === round)
+        return (
+          <Best5Selector
+            poolId={poolId}
+            round={round}
+            selectedIds={best5Selections[round] || []}
+            allFixtures={roundFixtures}
+            locked={locked}
+            onSwap={(oldId, newId) => setBest5Selections(prev => ({
+              ...prev,
+              [round]: (prev[round] || []).map(id => id === oldId ? newId : id),
+            }))}
+          />
+        )
+      })()}
 
       {/* Fixture cards */}
       <div>

@@ -884,7 +884,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                     ? <NFLGamesList poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} deadlineType={pool.deadline_type} isAdmin={isAdmin} />
                     : <>
                         {pool.season_props_enabled && !seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
-                        <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} hideControls={true} externalSortMode={mobileSortMode} externalViewMode={mobileViewMode} isAdmin={isAdmin} />
+                        <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} hideControls={true} externalSortMode={mobileSortMode} externalViewMode={mobileViewMode} isAdmin={isAdmin} plGameMode={pool.pl_game_mode} plBest5AdminOverride={pool.pl_best5_admin_override} />
                         {pool.season_props_enabled && seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
                       </>
                 )}
@@ -1170,7 +1170,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                   ? <NFLGamesList poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} deadlineType={pool.deadline_type} isAdmin={isAdmin} />
                   : <>
                       {pool.season_props_enabled && !seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
-                      <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
+                      <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} isAdmin={isAdmin} plGameMode={pool.pl_game_mode} plBest5AdminOverride={pool.pl_best5_admin_override} />
                       {pool.season_props_enabled && seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
                     </>
               )}
