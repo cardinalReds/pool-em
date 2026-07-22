@@ -10,24 +10,31 @@ export default async function Home() {
   // Every sport supports pool creation right now, but "live" only means something once
   // the underlying season has actually kicked off — PL/NFL pools can be set up months
   // before a ball's kicked, while F1 pools are being created mid-season. MMA has no
-  // season at all (each card is its own event), so it gets its own label rather than
-  // being forced into the started/not-started binary.
-  const [{ data: plStarted }, { data: nflStarted }, { data: f1Started }] = await Promise.all([
+  // season at all (each tournament row is one card), so instead of a vague "ongoing
+  // events" label, name the actual next card — or say plainly that none is scheduled.
+  const [{ data: plStarted }, { data: nflStarted }, { data: f1Started }, { data: nextMma }] = await Promise.all([
     supabase.from('fixtures').select('id').eq('tournament_id', 'pl_2026').neq('status', 'NS').limit(1),
     supabase.from('fixtures').select('id').eq('tournament_id', 'nfl_2026').neq('status', 'NS').limit(1),
     supabase.from('f1_sessions').select('id').eq('tournament_id', 'f1_2026').eq('status', 'Completed').limit(1),
+    supabase.from('tournaments').select('name, event_date').eq('sport', 'mma').eq('status', 'active').gte('event_date', new Date().toISOString()).order('event_date', { ascending: true }).limit(1),
   ])
 
   const TAG_STYLE: Record<string, { color: string; bg: string }> = {
     'live': { color: '#2d7a2d', bg: '#f0faf0' },
     'pools open': { color: '#1a56db', bg: '#eef3fe' },
-    'ongoing events': { color: '#9a6b00', bg: '#fdf6e3' },
+    'next event': { color: '#9a6b00', bg: '#fdf6e3' },
+    'no event scheduled': { color: '#aaa', bg: '#f5f5f5' },
   }
+
+  const mmaEvent = nextMma?.[0]
+  const mmaTag = mmaEvent
+    ? { kind: 'next event', label: `next: ${mmaEvent.name} · ${new Date(mmaEvent.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}` }
+    : { kind: 'no event scheduled', label: 'no event scheduled' }
 
   const competitions = [
     { emoji: '⚽', name: 'Premier League 2026/27', tag: plStarted?.length ? 'live' : 'pools open' },
     { emoji: '🏎️', name: 'Formula 1 2026', tag: f1Started?.length ? 'live' : 'pools open' },
-    { emoji: '🥊', name: 'MMA', tag: 'ongoing events' },
+    { emoji: '🥊', name: 'MMA', tag: mmaTag.kind, label: mmaTag.label },
     { emoji: '🏈', name: 'NFL 2026/27', tag: nflStarted?.length ? 'live' : 'pools open' },
   ]
 
@@ -79,7 +86,7 @@ export default async function Home() {
               <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <span style={{ fontSize: '1.1rem' }}>{s.emoji}</span>
                 <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>{s.name}</span>
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: TAG_STYLE[s.tag].color, background: TAG_STYLE[s.tag].bg, padding: '2px 8px', borderRadius: 4 }}>{s.tag}</span>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: TAG_STYLE[s.tag].color, background: TAG_STYLE[s.tag].bg, padding: '2px 8px', borderRadius: 4 }}>{'label' in s ? s.label : s.tag}</span>
               </div>
             ))}
           </div>

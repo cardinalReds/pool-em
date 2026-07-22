@@ -192,6 +192,17 @@ insert into public.ruleset_categories (id, sport, name, description, default_poi
 ('nfl_ht_total_points_ou', 'nfl', 'Halftime Total Points Over/Under', 'Will the combined halftime score go over or under the line?', 2, 'per_game', true, 'ou', 70)
 on conflict (id) do nothing;
 
+-- MMA has no season — each tournament row is one card, so "is this sport active right
+-- now" can't be answered the way PL/NFL/F1 answer it (season started or not). end_date
+-- already means "when does this stop being poolable" (day-after-card, since cards often
+-- run past midnight UTC) and isn't a good display date. event_date is the actual
+-- human-facing card date, used to find and label the next upcoming card on the homepage.
+alter table public.tournaments add column if not exists event_date timestamptz;
+
+insert into public.tournaments (id, name, sport, season, status, end_date, event_date)
+values ('ufc_330', 'UFC 330', 'mma', 2026, 'active', '2026-08-17T00:00:00Z', '2026-08-15T00:00:00Z')
+on conflict (id) do nothing;
+
 alter table public.pools enable row level security;
 create policy "Members can view their pools" on public.pools for select
   using (
