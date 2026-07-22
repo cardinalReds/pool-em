@@ -429,8 +429,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const isAdmin = pool.admin_id === user?.id
 
   // Buy-in collection summary — how much of the pot has actually been collected so far.
-  // Ghosts count too — they represent real people who paid real money, tracked by the admin.
-  const payingMembers = leaderboard
+  // Ghosts are excluded — same as weekly-pot credits, ghosts never have money tracked
+  // against them.
+  const payingMembers = leaderboard.filter(m => !m.is_ghost)
   const paidCount = payingMembers.filter(m => m.is_paid).length
   const totalCollected = paidCount * (pool.buy_in_amount || 0)
   const totalDue = payingMembers.length * (pool.buy_in_amount || 0)
@@ -644,7 +645,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                   delete
                 </button>
               )}
-              {pool.buy_in_amount && (
+              {pool.buy_in_amount && !member.is_ghost && (
                 <div style={{width: 68, display: 'flex', justifyContent: 'center', flexShrink: 0}}>
                   <PaidPill member={member} />
                 </div>
@@ -970,7 +971,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                           delete
                         </button>
                       )}
-                      {pool.buy_in_amount && (
+                      {pool.buy_in_amount && !member.is_ghost && (
                         <div style={{width: 68, display: 'flex', justifyContent: 'center', flexShrink: 0}}>
                           <PaidPill member={member} />
                         </div>
