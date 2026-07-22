@@ -44,12 +44,16 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Check if any MMA tournament is active
+    // Check if any MMA tournament is active — status alone isn't reliable since nothing
+    // flips it to 'completed' automatically, so also require it hasn't passed end_date.
+    // Without this, an event stays "active" (and this cron keeps polling balldontlie.io
+    // every minute) forever after the actual event is over.
     const { data: activeTournaments } = await supabase
       .from('tournaments')
       .select('id')
       .eq('sport', 'mma')
       .eq('status', 'active')
+      .or(`end_date.is.null,end_date.gt.${new Date().toISOString()}`)
 
     if (!activeTournaments?.length) {
       return NextResponse.json({ ok: true, skipped: true, reason: 'no active mma tournaments' })
