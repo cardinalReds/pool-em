@@ -11,8 +11,9 @@ function parseMatchday(round: string): number | null {
   return m ? parseInt(m[1]) : null
 }
 
-export default function WeeklyPot({ poolId, userId, isAdmin, weeklyBuyIn, tournamentId }: {
+export default function WeeklyPot({ poolId, userId, isAdmin, weeklyBuyIn, tournamentId, poolName, venmoHandle, zelleHandle }: {
   poolId: string; userId: string; isAdmin: boolean; weeklyBuyIn: number; tournamentId: string
+  poolName: string; venmoHandle?: string | null; zelleHandle?: string | null
 }) {
   const [loading, setLoading] = useState(true)
   const [members, setMembers] = useState<Member[]>([])
@@ -22,8 +23,6 @@ export default function WeeklyPot({ poolId, userId, isAdmin, weeklyBuyIn, tourna
   const [matchdaysRemaining, setMatchdaysRemaining] = useState(0)
   const [paymentInputs, setPaymentInputs] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
-  const [standingsMatchday, setStandingsMatchday] = useState<number | null>(null)
-  const [standings, setStandings] = useState<{ user_id: string; display_name: string; points: number }[]>([])
 
   async function load() {
     const supabase = createClient()
@@ -31,66 +30,41 @@ export default function WeeklyPot({ poolId, userId, isAdmin, weeklyBuyIn, tourna
       supabase.from('pool_members').select('user_id, display_name').eq('pool_id', poolId),
       supabase.from('member_credits').select('user_id, credits_purchased, prepaid_all').eq('pool_id', poolId),
       supabase.from('matchday_entries').select('user_id, matchday').eq('pool_id', poolId),
-      supabase.from('fixtures').select('id, round, date').eq('tournament_id', tournamentId),
+      supabase.from('fixtures').select('round, date').eq('tournament_id', tournamentId),
     ])
 
-    const memberList: Member[] = membersRes.data || []
-    setMembers(memberList)
-    const nameByUser: Record<string, string> = {}
-    memberList.forEach(m => { nameByUser[m.user_id] = m.display_name })
+    setMembers(membersRes.data || [])
 
     const creditMap: Record<string, Credit> = {}
     ;(creditsRes.data || []).forEach((c: any) => { creditMap[c.user_id] = c })
+
+    // Admin doesn't pay themselves — auto-exempt on first load if they have no record yet
+    if (isAdmin && !creditMap[userId]) {
+      await supabase.from('member_credits').insert({ pool_id: poolId, user_id: userId, prepaid_all: true })
+      creditMap[userId] = { user_id: userId, credits_purchased: 0, prepaid_all: true }
+    }
     setCredits(creditMap)
 
     const byUser: Record<string, Set<number>> = {}
-    const byMatchday: Record<number, string[]> = {}
     ;(entriesRes.data || []).forEach((e: any) => {
       if (!byUser[e.user_id]) byUser[e.user_id] = new Set()
       byUser[e.user_id].add(e.matchday)
-      if (!byMatchday[e.matchday]) byMatchday[e.matchday] = []
-      byMatchday[e.matchday].push(e.user_id)
     })
     setEntriesByUser(byUser)
 
     // Determine matchdays: the earliest not-yet-locked matchday is "upcoming"; count all
     // matchdays whose lock time is still in the future for the prepay-cost estimate.
     const matchdayLockTimes: Record<number, number> = {}
-    const fixtureIdsByMatchday: Record<number, number[]> = {}
     ;(fixturesRes.data || []).forEach((f: any) => {
       const md = parseMatchday(f.round)
       if (md === null) return
       const t = new Date(f.date).getTime()
       if (!(md in matchdayLockTimes) || t < matchdayLockTimes[md]) matchdayLockTimes[md] = t
-      if (!fixtureIdsByMatchday[md]) fixtureIdsByMatchday[md] = []
-      fixtureIdsByMatchday[md].push(f.id)
     })
     const now = Date.now()
     const future = Object.entries(matchdayLockTimes).filter(([, t]) => t > now).map(([md]) => parseInt(md)).sort((a, b) => a - b)
     setUpcomingMatchday(future[0] ?? null)
     setMatchdaysRemaining(future.length)
-
-    // "This week's pot" standings — the most recent locked matchday that had entrants
-    const lockedWithEntrants = Object.entries(matchdayLockTimes)
-      .filter(([md, t]) => t <= now && (byMatchday[parseInt(md)] || []).length > 0)
-      .map(([md]) => parseInt(md))
-      .sort((a, b) => b - a)
-    const targetMatchday = lockedWithEntrants[0] ?? null
-    setStandingsMatchday(targetMatchday)
-    if (targetMatchday !== null) {
-      const entrantIds = byMatchday[targetMatchday]
-      const fixtureIds = fixtureIdsByMatchday[targetMatchday] || []
-      const { data: preds } = await supabase.from('predictions_v2').select('user_id, points_earned')
-        .eq('pool_id', poolId).in('fixture_id', fixtureIds).in('user_id', entrantIds)
-      const pointsByUser: Record<string, number> = {}
-      entrantIds.forEach(id => { pointsByUser[id] = 0 })
-      ;(preds || []).forEach((p: any) => { pointsByUser[p.user_id] = (pointsByUser[p.user_id] || 0) + (p.points_earned || 0) })
-      setStandings(Object.entries(pointsByUser)
-        .map(([user_id, points]) => ({ user_id, display_name: nameByUser[user_id] || 'unknown', points }))
-        .sort((a, b) => b.points - a.points))
-    } else {
-      setStandings([])
-    }
 
     setLoading(false)
   }
@@ -149,6 +123,7 @@ export default function WeeklyPot({ poolId, userId, isAdmin, weeklyBuyIn, tourna
   const alreadyEntered = upcomingMatchday !== null && myEntries.has(upcomingMatchday)
   const canEnter = upcomingMatchday !== null && !alreadyEntered && (myCredit?.prepaid_all || (myCredit?.credits_purchased || 0) > 0)
   const prepayCost = weeklyBuyIn * matchdaysRemaining
+  const hasPaymentInfo = !!(venmoHandle || zelleHandle)
 
   return (
     <div style={{ border: '1px solid #eee', marginBottom: 16, background: '#fdfdfc' }}>
@@ -159,11 +134,9 @@ export default function WeeklyPot({ poolId, userId, isAdmin, weeklyBuyIn, tourna
         <div style={{ fontSize: '12px', color: '#555', marginBottom: 4 }}>
           {myCredit?.prepaid_all ? '✓ paid in full for the season' : `you have ${myCredit?.credits_purchased || 0} entr${(myCredit?.credits_purchased || 0) === 1 ? 'y' : 'ies'}`}
         </div>
-        {!myCredit?.prepaid_all && matchdaysRemaining > 0 && (
-          <div style={{ fontSize: '10px', color: '#aaa', marginBottom: 8 }}>paying for the rest of the season upfront would cost ${prepayCost} ({matchdaysRemaining} matchdays × ${weeklyBuyIn})</div>
-        )}
+
         {upcomingMatchday !== null && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <span style={{ fontSize: '11px', color: '#555' }}>matchday {upcomingMatchday}:</span>
             {alreadyEntered || myCredit?.prepaid_all ? (
               <span style={{ fontSize: '10px', fontWeight: 600, color: '#2d7a2d' }}>✓ entered</span>
@@ -173,29 +146,50 @@ export default function WeeklyPot({ poolId, userId, isAdmin, weeklyBuyIn, tourna
                 {busy === 'self' ? 'entering...' : 'enter (1 credit)'}
               </button>
             )}
-            {!canEnter && !alreadyEntered && !myCredit?.prepaid_all && <span style={{ fontSize: '10px', color: '#C8102E' }}>no credits — ask the admin</span>}
+            {!canEnter && !alreadyEntered && !myCredit?.prepaid_all && <span style={{ fontSize: '10px', color: '#C8102E' }}>no credits yet</span>}
           </div>
         )}
-      </div>
 
-      {/* This week's pot — just a leaderboard scoped to matchday entrants */}
-      {standingsMatchday !== null && standings.length > 0 && (
-        <div style={{ padding: '10px 12px', borderBottom: '1px solid #eee' }}>
-          <div style={{ fontSize: '10px', fontWeight: 600, color: '#888', marginBottom: 8 }}>matchday {standingsMatchday} pot · {standings.length} entr{standings.length === 1 ? 'y' : 'ies'} · ${weeklyBuyIn * standings.length} pot</div>
-          {standings.map((s, i) => (
-            <div key={s.user_id} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: '11px' }}>
-              <span style={{ color: s.user_id === userId ? '#C8102E' : '#333', fontWeight: s.user_id === userId ? 600 : 400 }}>{i + 1}. {s.display_name}</span>
-              <span style={{ color: '#888' }}>{s.points} pts</span>
+        {/* Payment instructions — not shown to the admin, who doesn't pay themselves */}
+        {!isAdmin && !myCredit?.prepaid_all && (
+          <div style={{ background: '#fffbf0', border: '1px solid #f0e0a0', padding: '10px', marginTop: 4 }}>
+            <div style={{ fontSize: '11px', color: '#555', marginBottom: 6 }}>
+              buy entries by sending the admin ${weeklyBuyIn} (or a multiple of it) via venmo or zelle.
             </div>
-          ))}
-        </div>
-      )}
+            {matchdaysRemaining > 0 && (
+              <div style={{ fontSize: '11px', color: '#555', marginBottom: 8 }}>
+                to prepay for the rest of the season ({matchdaysRemaining} matchdays), send <strong>${prepayCost}</strong>.
+              </div>
+            )}
+            {hasPaymentInfo ? (
+              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 6 }}>
+                {venmoHandle && (
+                  <a href={`https://venmo.com/${venmoHandle}?txn=pay&amount=${weeklyBuyIn}&note=${encodeURIComponent(poolName + ' weekly pot')}`} target="_blank" rel="noopener noreferrer">
+                    <button type="button" style={{ width: '100%', padding: '8px', fontSize: '12px', fontWeight: 600, background: '#111', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      pay @{venmoHandle} via venmo →
+                    </button>
+                  </a>
+                )}
+                {zelleHandle && (
+                  <div style={{ padding: '8px', background: '#111', color: 'white', fontSize: '11px', fontWeight: 600, textAlign: 'center' as const }}>
+                    zelle: {zelleHandle}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ fontSize: '10px', color: '#aaa' }}>the admin hasn't added a venmo or zelle handle yet — ask them directly.</div>
+            )}
+          </div>
+        )}
+
+        <div style={{ fontSize: '10px', color: '#aaa', marginTop: 8 }}>payouts are issued at the conclusion of each match week.</div>
+      </div>
 
       {/* Admin ledger */}
       {isAdmin && (
         <div style={{ padding: '10px 12px' }}>
           <div style={{ fontSize: '10px', fontWeight: 600, color: '#888', marginBottom: 8 }}>member credits</div>
-          {members.map(m => {
+          {members.filter(m => m.user_id !== userId).map(m => {
             const c = credits[m.user_id]
             return (
               <div key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #f5f5f5' }}>
@@ -221,6 +215,7 @@ export default function WeeklyPot({ poolId, userId, isAdmin, weeklyBuyIn, tourna
               </div>
             )
           })}
+          {members.length <= 1 && <div style={{ fontSize: '10px', color: '#aaa' }}>no other members yet</div>}
         </div>
       )}
     </div>

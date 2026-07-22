@@ -14,6 +14,7 @@ import BracketViewer from '@/components/BracketViewer'
 import ShitChat from '@/components/ShitChat'
 import SeasonPropsTicket from '@/components/SeasonPropsTicket'
 import WeeklyPot from '@/components/WeeklyPot'
+import WeeklyLeaderboard from '@/components/WeeklyLeaderboard'
 
 function getSessionFromCookie() {
   try {
@@ -539,9 +540,6 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           </div>
         </div>
       )}
-      {isAdmin && (pool.buy_in_amount || pool.weekly_buy_in) && <PrizesPanel pool={pool} />}
-      {user && pool.weekly_buy_in > 0 && <WeeklyPot poolId={pool.id} userId={user.id} isAdmin={isAdmin} weeklyBuyIn={pool.weekly_buy_in} tournamentId={pool.tournament_id} />}
-
       {/* Leaderboard */}
       {isLive && (
         <div style={{display:'flex',alignItems:'center',gap:5,padding:'4px 0 8px',fontSize:'10px',fontWeight:700,color:'#2d7a2d',textTransform:'uppercase' as const,letterSpacing:'0.06em'}}>
@@ -647,6 +645,8 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         ))}
       </Section>
 
+      {user && pool.weekly_buy_in > 0 && <WeeklyLeaderboard poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} />}
+
       {yourLeaderboard.length > 0 && (
         <Section title="your leaderboard" defaultOpen={false}>
           <div style={{fontSize: '11px', color: '#aaa', marginBottom: '4px'}}>Based only on the games you predicted.</div>
@@ -735,6 +735,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         )}
       </Section>
 
+      {isAdmin && (pool.buy_in_amount || pool.weekly_buy_in) && <PrizesPanel pool={pool} />}
+      {user && pool.weekly_buy_in > 0 && <WeeklyPot poolId={pool.id} userId={user.id} isAdmin={isAdmin} weeklyBuyIn={pool.weekly_buy_in} tournamentId={pool.tournament_id} poolName={pool.name} venmoHandle={pool.venmo_handle} zelleHandle={pool.zelle_handle} />}
+
       {/* Invite — admins always, members too if the pool allows it */}
       {(isAdmin || pool.allow_member_invites) && (
         <Section title="invite" defaultOpen={!isMobile}>
@@ -791,8 +794,6 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 </button>
               </a>
             )}
-            {isAdmin && (pool.buy_in_amount || pool.weekly_buy_in) && <PrizesPanel pool={pool} />}
-      {user && pool.weekly_buy_in > 0 && <WeeklyPot poolId={pool.id} userId={user.id} isAdmin={isAdmin} weeklyBuyIn={pool.weekly_buy_in} tournamentId={pool.tournament_id} />}
             {!isAdmin && recentChanges.length > 0 && !changesDismissed && (
               <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '10px 12px', marginBottom: '12px', fontSize: '11px'}}>
                 <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px'}}>
@@ -968,6 +969,8 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                     </div>
                   </div>
                 ))}
+                {user && pool.weekly_buy_in > 0 && <WeeklyLeaderboard poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} />}
+
                 {/* Your leaderboard */}
                 {yourLeaderboard.length > 0 && (
                   <div style={{marginTop: 20, borderTop: '1px solid #eee', paddingTop: 16}}>
@@ -981,6 +984,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                     ))}
                   </div>
                 )}
+
+                {isAdmin && (pool.buy_in_amount || pool.weekly_buy_in) && <div style={{marginTop: 20}}><PrizesPanel pool={pool} /></div>}
+                {user && pool.weekly_buy_in > 0 && <WeeklyPot poolId={pool.id} userId={user.id} isAdmin={isAdmin} weeklyBuyIn={pool.weekly_buy_in} tournamentId={pool.tournament_id} poolName={pool.name} venmoHandle={pool.venmo_handle} zelleHandle={pool.zelle_handle} />}
               </div>
             )}
             {mobilePanel === 'chat' && user && (
