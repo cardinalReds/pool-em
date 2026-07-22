@@ -52,7 +52,7 @@ export default async function Home() {
           <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', marginBottom: '1rem' }}>available now</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {[
-              { emoji: '🏆', name: 'FIFA World Cup 2026', live: true },
+              { emoji: '⚽', name: 'Premier League 2026/27', live: true },
               { emoji: '🏎️', name: 'Formula 1 2026', live: true },
               { emoji: '🥊', name: 'MMA', live: true },
             ].map(s => (
@@ -67,7 +67,6 @@ export default async function Home() {
           <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', marginBottom: '1rem', marginTop: '1.5rem' }}>coming soon</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {[
-              { emoji: '⚽', name: 'Premier League' },
               { emoji: '⚾', name: 'MLB Playoffs' },
               { emoji: '🏈', name: 'NCAA Football' },
               { emoji: '🏈', name: 'NFL' },
