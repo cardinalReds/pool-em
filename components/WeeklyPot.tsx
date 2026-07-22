@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { computeWeeklyPayouts } from '@/lib/weeklyPayouts'
 
 interface Member { user_id: string; display_name: string }
 interface Credit { user_id: string; credits_purchased: number; prepaid_all: boolean }
@@ -11,9 +12,10 @@ function parseMatchday(round: string): number | null {
   return m ? parseInt(m[1]) : null
 }
 
-export default function WeeklyPot({ poolId, userId, isAdmin, weeklyBuyIn, tournamentId, poolName, venmoHandle, zelleHandle }: {
+export default function WeeklyPot({ poolId, userId, isAdmin, weeklyBuyIn, tournamentId, poolName, venmoHandle, zelleHandle, weeklyPayoutStructure, adminFeePercent }: {
   poolId: string; userId: string; isAdmin: boolean; weeklyBuyIn: number; tournamentId: string
   poolName: string; venmoHandle?: string | null; zelleHandle?: string | null
+  weeklyPayoutStructure?: string | null; adminFeePercent?: number | null
 }) {
   const [loading, setLoading] = useState(true)
   const [members, setMembers] = useState<Member[]>([])
@@ -23,15 +25,26 @@ export default function WeeklyPot({ poolId, userId, isAdmin, weeklyBuyIn, tourna
   const [matchdaysRemaining, setMatchdaysRemaining] = useState(0)
   const [paymentInputs, setPaymentInputs] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
+  const [payouts, setPayouts] = useState<{ matchday: number; winner_user_id: string; payout_rank: number; amount: number }[]>([])
 
   async function load() {
     const supabase = createClient()
-    const [membersRes, creditsRes, entriesRes, fixturesRes] = await Promise.all([
+
+    // Admin viewing the pool is the trigger for computing any newly-completed matchday's
+    // payout — no separate button, no cron dependency for the common case of "admin
+    // checks their pool after the week's games finish."
+    if (isAdmin) {
+      await computeWeeklyPayouts(supabase, poolId, tournamentId, weeklyBuyIn, weeklyPayoutStructure, adminFeePercent)
+    }
+
+    const [membersRes, creditsRes, entriesRes, fixturesRes, payoutsRes] = await Promise.all([
       supabase.from('pool_members').select('user_id, display_name').eq('pool_id', poolId),
       supabase.from('member_credits').select('user_id, credits_purchased, prepaid_all').eq('pool_id', poolId),
       supabase.from('matchday_entries').select('user_id, matchday').eq('pool_id', poolId),
       supabase.from('fixtures').select('round, date').eq('tournament_id', tournamentId),
+      supabase.from('weekly_payouts').select('matchday, winner_user_id, payout_rank, amount').eq('pool_id', poolId).order('matchday', { ascending: false }),
     ])
+    setPayouts(payoutsRes.data || [])
 
     setMembers(membersRes.data || [])
 
@@ -69,7 +82,7 @@ export default function WeeklyPot({ poolId, userId, isAdmin, weeklyBuyIn, tourna
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [poolId, userId, tournamentId])
+  useEffect(() => { load() }, [poolId, userId, tournamentId, weeklyBuyIn, weeklyPayoutStructure, adminFeePercent])
 
   async function recordPayment(memberId: string) {
     const amount = parseFloat(paymentInputs[memberId] || '0')
@@ -128,6 +141,27 @@ export default function WeeklyPot({ poolId, userId, isAdmin, weeklyBuyIn, tourna
   return (
     <div style={{ border: '1px solid #eee', marginBottom: 16, background: '#fdfdfc' }}>
       <div style={{ fontSize: '10px', fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.08em', padding: '8px 12px', borderBottom: '1px solid #eee' }}>weekly pot</div>
+
+      {/* Payout results — grouped by matchday, most recent first */}
+      {payouts.length > 0 && (
+        <div style={{ padding: '10px 12px', borderBottom: '1px solid #eee' }}>
+          <div style={{ fontSize: '10px', fontWeight: 600, color: '#888', marginBottom: 6 }}>results</div>
+          {Object.entries(
+            payouts.reduce((acc: Record<number, typeof payouts>, p) => {
+              (acc[p.matchday] = acc[p.matchday] || []).push(p)
+              return acc
+            }, {})
+          ).map(([md, rows]) => (
+            <div key={md} style={{ fontSize: '11px', color: '#555', marginBottom: 4 }}>
+              <span style={{ color: '#888' }}>matchday {md}:</span>{' '}
+              {rows
+                .slice().sort((a, b) => a.payout_rank - b.payout_rank)
+                .map(r => `${members.find(m => m.user_id === r.winner_user_id)?.display_name || (r.winner_user_id === userId ? 'you' : 'unknown')} won $${r.amount.toFixed(2)}`)
+                .join(' · ')}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Your status */}
       <div style={{ padding: '10px 12px', borderBottom: isAdmin ? '1px solid #eee' : 'none' }}>

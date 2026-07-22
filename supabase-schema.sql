@@ -76,6 +76,49 @@ create policy "Admins can update ghost entries in their pools" on public.ghost_e
 -- Null/0 means no fee. One rate applies to both pots (kept simple — no separate rate per pot).
 alter table public.pools add column if not exists admin_fee_percent numeric;
 
+-- weekly_payouts already existed (id, pool_id, matchday, winner_user_id, amount, paid_out,
+-- notified, created_at) but only ever supported a single winner per matchday. Payout
+-- structures like "top 2 split" or "top 3 equal" need one row per paid position.
+-- Named payout_rank, not rank — "rank" collides with Postgres's built-in rank() window
+-- function and breaks PostgREST's query parser ("WITHIN GROUP is required for
+-- ordered-set aggregate rank") when it appears bare in a select=... list.
+alter table public.weekly_payouts add column if not exists payout_rank int not null default 1;
+
+-- The pre-existing unique constraint was (pool_id, matchday) alone — fine for a single
+-- winner, but blocks inserting more than one row per matchday for split payouts (top 2,
+-- top 3, etc). Widen it to (pool_id, matchday, payout_rank).
+alter table public.weekly_payouts drop constraint if exists weekly_payouts_pool_id_matchday_key;
+alter table public.weekly_payouts add constraint weekly_payouts_pool_id_matchday_rank_key unique (pool_id, matchday, payout_rank);
+
+alter table public.weekly_payouts enable row level security;
+create policy "Pool members can view weekly payouts" on public.weekly_payouts for select
+  using (
+    exists (
+      select 1 from public.pool_members
+      where pool_members.pool_id = weekly_payouts.pool_id
+      and pool_members.user_id = auth.uid()
+    )
+  );
+-- Only the admin can write payout results — matches the trust model already used for
+-- marking members paid and recording weekly-pot credit payments.
+create policy "Pool admins can insert weekly payouts" on public.weekly_payouts for insert
+  with check (
+    exists (
+      select 1 from public.pools
+      where pools.id = weekly_payouts.pool_id
+      and pools.admin_id = auth.uid()
+    )
+  );
+create policy "Pool admins can update weekly payouts" on public.weekly_payouts for update
+  using (
+    exists (
+      select 1 from public.pools
+      where pools.id = weekly_payouts.pool_id
+      and pools.admin_id = auth.uid()
+    )
+  );
+grant select, insert, update on public.weekly_payouts to authenticated;
+
 alter table public.pools enable row level security;
 create policy "Members can view their pools" on public.pools for select
   using (

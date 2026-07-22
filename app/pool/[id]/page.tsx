@@ -753,7 +753,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       </Section>
 
       {(pool.buy_in_amount || pool.weekly_buy_in) && <PrizesPanel pool={pool} />}
-      {user && pool.weekly_buy_in > 0 && <WeeklyPot poolId={pool.id} userId={user.id} isAdmin={isAdmin} weeklyBuyIn={pool.weekly_buy_in} tournamentId={pool.tournament_id} poolName={pool.name} venmoHandle={pool.venmo_handle} zelleHandle={pool.zelle_handle} />}
+      {user && pool.weekly_buy_in > 0 && <WeeklyPot poolId={pool.id} userId={user.id} isAdmin={isAdmin} weeklyBuyIn={pool.weekly_buy_in} tournamentId={pool.tournament_id} poolName={pool.name} venmoHandle={pool.venmo_handle} zelleHandle={pool.zelle_handle} weeklyPayoutStructure={pool.weekly_payout_structure} adminFeePercent={pool.admin_fee_percent} />}
 
       {/* Invite — admins always, members too if the pool allows it */}
       {(isAdmin || pool.allow_member_invites) && (
@@ -1003,7 +1003,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 )}
 
                 {(pool.buy_in_amount || pool.weekly_buy_in) && <div style={{marginTop: 20}}><PrizesPanel pool={pool} /></div>}
-                {user && pool.weekly_buy_in > 0 && <WeeklyPot poolId={pool.id} userId={user.id} isAdmin={isAdmin} weeklyBuyIn={pool.weekly_buy_in} tournamentId={pool.tournament_id} poolName={pool.name} venmoHandle={pool.venmo_handle} zelleHandle={pool.zelle_handle} />}
+                {user && pool.weekly_buy_in > 0 && <WeeklyPot poolId={pool.id} userId={user.id} isAdmin={isAdmin} weeklyBuyIn={pool.weekly_buy_in} tournamentId={pool.tournament_id} poolName={pool.name} venmoHandle={pool.venmo_handle} zelleHandle={pool.zelle_handle} weeklyPayoutStructure={pool.weekly_payout_structure} adminFeePercent={pool.admin_fee_percent} />}
               </div>
             )}
             {mobilePanel === 'chat' && user && (
