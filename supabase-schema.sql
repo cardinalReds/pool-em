@@ -72,6 +72,10 @@ create policy "Admins can update ghost entries in their pools" on public.ghost_e
     )
   );
 
+-- Optional admin fee, taken as a percentage of both the season pot and weekly pot totals.
+-- Null/0 means no fee. One rate applies to both pots (kept simple — no separate rate per pot).
+alter table public.pools add column if not exists admin_fee_percent numeric;
+
 alter table public.pools enable row level security;
 create policy "Members can view their pools" on public.pools for select
   using (

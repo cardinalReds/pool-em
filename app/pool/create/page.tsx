@@ -77,6 +77,8 @@ export default function CreatePoolPage() {
   const [customPayout, setCustomPayout] = useState('')
   const [weeklyPayoutTemplate, setWeeklyPayoutTemplate] = useState<string>('winner')
   const [weeklyCustomPayout, setWeeklyCustomPayout] = useState('')
+  const [adminFeeEnabled, setAdminFeeEnabled] = useState(false)
+  const [adminFeePercent, setAdminFeePercent] = useState('5')
 
   const PAYOUT_TEMPLATES = [
     { id: 'winner', label: 'Winner takes all', description: '1st place gets the full pot' },
@@ -169,6 +171,7 @@ export default function CreatePoolPage() {
         : (buyIn && parseFloat(buyIn) > 0
           ? (payoutTemplate === 'custom' ? customPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description || null)
           : null),
+      admin_fee_percent: adminFeeEnabled && adminFeePercent ? parseFloat(adminFeePercent) : null,
       pick_mode: deadlineType === 'before_tournament' ? groupFormat : null,
       // PL-specific
       ...(isPL ? {
@@ -269,6 +272,29 @@ export default function CreatePoolPage() {
         <input type="number" min="0" max="100" value={value}
           onChange={e => onChange(parseInt(e.target.value) || 0)}
           style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontWeight: 600, fontFamily: 'inherit', textAlign: 'center', minHeight: 44}} />
+      </div>
+    )
+  }
+
+  function AdminFeeSection() {
+    return (
+      <div style={{marginBottom: 16, padding: '14px', border: '1px solid', borderColor: adminFeeEnabled ? '#C8102E' : '#e0e0db', background: adminFeeEnabled ? '#fff5f5' : 'white'}}>
+        <label style={{display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: adminFeeEnabled ? 10 : 0}}>
+          <input type="checkbox" checked={adminFeeEnabled} onChange={e => setAdminFeeEnabled(e.target.checked)}
+            style={{width: 18, height: 18, cursor: 'pointer', marginTop: 2}} />
+          <div>
+            <div style={{fontWeight: 600, fontSize: '13px'}}>admin fee <span style={{fontWeight: 400, color: '#aaa'}}>(optional)</span></div>
+            <div style={{fontSize: '11px', color: '#aaa'}}>take a cut off the top of both pots — shown to members so it's never a surprise at payout</div>
+          </div>
+        </label>
+        {adminFeeEnabled && (
+          <div style={{marginLeft: 28, display: 'flex', alignItems: 'center', gap: 8}}>
+            <input type="number" min="0" max="100" step="1" value={adminFeePercent}
+              onChange={e => setAdminFeePercent(e.target.value)}
+              style={{width: 70, border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontFamily: 'inherit', textAlign: 'center'}} />
+            <span style={{fontSize: '13px', color: '#888'}}>% of the season pot and weekly pot</span>
+          </div>
+        )}
       </div>
     )
   }
@@ -727,6 +753,9 @@ export default function CreatePoolPage() {
               )}
             </div>
 
+            {/* Admin fee */}
+            {(plPrizeSeason || plPrizeWeekly) && <AdminFeeSection />}
+
             {/* Payment handles */}
             {(plPrizeSeason || plPrizeWeekly) && (
               <div style={{marginBottom: 20}}>
@@ -840,6 +869,8 @@ export default function CreatePoolPage() {
                       style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '13px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' as const}} />
                   )}
                 </div>
+
+                <AdminFeeSection />
               </>
             )}
 

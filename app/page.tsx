@@ -92,8 +92,13 @@ export default async function Home() {
           </div>
         </div>
 
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-faint)' }}>Free forever · No ads · No spam</span>
+          <a href={`https://venmo.com/fred-krynen?txn=pay&note=${encodeURIComponent("Support pool'em")}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+            <button style={{ fontSize: '0.75rem', fontWeight: 600, padding: '6px 14px', background: 'none', border: '1px solid var(--border)', color: 'var(--text-dim)', cursor: 'pointer', borderRadius: 6 }}>
+              💛 donate
+            </button>
+          </a>
         </div>
       </div>
     </div>

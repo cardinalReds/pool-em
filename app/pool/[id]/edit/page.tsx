@@ -30,6 +30,8 @@ export default function EditPoolPage() {
   const [zelleHandle, setZelleHandle] = useState('')
   const [payoutTemplate, setPayoutTemplate] = useState('winner')
   const [customPayout, setCustomPayout] = useState('')
+  const [adminFeeEnabled, setAdminFeeEnabled] = useState(false)
+  const [adminFeePercent, setAdminFeePercent] = useState('5')
   const [rulePoints, setRulePoints] = useState<Record<string, { points: number; bonus_points: number }>>({})
 
   useEffect(() => {
@@ -52,6 +54,8 @@ export default function EditPoolPage() {
       setBuyIn(poolData.buy_in_amount?.toString() || '')
       setVenmoHandle(poolData.venmo_handle || '')
       setZelleHandle(poolData.zelle_handle || '')
+      setAdminFeeEnabled(!!poolData.admin_fee_percent)
+      setAdminFeePercent(poolData.admin_fee_percent?.toString() || '5')
 
       // Detect existing payout template
       const matchedTemplate = PAYOUT_TEMPLATES.find(t => t.description === poolData.payout_structure)
@@ -99,6 +103,8 @@ export default function EditPoolPage() {
       ? (payoutTemplate === 'custom' ? customPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description || null)
       : null
     if (newPayout !== pool.payout_structure) changes.payout_structure = { from: pool.payout_structure, to: newPayout }
+    const newAdminFee = adminFeeEnabled && adminFeePercent ? parseFloat(adminFeePercent) : null
+    if (newAdminFee !== pool.admin_fee_percent) changes.admin_fee_percent = { from: pool.admin_fee_percent, to: newAdminFee }
 
     // Check rule changes
     rules.forEach(r => {
@@ -115,6 +121,7 @@ export default function EditPoolPage() {
       venmo_handle: cleanVenmo,
       zelle_handle: cleanZelle,
       payout_structure: newPayout,
+      admin_fee_percent: newAdminFee,
       updated_at: new Date().toISOString(),
     }).eq('id', poolId)
 
@@ -207,6 +214,25 @@ export default function EditPoolPage() {
               <textarea value={customPayout} onChange={e => setCustomPayout(e.target.value)}
                 placeholder="describe how the pot gets paid out..."
                 style={{ width: '100%', border: '1px solid #ddd', padding: '8px 10px', fontSize: 13, fontFamily: 'inherit', minHeight: 80, boxSizing: 'border-box' as const }} />
+            )}
+          </div>
+
+          <div style={{ marginTop: 16, padding: 14, border: '1px solid', borderColor: adminFeeEnabled ? '#C8102E' : '#e0e0db', background: adminFeeEnabled ? '#fff5f5' : 'white' }}>
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: adminFeeEnabled ? 10 : 0 }}>
+              <input type="checkbox" checked={adminFeeEnabled} onChange={e => setAdminFeeEnabled(e.target.checked)}
+                style={{ width: 18, height: 18, cursor: 'pointer', marginTop: 2 }} />
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>admin fee <span style={{ fontWeight: 400, color: '#aaa' }}>(optional)</span></div>
+                <div style={{ fontSize: 11, color: '#aaa' }}>take a cut off the top of both pots — shown to members so it's never a surprise at payout</div>
+              </div>
+            </label>
+            {adminFeeEnabled && (
+              <div style={{ marginLeft: 28, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input type="number" min="0" max="100" step="1" value={adminFeePercent}
+                  onChange={e => setAdminFeePercent(e.target.value)}
+                  style={{ width: 70, border: '1px solid #ddd', padding: 8, fontSize: 16, fontFamily: 'inherit', textAlign: 'center' }} />
+                <span style={{ fontSize: 13, color: '#888' }}>% of the season pot and weekly pot</span>
+              </div>
             )}
           </div>
         </>)}

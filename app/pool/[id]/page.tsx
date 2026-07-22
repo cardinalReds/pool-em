@@ -462,6 +462,8 @@ export default function PoolPage({ params }: { params: { id: string } }) {
     // Season payout_structure is saved as "<template> · best N of 38 matchdays counted" — split for cleaner display
     const [seasonTemplate, ...rest] = (pool.payout_structure || '').split(' · best ')
     const seasonBestWeeksNote = rest.length > 0 ? `best ${rest.join(' · best ')}` : null
+    const feePercent = pool.admin_fee_percent
+    const seasonPrizePool = feePercent && totalDue > 0 ? (totalDue * (1 - feePercent / 100)).toFixed(2) : null
 
     return (
       <div style={{ border: '1px solid #eee', marginBottom: 16, background: '#fdfdfc' }}>
@@ -469,16 +471,17 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         {pool.buy_in_amount > 0 && (
           <div style={{ padding: '10px 12px', borderBottom: pool.weekly_buy_in ? '1px solid #eee' : 'none' }}>
             <div style={{ fontSize: '10px', fontWeight: 700, color: '#C8102E', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>season pot</div>
-            <div style={{ fontSize: '12px', color: '#555' }}>💰 ${pool.buy_in_amount} buy-in</div>
+            <div style={{ fontSize: '12px', color: '#555' }}>💰 ${pool.buy_in_amount} buy-in{feePercent ? ` · ${feePercent}% admin fee` : ''}</div>
             {seasonTemplate && <div style={{ fontSize: '11px', color: '#888', marginTop: 2 }}>🏆 {seasonTemplate}</div>}
             {seasonBestWeeksNote && <div style={{ fontSize: '10px', color: '#aaa', marginTop: 2 }}>{seasonBestWeeksNote}</div>}
+            {seasonPrizePool && <div style={{ fontSize: '10px', color: '#aaa', marginTop: 2 }}>of ${seasonPrizePool} prize pool (after fee)</div>}
             <CollectionSummary />
           </div>
         )}
         {pool.weekly_buy_in > 0 && (
           <div style={{ padding: '10px 12px' }}>
             <div style={{ fontSize: '10px', fontWeight: 700, color: '#C8102E', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>weekly pot</div>
-            <div style={{ fontSize: '12px', color: '#555' }}>💰 ${pool.weekly_buy_in} per matchday</div>
+            <div style={{ fontSize: '12px', color: '#555' }}>💰 ${pool.weekly_buy_in} per matchday{feePercent ? ` · ${feePercent}% admin fee` : ''}</div>
             {pool.weekly_payout_structure && <div style={{ fontSize: '11px', color: '#888', marginTop: 2 }}>🏆 {pool.weekly_payout_structure}</div>}
           </div>
         )}
@@ -741,7 +744,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         )}
       </Section>
 
-      {isAdmin && (pool.buy_in_amount || pool.weekly_buy_in) && <PrizesPanel pool={pool} />}
+      {(pool.buy_in_amount || pool.weekly_buy_in) && <PrizesPanel pool={pool} />}
       {user && pool.weekly_buy_in > 0 && <WeeklyPot poolId={pool.id} userId={user.id} isAdmin={isAdmin} weeklyBuyIn={pool.weekly_buy_in} tournamentId={pool.tournament_id} poolName={pool.name} venmoHandle={pool.venmo_handle} zelleHandle={pool.zelle_handle} />}
 
       {/* Invite — admins always, members too if the pool allows it */}
@@ -991,7 +994,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                   </div>
                 )}
 
-                {isAdmin && (pool.buy_in_amount || pool.weekly_buy_in) && <div style={{marginTop: 20}}><PrizesPanel pool={pool} /></div>}
+                {(pool.buy_in_amount || pool.weekly_buy_in) && <div style={{marginTop: 20}}><PrizesPanel pool={pool} /></div>}
                 {user && pool.weekly_buy_in > 0 && <WeeklyPot poolId={pool.id} userId={user.id} isAdmin={isAdmin} weeklyBuyIn={pool.weekly_buy_in} tournamentId={pool.tournament_id} poolName={pool.name} venmoHandle={pool.venmo_handle} zelleHandle={pool.zelle_handle} />}
               </div>
             )}
