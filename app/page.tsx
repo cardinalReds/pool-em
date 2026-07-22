@@ -69,7 +69,6 @@ export default async function Home() {
             {[
               { emoji: '⚾', name: 'MLB Playoffs' },
               { emoji: '🏈', name: 'NCAA Football' },
-              { emoji: '🏈', name: 'NFL' },
               { emoji: '🎾', name: 'Tennis' },
             ].map(s => (
               <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
