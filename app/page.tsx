@@ -7,6 +7,30 @@ export default async function Home() {
   const { data: { user } } = await supabase.auth.getUser()
   if (user) redirect('/dashboard')
 
+  // Every sport supports pool creation right now, but "live" only means something once
+  // the underlying season has actually kicked off — PL/NFL pools can be set up months
+  // before a ball's kicked, while F1 pools are being created mid-season. MMA has no
+  // season at all (each card is its own event), so it gets its own label rather than
+  // being forced into the started/not-started binary.
+  const [{ data: plStarted }, { data: nflStarted }, { data: f1Started }] = await Promise.all([
+    supabase.from('fixtures').select('id').eq('tournament_id', 'pl_2026').neq('status', 'NS').limit(1),
+    supabase.from('fixtures').select('id').eq('tournament_id', 'nfl_2026').neq('status', 'NS').limit(1),
+    supabase.from('f1_sessions').select('id').eq('tournament_id', 'f1_2026').eq('status', 'Completed').limit(1),
+  ])
+
+  const TAG_STYLE: Record<string, { color: string; bg: string }> = {
+    'live': { color: '#2d7a2d', bg: '#f0faf0' },
+    'pools open': { color: '#1a56db', bg: '#eef3fe' },
+    'ongoing events': { color: '#9a6b00', bg: '#fdf6e3' },
+  }
+
+  const competitions = [
+    { emoji: '⚽', name: 'Premier League 2026/27', tag: plStarted?.length ? 'live' : 'pools open' },
+    { emoji: '🏎️', name: 'Formula 1 2026', tag: f1Started?.length ? 'live' : 'pools open' },
+    { emoji: '🥊', name: 'MMA', tag: 'ongoing events' },
+    { emoji: '🏈', name: 'NFL 2026/27', tag: nflStarted?.length ? 'live' : 'pools open' },
+  ]
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
       {/* Nav */}
@@ -51,15 +75,11 @@ export default async function Home() {
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem', marginBottom: '3rem' }}>
           <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', marginBottom: '1rem' }}>available now</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {[
-              { emoji: '⚽', name: 'Premier League 2026/27', live: true },
-              { emoji: '🏎️', name: 'Formula 1 2026', live: true },
-              { emoji: '🥊', name: 'MMA', live: true },
-            ].map(s => (
+            {competitions.map(s => (
               <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <span style={{ fontSize: '1.1rem' }}>{s.emoji}</span>
                 <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>{s.name}</span>
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#2d7a2d', background: '#f0faf0', padding: '2px 8px', borderRadius: 4 }}>live</span>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: TAG_STYLE[s.tag].color, background: TAG_STYLE[s.tag].bg, padding: '2px 8px', borderRadius: 4 }}>{s.tag}</span>
               </div>
             ))}
           </div>
@@ -69,7 +89,6 @@ export default async function Home() {
             {[
               { emoji: '⚾', name: 'MLB Playoffs' },
               { emoji: '🏈', name: 'NCAA Football' },
-              { emoji: '🏈', name: 'NFL' },
               { emoji: '🎾', name: 'Tennis' },
             ].map(s => (
               <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
