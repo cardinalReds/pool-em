@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { COMMON_IDS, CATEGORY_GROUPS, ROUND_SPECIALS } from '@/lib/categoryGroups'
 
 interface Category {
   id: string
@@ -212,26 +213,6 @@ function checkCorrect(categoryId: string, pick: any, result: ReturnType<typeof g
     default: return false
   }
 }
-
-// Most commonly picked soccer predictions — surfaced up top so admins don't have to dig through groups for them
-const COMMON_IDS = ['soccer_result', 'soccer_first_team_score', 'soccer_ht_result', 'soccer_first_goalscorer']
-
-const CATEGORY_GROUPS = [
-  { label: 'Match Outcome Props', ids: ['soccer_result', 'soccer_team_to_advance', 'soccer_ht_result', 'soccer_asian_handicap'], plExclude: ['soccer_team_to_advance'] },
-  { label: 'Goals Props', ids: ['soccer_exact_score', 'soccer_ht_exact_score', 'soccer_btts', 'soccer_total_goals_ou', 'soccer_first_team_score', 'soccer_first_goalscorer', 'soccer_anytime_goalscorer'] },
-  { label: 'Corners Props', ids: ['soccer_corners_winner', 'soccer_ht_corners_winner', 'soccer_total_corners_ou'] },
-  { label: 'Cards Props', ids: ['soccer_card_points_ou', 'soccer_cards_home_away', 'soccer_cards_ht', 'soccer_first_yellow_team'] },
-  { label: 'Fight Result', ids: ['mma_result', 'mma_method'] },
-  { label: 'Fight Duration', ids: ['mma_round_finish'] },
-  { label: 'Race', ids: ['f1_race_winner', 'f1_podium_order', 'f1_podium', 'f1_points_finish', 'f1_fastest_lap', 'f1_first_retirement', 'f1_pole_to_win', 'f1_first_pit_lap', 'f1_teammate_battle'] },
-  { label: 'Qualifying', ids: ['f1_pole_position', 'f1_top3_quali', 'f1_q1_eliminated', 'f1_q3_qualifier'] },
-  { label: 'Sprint', ids: ['f1_sprint_winner', 'f1_sprint_podium'] },
-  { label: 'Head to Head', ids: ['f1_top6_teammate'] },
-  { label: 'Full Game Props', ids: ['nfl_result', 'nfl_spread', 'nfl_total_points_ou'] },
-  { label: '1st Half Props', ids: ['nfl_ht_result', 'nfl_ht_spread', 'nfl_ht_total_points_ou'] },
-]
-
-const ROUND_SPECIALS = ['soccer_clean_sheet_round', 'soccer_brace_round', 'soccer_red_card_round', 'soccer_penalty_round']
 
 // Descriptions that override whatever is in the DB for display clarity
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
