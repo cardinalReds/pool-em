@@ -23,7 +23,7 @@ export default async function Home() {
           Your group chat's prediction pool.
         </h1>
         <p style={{ color: 'var(--text-dim)', marginBottom: '2rem', fontSize: '1rem', lineHeight: 1.7, maxWidth: 480 }}>
-          A private prediction pool for your friends, family, or coworkers — not strangers. Set your own rules, invite your group with a link, and watch picks score automatically once games kick off. Premier League, F1, MMA, and more. Free, no ads, no nonsense.
+          A private prediction pool for your friends, family, or coworkers. Set your own rules, invite your group with a link, and watch picks score automatically once games kick off. Premier League, F1, MMA, and more. Free, no ads, no nonsense.
         </p>
 
         <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '3.5rem', flexWrap: 'wrap' }}>
