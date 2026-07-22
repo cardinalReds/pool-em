@@ -12,6 +12,7 @@ import { DEFAULT_BRACKET_SCORING } from '@/lib/bracketEngine'
 import BracketPicker from '@/components/BracketPicker'
 import BracketViewer from '@/components/BracketViewer'
 import ShitChat from '@/components/ShitChat'
+import SeasonPropsTicket from '@/components/SeasonPropsTicket'
 
 function getSessionFromCookie() {
   try {
@@ -514,6 +515,12 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           <CollectionSummary />
         </div>
       )}
+      {isAdmin && pool.weekly_buy_in && (
+        <div style={{background: '#f9f9f9', border: '1px solid #eee', padding: '10px 12px', marginBottom: '16px', fontSize: '12px', color: '#555'}}>
+          💰 ${pool.weekly_buy_in}/matchday weekly pot{pool.weekly_payout_structure ? ` · 🏆 ${pool.weekly_payout_structure}` : ''}
+          <div style={{fontSize: '10px', color: '#aaa', marginTop: 4}}>credit tracking coming soon — for now, manage weekly buy-ins outside the app</div>
+        </div>
+      )}
 
       {/* Leaderboard */}
       {isLive && (
@@ -770,6 +777,12 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 <CollectionSummary />
               </div>
             )}
+            {isAdmin && pool.weekly_buy_in && (
+              <div style={{background: '#f9f9f9', border: '1px solid #eee', padding: '10px 12px', marginBottom: '12px', fontSize: '12px', color: '#555'}}>
+                💰 ${pool.weekly_buy_in}/matchday weekly pot{pool.weekly_payout_structure ? ` · 🏆 ${pool.weekly_payout_structure}` : ''}
+                <div style={{fontSize: '10px', color: '#aaa', marginTop: 4}}>credit tracking coming soon — for now, manage weekly buy-ins outside the app</div>
+              </div>
+            )}
             {!isAdmin && recentChanges.length > 0 && !changesDismissed && (
               <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '10px 12px', marginBottom: '12px', fontSize: '11px'}}>
                 <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px'}}>
@@ -832,7 +845,10 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                     ? <F1SessionsList poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
                     : pool.sport === 'mma'
                     ? <MMAFightCard poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
-                    : <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} hideControls={true} externalSortMode={mobileSortMode} externalViewMode={mobileViewMode} isAdmin={isAdmin} />
+                    : <>
+                        {pool.season_props_enabled && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} />}
+                        <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} hideControls={true} externalSortMode={mobileSortMode} externalViewMode={mobileViewMode} isAdmin={isAdmin} />
+                      </>
                 )}
               </div>
             )}
@@ -1103,7 +1119,10 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                   ? <F1SessionsList poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
                   : pool.sport === 'mma'
                   ? <MMAFightCard poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
-                  : <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
+                  : <>
+                      {pool.season_props_enabled && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} />}
+                      <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
+                    </>
               )}
             </div>
           </div>

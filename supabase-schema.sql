@@ -54,6 +54,9 @@ alter table public.pools add column if not exists bank_account_number text;
 -- If true, any member can share the invite link/section, not just the admin
 alter table public.pools add column if not exists allow_member_invites boolean not null default false;
 
+-- How each week's weekly-pot winnings are split (mirrors payout_structure for season pot)
+alter table public.pools add column if not exists weekly_payout_structure text;
+
 alter table public.pools enable row level security;
 create policy "Members can view their pools" on public.pools for select
   using (

@@ -75,6 +75,8 @@ export default function CreatePoolPage() {
   const [accountNumber, setAccountNumber] = useState('')
   const [payoutTemplate, setPayoutTemplate] = useState<string>('winner')
   const [customPayout, setCustomPayout] = useState('')
+  const [weeklyPayoutTemplate, setWeeklyPayoutTemplate] = useState<string>('winner')
+  const [weeklyCustomPayout, setWeeklyCustomPayout] = useState('')
 
   const PAYOUT_TEMPLATES = [
     { id: 'winner', label: 'Winner takes all', description: '1st place gets the full pot' },
@@ -176,6 +178,9 @@ export default function CreatePoolPage() {
         prize_weekly: plPrizeWeekly,
         season_buy_in: plPrizeSeason && plSeasonBuyIn ? parseFloat(plSeasonBuyIn) : null,
         weekly_buy_in: plPrizeWeekly && plWeeklyBuyIn ? parseFloat(plWeeklyBuyIn) : null,
+        weekly_payout_structure: plPrizeWeekly && plWeeklyBuyIn
+          ? (weeklyPayoutTemplate === 'custom' ? weeklyCustomPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === weeklyPayoutTemplate)?.description || null)
+          : null,
         season_props_enabled: plSeasonProps,
       } : {}),
     }).select().single()
@@ -692,9 +697,32 @@ export default function CreatePoolPage() {
                   <input type="number" min="0" placeholder="e.g. 10" value={plWeeklyBuyIn}
                     onChange={e => setPlWeeklyBuyIn(e.target.value)}
                     style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontFamily: 'inherit', marginBottom: 8}} />
-                  <div style={{fontSize: '10px', color: '#aaa'}}>
-                    you issue credits to members as they pay. they allocate credits to enter each matchday. weekly winner takes the pot.
+                  <div style={{fontSize: '10px', color: '#aaa', marginBottom: 14}}>
+                    you issue credits to members as they pay. they allocate credits to enter each matchday.
                   </div>
+
+                  <div style={{fontSize: '11px', fontWeight: 600, marginBottom: 8}}>how does each week's pot get paid out?</div>
+                  <div style={{display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10}}>
+                    {PAYOUT_TEMPLATES.map(t => (
+                      <button key={t.id} type="button" onClick={() => setWeeklyPayoutTemplate(t.id)}
+                        style={{
+                          textAlign: 'left', padding: '10px 12px', border: '1px solid', cursor: 'pointer', fontFamily: 'inherit',
+                          borderColor: weeklyPayoutTemplate === t.id ? '#C8102E' : '#e0e0db',
+                          background: weeklyPayoutTemplate === t.id ? '#fff5f5' : 'white',
+                        }}>
+                        <span style={{fontWeight: 600, fontSize: '12px', color: weeklyPayoutTemplate === t.id ? '#C8102E' : '#111'}}>{t.label}</span>
+                        {t.id !== 'custom' && <span style={{fontSize: '11px', color: '#888', marginLeft: 8}}>{t.description}</span>}
+                      </button>
+                    ))}
+                  </div>
+                  {weeklyPayoutTemplate === 'custom' && (
+                    <textarea
+                      placeholder="e.g. 1st: 50%, 2nd: 30%, 3rd: 20%"
+                      value={weeklyCustomPayout}
+                      onChange={e => setWeeklyCustomPayout(e.target.value)}
+                      rows={3}
+                      style={{width: '100%', border: '1px solid #ddd', padding: '8px', fontSize: '13px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' as const}} />
+                  )}
                 </div>
               )}
             </div>
