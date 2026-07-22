@@ -450,6 +450,35 @@ export default function PoolPage({ params }: { params: { id: string } }) {
     )
   }
 
+  function PrizesPanel({ pool }: { pool: any }) {
+    // Season payout_structure is saved as "<template> · best N of 38 matchdays counted" — split for cleaner display
+    const [seasonTemplate, ...rest] = (pool.payout_structure || '').split(' · best ')
+    const seasonBestWeeksNote = rest.length > 0 ? `best ${rest.join(' · best ')}` : null
+
+    return (
+      <div style={{ border: '1px solid #eee', marginBottom: 16, background: '#fdfdfc' }}>
+        <div style={{ fontSize: '10px', fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.08em', padding: '8px 12px', borderBottom: '1px solid #eee' }}>prizes</div>
+        {pool.buy_in_amount > 0 && (
+          <div style={{ padding: '10px 12px', borderBottom: pool.weekly_buy_in ? '1px solid #eee' : 'none' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#C8102E', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>season pot</div>
+            <div style={{ fontSize: '12px', color: '#555' }}>💰 ${pool.buy_in_amount} buy-in</div>
+            {seasonTemplate && <div style={{ fontSize: '11px', color: '#888', marginTop: 2 }}>🏆 {seasonTemplate}</div>}
+            {seasonBestWeeksNote && <div style={{ fontSize: '10px', color: '#aaa', marginTop: 2 }}>{seasonBestWeeksNote}</div>}
+            <CollectionSummary />
+          </div>
+        )}
+        {pool.weekly_buy_in > 0 && (
+          <div style={{ padding: '10px 12px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 700, color: '#C8102E', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>weekly pot</div>
+            <div style={{ fontSize: '12px', color: '#555' }}>💰 ${pool.weekly_buy_in} per matchday</div>
+            {pool.weekly_payout_structure && <div style={{ fontSize: '11px', color: '#888', marginTop: 2 }}>🏆 {pool.weekly_payout_structure}</div>}
+            <div style={{ fontSize: '10px', color: '#aaa', marginTop: 6 }}>credit tracking coming soon — for now, manage weekly buy-ins outside the app</div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   const sidebarContent = (
     <div style={{padding: isMobile ? '16px' : '40px 24px', maxWidth: isMobile ? '100%' : 280, margin: isMobile ? 0 : '0 auto', width: '100%'}}>
 
@@ -510,18 +539,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           </div>
         </div>
       )}
-      {isAdmin && pool.buy_in_amount && (
-        <div style={{background: '#f9f9f9', border: '1px solid #eee', padding: '10px 12px', marginBottom: '16px', fontSize: '12px', color: '#555'}}>
-          💰 ${pool.buy_in_amount} buy-in{pool.payout_structure ? ` · 🏆 ${pool.payout_structure}` : ''}
-          <CollectionSummary />
-        </div>
-      )}
-      {isAdmin && pool.weekly_buy_in && (
-        <div style={{background: '#f9f9f9', border: '1px solid #eee', padding: '10px 12px', marginBottom: '16px', fontSize: '12px', color: '#555'}}>
-          💰 ${pool.weekly_buy_in}/matchday weekly pot{pool.weekly_payout_structure ? ` · 🏆 ${pool.weekly_payout_structure}` : ''}
-          <div style={{fontSize: '10px', color: '#aaa', marginTop: 4}}>credit tracking coming soon — for now, manage weekly buy-ins outside the app</div>
-        </div>
-      )}
+      {isAdmin && (pool.buy_in_amount || pool.weekly_buy_in) && <PrizesPanel pool={pool} />}
 
       {/* Leaderboard */}
       {isLive && (
@@ -772,18 +790,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 </button>
               </a>
             )}
-            {isAdmin && pool.buy_in_amount && (
-              <div style={{background: '#f9f9f9', border: '1px solid #eee', padding: '10px 12px', marginBottom: '12px', fontSize: '12px', color: '#555'}}>
-                💰 ${pool.buy_in_amount} buy-in{pool.payout_structure ? ` · 🏆 ${pool.payout_structure}` : ''}
-                <CollectionSummary />
-              </div>
-            )}
-            {isAdmin && pool.weekly_buy_in && (
-              <div style={{background: '#f9f9f9', border: '1px solid #eee', padding: '10px 12px', marginBottom: '12px', fontSize: '12px', color: '#555'}}>
-                💰 ${pool.weekly_buy_in}/matchday weekly pot{pool.weekly_payout_structure ? ` · 🏆 ${pool.weekly_payout_structure}` : ''}
-                <div style={{fontSize: '10px', color: '#aaa', marginTop: 4}}>credit tracking coming soon — for now, manage weekly buy-ins outside the app</div>
-              </div>
-            )}
+            {isAdmin && (pool.buy_in_amount || pool.weekly_buy_in) && <PrizesPanel pool={pool} />}
             {!isAdmin && recentChanges.length > 0 && !changesDismissed && (
               <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '10px 12px', marginBottom: '12px', fontSize: '11px'}}>
                 <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px'}}>
