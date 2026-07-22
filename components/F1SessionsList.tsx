@@ -322,8 +322,8 @@ function isLocked(session: F1Session, deadlineType: string, gpSessions: F1Sessio
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function F1SessionsList({ poolId, userId, deadlineType, tournamentId }: {
-  poolId: string; userId: string; deadlineType: string; tournamentId: string
+export default function F1SessionsList({ poolId, userId, deadlineType, tournamentId, isAdmin = false }: {
+  poolId: string; userId: string; deadlineType: string; tournamentId: string; isAdmin?: boolean
 }) {
   const [sessions, setSessions] = useState<F1Session[]>([])
   const [poolRules, setPoolRules] = useState<PoolRule[]>([])
@@ -334,6 +334,10 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
   const [saving, setSaving] = useState<number | null>(null)
   const [saved, setSaved] = useState<Record<number, boolean>>({})
   const [gpIndex, setGpIndex] = useState(0)
+  const [ghostEntries, setGhostEntries] = useState<{ id: string; name: string }[]>([])
+  const [activeEntryId, setActiveEntryId] = useState<string>(userId) // who we're making picks for
+  const [newGhostName, setNewGhostName] = useState('')
+  const [addingGhost, setAddingGhost] = useState(false)
   const LS_KEY = `f1_preds_${poolId}_${userId}`
   const autoSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
   const predsRef = useRef(preds)
@@ -348,13 +352,16 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
   useEffect(() => {
     async function load() {
       const supabase = createClient()
-      const [sessionsRes, rulesRes, myPredsRes, allPredsRes, membersRes] = await Promise.all([
+      const [sessionsRes, rulesRes, myPredsRes, allPredsRes, membersRes, ghostRes] = await Promise.all([
         supabase.from('f1_sessions').select('*').eq('tournament_id', tournamentId).order('date'),
         supabase.from('pool_rules').select('category_id, points, bonus_points, ruleset_categories(name, input_type)').eq('pool_id', poolId),
         supabase.from('predictions_v2').select('*').eq('pool_id', poolId).eq('user_id', userId).limit(10000),
         supabase.from('predictions_v2').select('*').eq('pool_id', poolId).limit(10000),
         supabase.from('pool_members').select('user_id, display_name').eq('pool_id', poolId),
+        supabase.from('ghost_entries').select('id, name').eq('pool_id', poolId),
       ])
+
+      setGhostEntries(ghostRes.data || [])
 
       const allSessions = sessionsRes.data || []
       setSessions(allSessions)
@@ -407,9 +414,10 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
       }
       setMemberPreds(allPredMap)
 
-      // Load member names
+      // Load member names (ghost entries count too — they're admin-managed real people)
       const memberMap: Record<string, string> = {}
       for (const m of membersRes.data || []) memberMap[m.user_id] = m.display_name
+      for (const g of ghostRes.data || []) memberMap[g.id] = g.name
       setMembers(memberMap)
 
       // Find the current live GP first, then next upcoming
@@ -433,6 +441,30 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
     }
     load()
   }, [poolId, userId, tournamentId])
+
+  async function switchEntry(entryId: string) {
+    setActiveEntryId(entryId)
+    const supabase = createClient()
+    const { data } = await supabase.from('predictions_v2').select('*').eq('pool_id', poolId).eq('user_id', entryId).limit(10000)
+    const predMap: Record<string, any> = {}
+    for (const p of data || []) predMap[`${p.fixture_id}:${p.category_id}`] = p
+    setPreds(predMap)
+  }
+
+  async function addGhostEntry() {
+    if (!newGhostName.trim()) return
+    const supabase = createClient()
+    const { data } = await supabase.from('ghost_entries').insert({
+      pool_id: poolId, name: newGhostName.trim(), created_by: userId
+    }).select().single()
+    if (data) {
+      setGhostEntries(prev => [...prev, data])
+      setMembers(prev => ({ ...prev, [data.id]: data.name }))
+      await switchEntry(data.id)
+      setNewGhostName('')
+      setAddingGhost(false)
+    }
+  }
 
   // Realtime subscription — update session status/scored without full reload
   useEffect(() => {
@@ -487,7 +519,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
         for (const pos of [1, 2, 3]) {
           const val = currentPreds[`${sessionId}:f1_podium_order_${pos}`]?.value_text
           if (val) rows.push({
-            pool_id: poolId, user_id: userId, fixture_id: sessionId,
+            pool_id: poolId, user_id: activeEntryId, fixture_id: sessionId,
             category_id: `f1_podium_order_${pos}`, value_text: val,
             value_wld: null, value_yesno: null, value_number: null, value_ou: null,
             submitted_at: new Date().toISOString(),
@@ -498,7 +530,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
       const pred = currentPreds[`${sessionId}:${r.category_id}`]
       if (pred?.value_text || pred?.value_yesno !== null && pred?.value_yesno !== undefined || pred?.value_number !== null && pred?.value_number !== undefined)
         rows.push({
-          pool_id: poolId, user_id: userId, fixture_id: sessionId,
+          pool_id: poolId, user_id: activeEntryId, fixture_id: sessionId,
           category_id: r.category_id,
           value_text: pred.value_text ?? null, value_wld: null,
           value_yesno: pred.value_yesno ?? null,
@@ -513,7 +545,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
     setSaving(null)
     setSaved(prev => ({ ...prev, [sessionId]: true }))
     setTimeout(() => setSaved(prev => ({ ...prev, [sessionId]: false })), 3000)
-  }, [poolId, userId])
+  }, [poolId, activeEntryId])
 
   // Keep saveSessionRef in sync with latest saveSession
   useEffect(() => { saveSessionRef.current = saveSession }, [saveSession])
@@ -563,6 +595,56 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
 
   return (
     <div>
+      {/* Entry switcher — admin only, lets the admin pick on behalf of ghost entries */}
+      {isAdmin && (
+        <div style={{ marginBottom: 16, padding: '10px 12px', background: '#f9f9f9', border: '1px solid #e0e0db' }}>
+          <div style={{ fontSize: '10px', fontWeight: 600, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>making picks for</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginBottom: 8 }}>
+            {/* Self */}
+            <button type="button" onClick={() => switchEntry(userId)}
+              style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
+                borderColor: activeEntryId === userId ? '#C8102E' : '#ddd',
+                background: activeEntryId === userId ? '#C8102E' : 'white',
+                color: activeEntryId === userId ? 'white' : '#555', fontWeight: activeEntryId === userId ? 700 : 400 }}>
+              you
+            </button>
+            {/* Ghost entries */}
+            {ghostEntries.map(g => (
+              <button key={g.id} type="button" onClick={() => switchEntry(g.id)}
+                style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
+                  borderColor: activeEntryId === g.id ? '#C8102E' : '#ddd',
+                  background: activeEntryId === g.id ? '#C8102E' : 'white',
+                  color: activeEntryId === g.id ? 'white' : '#555', fontWeight: activeEntryId === g.id ? 700 : 400 }}>
+                {g.name}
+              </button>
+            ))}
+            {/* Add new */}
+            {!addingGhost && (
+              <button type="button" onClick={() => setAddingGhost(true)}
+                style={{ padding: '5px 10px', fontSize: '12px', border: '1px dashed #ddd', background: 'white', color: '#aaa', cursor: 'pointer', fontFamily: 'inherit' }}>
+                + add entry
+              </button>
+            )}
+          </div>
+          {addingGhost && (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input autoFocus value={newGhostName} onChange={e => setNewGhostName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addGhostEntry()}
+                placeholder="entry name..."
+                style={{ flex: 1, padding: '6px 8px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit' }} />
+              <button type="button" onClick={addGhostEntry}
+                style={{ padding: '6px 12px', background: '#111', color: 'white', border: 'none', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer' }}>
+                add
+              </button>
+              <button type="button" onClick={() => { setAddingGhost(false); setNewGhostName('') }}
+                style={{ padding: '6px 10px', background: 'none', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer', color: '#aaa' }}>
+                cancel
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* GP Navigator */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
         <button type="button" onClick={() => setGpIndex(i => Math.max(0, i - 1))} disabled={safeIdx === 0}
