@@ -13,6 +13,7 @@ import BracketPicker from '@/components/BracketPicker'
 import BracketViewer from '@/components/BracketViewer'
 import ShitChat from '@/components/ShitChat'
 import SeasonPropsTicket from '@/components/SeasonPropsTicket'
+import WeeklyPot from '@/components/WeeklyPot'
 
 function getSessionFromCookie() {
   try {
@@ -472,7 +473,6 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             <div style={{ fontSize: '10px', fontWeight: 700, color: '#C8102E', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 4 }}>weekly pot</div>
             <div style={{ fontSize: '12px', color: '#555' }}>💰 ${pool.weekly_buy_in} per matchday</div>
             {pool.weekly_payout_structure && <div style={{ fontSize: '11px', color: '#888', marginTop: 2 }}>🏆 {pool.weekly_payout_structure}</div>}
-            <div style={{ fontSize: '10px', color: '#aaa', marginTop: 6 }}>credit tracking coming soon — for now, manage weekly buy-ins outside the app</div>
           </div>
         )}
       </div>
@@ -540,6 +540,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         </div>
       )}
       {isAdmin && (pool.buy_in_amount || pool.weekly_buy_in) && <PrizesPanel pool={pool} />}
+      {user && pool.weekly_buy_in > 0 && <WeeklyPot poolId={pool.id} userId={user.id} isAdmin={isAdmin} weeklyBuyIn={pool.weekly_buy_in} tournamentId={pool.tournament_id} />}
 
       {/* Leaderboard */}
       {isLive && (
@@ -791,6 +792,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               </a>
             )}
             {isAdmin && (pool.buy_in_amount || pool.weekly_buy_in) && <PrizesPanel pool={pool} />}
+      {user && pool.weekly_buy_in > 0 && <WeeklyPot poolId={pool.id} userId={user.id} isAdmin={isAdmin} weeklyBuyIn={pool.weekly_buy_in} tournamentId={pool.tournament_id} />}
             {!isAdmin && recentChanges.length > 0 && !changesDismissed && (
               <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '10px 12px', marginBottom: '12px', fontSize: '11px'}}>
                 <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px'}}>
