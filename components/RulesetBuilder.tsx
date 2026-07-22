@@ -200,6 +200,9 @@ function checkCorrect(categoryId: string, pick: any, result: ReturnType<typeof g
   }
 }
 
+// Most commonly picked soccer predictions — surfaced up top so admins don't have to dig through groups for them
+const COMMON_IDS = ['soccer_result', 'soccer_first_team_score', 'soccer_ht_result', 'soccer_first_goalscorer']
+
 const CATEGORY_GROUPS = [
   { label: 'Match Outcome', ids: ['soccer_result', 'soccer_team_to_advance', 'soccer_ht_result', 'soccer_asian_handicap'], plExclude: ['soccer_team_to_advance'] },
   { label: 'Goals', ids: ['soccer_exact_score', 'soccer_ht_exact_score', 'soccer_btts', 'soccer_total_goals_ou', 'soccer_first_team_score', 'soccer_first_goalscorer', 'soccer_anytime_goalscorer'] },
@@ -332,6 +335,11 @@ export default function RulesetBuilder({ sport, onComplete, isPL, plSelectedProp
   const [showPreview, setShowPreview] = useState(false)
   const [plPlayers, setPlPlayers] = useState<Record<string, {id: number, name: string, position: string}[]>>({})
   const [propOverrides, setPropOverrides] = useState<Record<string, number>>({})
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
+
+  function toggleGroup(label: string) {
+    setOpenGroups(prev => ({ ...prev, [label]: !prev[label] }))
+  }
 
   // Calculate max possible game points from current rules
   const maxGamePoints = Object.values(rules).filter(r => r.enabled).reduce((sum, r) => {
@@ -953,19 +961,42 @@ export default function RulesetBuilder({ sport, onComplete, isPL, plSelectedProp
         </p>
       </div>
 
+      {sport === 'soccer' && (() => {
+        const commonCats = COMMON_IDS.map(id => categories.find(c => c.id === id)).filter(Boolean) as Category[]
+        if (commonCats.length === 0) return null
+        return (
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#C8102E', marginBottom: '4px', paddingBottom: '4px', borderBottom: '1px solid #eee' }}>
+              common picks
+            </div>
+            {commonCats.map(cat => <RuleRow key={cat.id} cat={cat} />)}
+          </div>
+        )
+      })()}
+
       {CATEGORY_GROUPS.map(group => {
         const groupCats = categories.filter(c => {
           if (!group.ids.includes(c.id)) return false
           if (isPL && (group as any).plExclude?.includes(c.id)) return false
+          if (sport === 'soccer' && COMMON_IDS.includes(c.id)) return false
           return true
         })
         if (groupCats.length === 0) return null
+        const enabledInGroup = groupCats.filter(c => rules[c.id]?.enabled).length
+        const isOpen = !!openGroups[group.label]
         return (
-          <div key={group.label} style={{ marginBottom: '20px' }}>
-            <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '4px', paddingBottom: '4px', borderBottom: '1px solid #eee' }}>
-              {group.label}
-            </div>
-            {groupCats.map(cat => <RuleRow key={cat.id} cat={cat} />)}
+          <div key={group.label} style={{ marginBottom: '12px' }}>
+            <button type="button" onClick={() => toggleGroup(group.label)}
+              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: isOpen ? '4px' : 0, paddingBottom: '4px', borderBottom: '1px solid #eee', fontFamily: 'inherit' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb' }}>{group.label}</span>
+                {enabledInGroup > 0 && (
+                  <span style={{ fontSize: '9px', fontWeight: 600, color: '#C8102E', background: '#fff5f5', padding: '1px 6px', borderRadius: 8 }}>{enabledInGroup} selected</span>
+                )}
+              </span>
+              <span style={{ fontSize: '10px', color: '#bbb' }}>{isOpen ? '▲' : '▼'}</span>
+            </button>
+            {isOpen && groupCats.map(cat => <RuleRow key={cat.id} cat={cat} />)}
           </div>
         )
       })}
