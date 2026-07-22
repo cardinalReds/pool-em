@@ -57,6 +57,21 @@ alter table public.pools add column if not exists allow_member_invites boolean n
 -- How each week's weekly-pot winnings are split (mirrors payout_structure for season pot)
 alter table public.pools add column if not exists weekly_payout_structure text;
 
+-- Ghost entries need their own paid flag — they don't have a pool_members row to store it on
+alter table public.ghost_entries add column if not exists is_paid boolean not null default false;
+
+-- ghost_entries had select/insert/delete policies for the pool admin but no UPDATE policy,
+-- so admin writes to is_paid (or anything else) silently matched 0 rows and no-op'd —
+-- PostgREST still returns 204 success even when RLS hides every row from the UPDATE.
+create policy "Admins can update ghost entries in their pools" on public.ghost_entries for update
+  using (
+    exists (
+      select 1 from public.pools
+      where pools.id = ghost_entries.pool_id
+      and pools.admin_id = auth.uid()
+    )
+  );
+
 alter table public.pools enable row level security;
 create policy "Members can view their pools" on public.pools for select
   using (

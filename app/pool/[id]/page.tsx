@@ -271,8 +271,8 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         scores?.forEach(s => { if (s.points_earned) pointsMap[s.user_id] = (pointsMap[s.user_id] || 0) + s.points_earned })
       }
       // Include ghost entries in leaderboard
-      const { data: ghosts } = await supabase.from('ghost_entries').select('id, name').eq('pool_id', pool.id)
-      const ghostMembers = (ghosts || []).map(g => ({ user_id: g.id, display_name: g.name, is_paid: false, is_ghost: true }))
+      const { data: ghosts } = await supabase.from('ghost_entries').select('id, name, is_paid').eq('pool_id', pool.id)
+      const ghostMembers = (ghosts || []).map(g => ({ id: g.id, user_id: g.id, display_name: g.name, is_paid: !!g.is_paid, is_ghost: true }))
       const allMembers = [...(members || []), ...ghostMembers]
 
       setLeaderboard(allMembers.map(m => ({ ...m, points: pointsMap[m.user_id] || 0, maxPossible: maxPossibleMap[m.user_id] })).sort((a, b) => b.points - a.points))
@@ -383,7 +383,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ghost_entries', filter: `pool_id=eq.${params.id}` }, (payload) => {
         setLeaderboard(prev => prev.some(m => m.user_id === payload.new.id) ? prev : [
           ...prev,
-          { user_id: payload.new.id, display_name: payload.new.name, is_paid: false, is_ghost: true, points: 0 },
+          { id: payload.new.id, user_id: payload.new.id, display_name: payload.new.name, is_paid: false, is_ghost: true, points: 0 },
         ].sort((a, b) => b.points - a.points))
       })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'ghost_entries', filter: `pool_id=eq.${params.id}` }, (payload) => {
@@ -394,10 +394,15 @@ export default function PoolPage({ params }: { params: { id: string } }) {
     return () => { supabase.removeChannel(channel); supabase.removeChannel(ghostChannel) }
   }, [params.id])
 
-  async function togglePaid(memberId: string, currentValue: boolean) {
+  async function togglePaid(member: any) {
     const supabase = createClient()
-    await supabase.from('pool_members').update({ is_paid: !currentValue }).eq('id', memberId)
-    setLeaderboard(prev => prev.map(m => m.id === memberId ? { ...m, is_paid: !currentValue } : m))
+    const newValue = !member.is_paid
+    if (member.is_ghost) {
+      await supabase.from('ghost_entries').update({ is_paid: newValue }).eq('id', member.id)
+    } else {
+      await supabase.from('pool_members').update({ is_paid: newValue }).eq('id', member.id)
+    }
+    setLeaderboard(prev => prev.map(m => m.id === member.id && m.is_ghost === member.is_ghost ? { ...m, is_paid: newValue } : m))
   }
 
   if (loading) return (
@@ -415,8 +420,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const pkg = RULE_PACKAGES[pool.package_id as keyof typeof RULE_PACKAGES]
   const isAdmin = pool.admin_id === user?.id
 
-  // Buy-in collection summary — how much of the pot has actually been collected so far
-  const payingMembers = leaderboard.filter(m => !m.is_ghost)
+  // Buy-in collection summary — how much of the pot has actually been collected so far.
+  // Ghosts count too — they represent real people who paid real money, tracked by the admin.
+  const payingMembers = leaderboard
   const paidCount = payingMembers.filter(m => m.is_paid).length
   const totalCollected = paidCount * (pool.buy_in_amount || 0)
   const totalDue = payingMembers.length * (pool.buy_in_amount || 0)
@@ -433,7 +439,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   function PaidPill({ member }: { member: any }) {
     if (isAdmin) {
       return (
-        <button onClick={() => togglePaid(member.id, member.is_paid)}
+        <button onClick={() => togglePaid(member)}
           style={{fontSize: '10px', fontWeight: 600, padding: '3px 8px', borderRadius: 10, border: '1px solid',
             borderColor: member.is_paid ? '#2d7a2d' : '#ddd',
             background: member.is_paid ? '#2d7a2d' : 'white',
