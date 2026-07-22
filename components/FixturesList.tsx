@@ -140,6 +140,13 @@ function formatDatePT(dateStr: string) {
   })
 }
 
+function formatShortDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    timeZone: USER_TZ,
+    month: 'short', day: 'numeric',
+  })
+}
+
 // Keyed as `${fixtureId}:${categoryId}` → PredV2
 type PredMap = Record<string, PredV2>
 
@@ -1249,7 +1256,15 @@ export default function FixturesList({
     ? Object.entries(dateMap).map(([label, fx]) => ({ label, isoDate: dateIsoMap[label], roundId: null as string | null, sub: `${fx.length} game${fx.length > 1 ? 's' : ''}`, fixtures: fx }))
     : sortMode === 'round'
     ? MATCHDAY_ROUNDS.filter(r => roundMap[r.id]?.length > 0).map(r => ({ label: r.label, isoDate: r.start, roundId: r.id, sub: `${roundMap[r.id]?.length ?? 0} games`, fixtures: roundMap[r.id] || [] }))
-    : Object.entries(groupMap).map(([label, fx]) => ({ label, isoDate: null as string | null, roundId: null as string | null, sub: [...new Set(fx.flatMap(f => [f.home_team, f.away_team]))].slice(0, 4).join(' · '), fixtures: fx }))
+    : Object.entries(groupMap).map(([label, fx]) => {
+        const dates = fx.map(f => new Date(f.date).getTime())
+        const minDate = new Date(Math.min(...dates)).toISOString()
+        const maxDate = new Date(Math.max(...dates)).toISOString()
+        const sub = formatShortDate(minDate) === formatShortDate(maxDate)
+          ? formatShortDate(minDate)
+          : `${formatShortDate(minDate)} – ${formatShortDate(maxDate)}`
+        return { label, isoDate: null as string | null, roundId: null as string | null, sub, fixtures: fx }
+      })
   const totalPages = pages.length
   const safePage = Math.min(currentPage, Math.max(0, totalPages - 1))
 
