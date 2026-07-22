@@ -204,10 +204,10 @@ function checkCorrect(categoryId: string, pick: any, result: ReturnType<typeof g
 const COMMON_IDS = ['soccer_result', 'soccer_first_team_score', 'soccer_ht_result', 'soccer_first_goalscorer']
 
 const CATEGORY_GROUPS = [
-  { label: 'Match Outcome', ids: ['soccer_result', 'soccer_team_to_advance', 'soccer_ht_result', 'soccer_asian_handicap'], plExclude: ['soccer_team_to_advance'] },
-  { label: 'Goals', ids: ['soccer_exact_score', 'soccer_ht_exact_score', 'soccer_btts', 'soccer_total_goals_ou', 'soccer_first_team_score', 'soccer_first_goalscorer', 'soccer_anytime_goalscorer'] },
-  { label: 'Corners', ids: ['soccer_corners_winner', 'soccer_ht_corners_winner', 'soccer_total_corners_ou'] },
-  { label: 'Cards', ids: ['soccer_card_points_ou', 'soccer_cards_home_away', 'soccer_cards_ht', 'soccer_first_yellow_team'] },
+  { label: 'Match Outcome Props', ids: ['soccer_result', 'soccer_team_to_advance', 'soccer_ht_result', 'soccer_asian_handicap'], plExclude: ['soccer_team_to_advance'] },
+  { label: 'Goals Props', ids: ['soccer_exact_score', 'soccer_ht_exact_score', 'soccer_btts', 'soccer_total_goals_ou', 'soccer_first_team_score', 'soccer_first_goalscorer', 'soccer_anytime_goalscorer'] },
+  { label: 'Corners Props', ids: ['soccer_corners_winner', 'soccer_ht_corners_winner', 'soccer_total_corners_ou'] },
+  { label: 'Cards Props', ids: ['soccer_card_points_ou', 'soccer_cards_home_away', 'soccer_cards_ht', 'soccer_first_yellow_team'] },
   { label: 'Fight Result', ids: ['mma_result', 'mma_method'] },
   { label: 'Fight Duration', ids: ['mma_round_finish'] },
   { label: 'Race', ids: ['f1_race_winner', 'f1_podium_order', 'f1_podium', 'f1_points_finish', 'f1_fastest_lap', 'f1_first_retirement', 'f1_pole_to_win', 'f1_first_pit_lap', 'f1_teammate_battle'] },
@@ -220,10 +220,10 @@ const ROUND_SPECIALS = ['soccer_clean_sheet_round', 'soccer_brace_round', 'socce
 
 // Descriptions that override whatever is in the DB for display clarity
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
-  soccer_clean_sheet_round: 'Predict which team will keep a clean sheet. Pick 1 team per group, per matchday.',
-  soccer_brace_round: 'Predict which player scores 2+ goals across any game that matchday. One pick per matchday.',
-  soccer_red_card_round: 'Predict which team receives a red card across any game that matchday. One pick per matchday.',
-  soccer_penalty_round: 'Predict which team earns a penalty across any game that matchday. One pick per matchday.',
+  soccer_clean_sheet_round: 'Predict which team will keep a clean sheet. Pick 1 team per group, per match week.',
+  soccer_brace_round: 'Predict which player scores 2+ goals across any game that match week. One pick per match week.',
+  soccer_red_card_round: 'Predict which team receives a red card across any game that match week. One pick per match week.',
+  soccer_penalty_round: 'Predict which team earns a penalty across any game that match week. One pick per match week.',
 }
 
 // PlayerSearch: searchable dropdown for player/team picks
@@ -596,7 +596,7 @@ export default function RulesetBuilder({ sport, onComplete, isPL, plSelectedProp
               <option value={fixture.away_team}>{fixture.away_team}</option>
             </select>
           )}
-          <div style={{ fontSize: '9px', color: '#bbb', marginTop: 4 }}>one pick per matchday · not per game</div>
+          <div style={{ fontSize: '9px', color: '#bbb', marginTop: 4 }}>one pick per match week · not per game</div>
         </div>
       )
     }
@@ -889,7 +889,7 @@ export default function RulesetBuilder({ sport, onComplete, isPL, plSelectedProp
   const matchdayTicket = perRoundCats.length > 0 ? (
     <div style={{ background: 'white', border: '1px solid #e0e0db', marginTop: 16 }}>
       <div style={{ background: '#111', color: 'white', padding: '10px 12px' }}>
-        <div style={{ fontSize: '10px', color: '#888', marginBottom: '2px' }}>round specials · once per matchday</div>
+        <div style={{ fontSize: '10px', color: '#888', marginBottom: '2px' }}>round specials · once per match week</div>
         <div style={{ fontWeight: 700, fontSize: '13px' }}>Matchday 1</div>
       </div>
       <div style={{ padding: '10px 12px' }}>
@@ -1006,7 +1006,7 @@ export default function RulesetBuilder({ sport, onComplete, isPL, plSelectedProp
           <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: '4px', paddingBottom: '4px', borderBottom: '1px solid #eee' }}>
             round specials
             <span style={{ fontWeight: 400, textTransform: 'none' as const, marginLeft: '6px', color: '#ccc' }}>
-              — one pick per matchday, per group
+              — one pick per match week
             </span>
           </div>
           {allRoundCats.map(cat => <RuleRow key={cat.id} cat={cat} />)}
