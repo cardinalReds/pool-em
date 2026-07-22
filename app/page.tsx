@@ -23,7 +23,7 @@ export default async function Home() {
           Your group chat's prediction pool.
         </h1>
         <p style={{ color: 'var(--text-dim)', marginBottom: '2rem', fontSize: '1rem', lineHeight: 1.7, maxWidth: 480 }}>
-          Set your own rules, invite your crew, score live. World Cup, F1, and more — all in one place. Free, no ads, no nonsense.
+          A private prediction pool for your friends, family, or coworkers — not strangers. Set your own rules, invite your group with a link, and watch picks score automatically once games kick off. Premier League, F1, MMA, and more. Free, no ads, no nonsense.
         </p>
 
         <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '3.5rem', flexWrap: 'wrap' }}>
@@ -98,6 +98,11 @@ export default async function Home() {
               💛 donate
             </button>
           </a>
+        </div>
+        <div style={{ paddingTop: '0.75rem', display: 'flex', gap: '1rem' }}>
+          <Link href="/about" style={{ fontSize: '0.75rem', color: 'var(--text-faint)' }}>about</Link>
+          <Link href="/privacy" style={{ fontSize: '0.75rem', color: 'var(--text-faint)' }}>privacy</Link>
+          <Link href="/terms" style={{ fontSize: '0.75rem', color: 'var(--text-faint)' }}>terms</Link>
         </div>
       </div>
     </div>
