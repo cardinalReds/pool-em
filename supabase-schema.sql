@@ -181,15 +181,15 @@ alter table public.fixtures add column if not exists line_ht_asian_handicap_home
 alter table public.fixtures add column if not exists line_ht_asian_handicap_away numeric;
 alter table public.fixtures add column if not exists line_ht_total_points numeric;
 
+-- No exact-score category — unlike soccer's 0-5-ish scorelines, NFL final scores are
+-- high-variance (24-17, 31-28, ...), making an exact-score guess close to unhittable.
 insert into public.ruleset_categories (id, sport, name, description, default_points, prediction_type, requires_line, input_type, sort_order) values
 ('nfl_result', 'nfl', 'Game Winner', 'Pick who wins the game, or a tie.', 1, 'per_game', false, 'wld', 10),
 ('nfl_spread', 'nfl', 'Against the Spread', 'Pick who covers the point spread.', 2, 'per_game', true, 'wld', 20),
 ('nfl_total_points_ou', 'nfl', 'Total Points Over/Under', 'Will the combined score go over or under the line?', 2, 'per_game', true, 'ou', 30),
-('nfl_exact_score', 'nfl', 'Exact Score', 'Predict the exact final score. Points per correct team score, bonus if both are right.', 5, 'per_game', false, 'exact', 40),
 ('nfl_ht_result', 'nfl', 'Halftime Leader', 'Pick who''s ahead at halftime, or tied.', 2, 'per_game', false, 'wld', 50),
 ('nfl_ht_spread', 'nfl', 'Halftime Spread', 'Pick who covers the spread at halftime.', 2, 'per_game', true, 'wld', 60),
-('nfl_ht_total_points_ou', 'nfl', 'Halftime Total Points Over/Under', 'Will the combined halftime score go over or under the line?', 2, 'per_game', true, 'ou', 70),
-('nfl_ht_exact_score', 'nfl', 'Halftime Exact Score', 'Predict the exact halftime score.', 4, 'per_game', false, 'exact', 80)
+('nfl_ht_total_points_ou', 'nfl', 'Halftime Total Points Over/Under', 'Will the combined halftime score go over or under the line?', 2, 'per_game', true, 'ou', 70)
 on conflict (id) do nothing;
 
 alter table public.pools enable row level security;

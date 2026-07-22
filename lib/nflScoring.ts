@@ -25,23 +25,6 @@ export function getNFLResult(home: number, away: number): 'home' | 'draw' | 'awa
   return 'draw'
 }
 
-function scoreExact(pred: any, actualHome: number, actualAway: number, rule: NFLPoolRule): number {
-  const raw = pred.value_text || ''
-  const parts = raw.split('-')
-  if (parts.length !== 2) return 0
-  const predHome = parseInt(parts[0])
-  const predAway = parseInt(parts[1])
-  if (isNaN(predHome) || isNaN(predAway)) return 0
-
-  const homeCorrect = predHome === actualHome
-  const awayCorrect = predAway === actualAway
-  let pts = 0
-  if (homeCorrect) pts += rule.points
-  if (awayCorrect) pts += rule.points
-  if (homeCorrect && awayCorrect) pts += rule.bonus_points
-  return pts
-}
-
 export function scoreNFLPrediction(categoryId: string, pred: any, facts: NFLMatchFacts, rule: NFLPoolRule): number {
   switch (categoryId) {
     case 'nfl_result':
@@ -76,14 +59,6 @@ export function scoreNFLPrediction(categoryId: string, pred: any, facts: NFLMatc
       if (facts.htTotalLine === null || facts.htHomeScore === null || facts.htAwayScore === null) return 0
       const total = facts.htHomeScore + facts.htAwayScore
       return pred.value_ou === (total > facts.htTotalLine ? 'over' : 'under') ? rule.points : 0
-    }
-
-    case 'nfl_exact_score':
-      return scoreExact(pred, facts.homeScore, facts.awayScore, rule)
-
-    case 'nfl_ht_exact_score': {
-      if (facts.htHomeScore === null || facts.htAwayScore === null) return 0
-      return scoreExact(pred, facts.htHomeScore, facts.htAwayScore, rule)
     }
 
     default:

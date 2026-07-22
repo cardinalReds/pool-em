@@ -227,8 +227,8 @@ const CATEGORY_GROUPS = [
   { label: 'Qualifying', ids: ['f1_pole_position', 'f1_top3_quali', 'f1_q1_eliminated', 'f1_q3_qualifier'] },
   { label: 'Sprint', ids: ['f1_sprint_winner', 'f1_sprint_podium'] },
   { label: 'Head to Head', ids: ['f1_top6_teammate'] },
-  { label: 'Full Game Props', ids: ['nfl_result', 'nfl_spread', 'nfl_total_points_ou', 'nfl_exact_score'] },
-  { label: '1st Half Props', ids: ['nfl_ht_result', 'nfl_ht_spread', 'nfl_ht_total_points_ou', 'nfl_ht_exact_score'] },
+  { label: 'Full Game Props', ids: ['nfl_result', 'nfl_spread', 'nfl_total_points_ou'] },
+  { label: '1st Half Props', ids: ['nfl_ht_result', 'nfl_ht_spread', 'nfl_ht_total_points_ou'] },
 ]
 
 const ROUND_SPECIALS = ['soccer_clean_sheet_round', 'soccer_brace_round', 'soccer_red_card_round', 'soccer_penalty_round']

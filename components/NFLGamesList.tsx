@@ -8,6 +8,8 @@ interface NFLFixture {
   round: string
   home_team: string
   away_team: string
+  home_logo: string | null
+  away_logo: string | null
   date: string
   status: string
   home_score: number | null
@@ -31,7 +33,6 @@ interface Pred {
   fixture_id: number
   category_id: string
   value_wld?: string | null
-  value_text?: string | null
   value_ou?: string | null
   points_earned?: number | null
 }
@@ -49,14 +50,15 @@ function fmt(dateStr: string) {
   return `${time} ${tz}`
 }
 
-// Fixed, sensible display order — full-game props first, then their 1st-half counterparts
+// Fixed, sensible display order — full-game props first, then their 1st-half counterparts.
+// No exact-score category — NFL scores are too high-variance to make that a hittable pick.
 const CATEGORY_ORDER = [
-  'nfl_result', 'nfl_spread', 'nfl_total_points_ou', 'nfl_exact_score',
-  'nfl_ht_result', 'nfl_ht_spread', 'nfl_ht_total_points_ou', 'nfl_ht_exact_score',
+  'nfl_result', 'nfl_spread', 'nfl_total_points_ou',
+  'nfl_ht_result', 'nfl_ht_spread', 'nfl_ht_total_points_ou',
 ]
 
-export default function NFLGamesList({ poolId, userId, tournamentId, isAdmin = false }: {
-  poolId: string; userId: string; tournamentId: string; isAdmin?: boolean
+export default function NFLGamesList({ poolId, userId, tournamentId, deadlineType = 'before_each_game', isAdmin = false }: {
+  poolId: string; userId: string; tournamentId: string; deadlineType?: string; isAdmin?: boolean
 }) {
   const [games, setGames] = useState<NFLFixture[]>([])
   const [poolRules, setPoolRules] = useState<PoolRule[]>([])
@@ -156,6 +158,18 @@ export default function NFLGamesList({ poolId, userId, tournamentId, isAdmin = f
   const weekGames = games.filter(g => g.round === currentWeek).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
   const enabledRules = CATEGORY_ORDER.map(id => poolRules.find(r => r.category_id === id)).filter(Boolean) as PoolRule[]
 
+  // 'before_weekend' pools lock the whole gameweek at the first kickoff of that week,
+  // rather than each game locking individually at its own kickoff — mirrors FixturesList's
+  // isLocked/matchdayLockTime for PL's "before each match week" option.
+  function isGameLocked(game: NFLFixture) {
+    if (deadlineType === 'before_weekend') {
+      const weekGamesAll = games.filter(g => g.round === game.round)
+      const firstKickoff = Math.min(...weekGamesAll.map(g => new Date(g.date).getTime()))
+      return Date.now() >= firstKickoff
+    }
+    return new Date(game.date) <= new Date()
+  }
+
   return (
     <div>
       {/* Entry switcher — admin only */}
@@ -223,7 +237,7 @@ export default function NFLGamesList({ poolId, userId, tournamentId, isAdmin = f
 
       {/* Games for this week */}
       {weekGames.map(game => {
-        const locked = new Date(game.date) <= new Date()
+        const locked = isGameLocked(game)
         const btnStyle = (active: boolean): React.CSSProperties => ({
           flex: 1, padding: '8px 4px', fontSize: '11px', border: '1px solid',
           cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit',
@@ -236,10 +250,16 @@ export default function NFLGamesList({ poolId, userId, tournamentId, isAdmin = f
           <div key={game.id} style={{ marginBottom: 20, border: '1px solid #e0e0db', background: 'white' }}>
             <div style={{ background: '#111', color: 'white', padding: '10px 12px' }}>
               <div style={{ fontSize: '10px', color: '#888', marginBottom: 4 }}>{fmt(game.date)}{locked ? ' · locked' : ''}</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, fontSize: '13px' }}>{game.away_team}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: '13px' }}>
+                  {game.away_logo && <img src={game.away_logo} alt="" width={20} height={20} style={{ objectFit: 'contain' as const }} />}
+                  {game.away_team}
+                </span>
                 <span style={{ color: '#555', fontSize: '11px' }}>@</span>
-                <span style={{ fontWeight: 700, fontSize: '13px' }}>{game.home_team}</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: '13px' }}>
+                  {game.home_team}
+                  {game.home_logo && <img src={game.home_logo} alt="" width={20} height={20} style={{ objectFit: 'contain' as const }} />}
+                </span>
               </div>
               {game.status === 'FT' && (
                 <div style={{ textAlign: 'center' as const, marginTop: 6, fontWeight: 700, fontSize: '15px' }}>
@@ -312,33 +332,6 @@ export default function NFLGamesList({ poolId, userId, tournamentId, isAdmin = f
                         </button>
                       </div>
                     )}
-
-                    {rule.input_type === 'exact' && (() => {
-                      // Stored as "home-away" (matches nflScoring.ts's scoreExact, and the
-                      // same soccer_exact_score convention elsewhere in the app) even
-                      // though the away input renders on the left to match the game
-                      // header's "away @ home" order.
-                      const raw = pick?.value_text || ''
-                      const [homeVal, awayVal] = raw.includes('-') ? raw.split('-') : ['', '']
-                      return (
-                        // Keyed on activeEntryId — these are uncontrolled (defaultValue), so without
-                        // a key change on entry switch the DOM keeps showing the previous entry's
-                        // stale digits even though preds (and pick above) have already reset to empty.
-                        <div key={activeEntryId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                          <input type="number" min="0" max="99" placeholder="0" disabled={locked}
-                            defaultValue={awayVal}
-                            style={{ width: 44, border: '1px solid #ddd', padding: 4, textAlign: 'center' as const, fontSize: '12px', fontFamily: 'inherit' }}
-                            onChange={e => savePred(game.id, rule.category_id, { value_text: `${homeVal || '0'}-${e.target.value || '0'}` })} />
-                          <span style={{ color: '#aaa', fontSize: '11px' }}>{game.away_team.split(' ').pop()}</span>
-                          <span style={{ color: '#ccc' }}>–</span>
-                          <span style={{ color: '#aaa', fontSize: '11px' }}>{game.home_team.split(' ').pop()}</span>
-                          <input type="number" min="0" max="99" placeholder="0" disabled={locked}
-                            defaultValue={homeVal}
-                            style={{ width: 44, border: '1px solid #ddd', padding: 4, textAlign: 'center' as const, fontSize: '12px', fontFamily: 'inherit' }}
-                            onChange={e => savePred(game.id, rule.category_id, { value_text: `${e.target.value || '0'}-${awayVal || '0'}` })} />
-                        </div>
-                      )
-                    })()}
 
                     {pick?.points_earned != null && game.status === 'FT' && (
                       <div style={{ fontSize: '10px', marginTop: 4, color: pick.points_earned > 0 ? '#2d7a2d' : '#aaa' }}>

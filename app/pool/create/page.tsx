@@ -431,7 +431,8 @@ export default function CreatePoolPage() {
                     {id: 'before_weekend', label: 'before each match week', desc: 'all picks for the matchday lock before the first game kicks off'},
                     {id: 'before_each_game', label: 'before each game', desc: 'picks lock individually at each kickoff'},
                   ] : sport === 'nfl' ? [
-                    {id: 'before_each_game', label: 'before each game', desc: 'picks lock at kickoff — predict game by game'},
+                    {id: 'before_weekend', label: 'before each gameweek', desc: 'all picks for the week lock before the first game kicks off'},
+                    {id: 'before_each_game', label: 'before each game', desc: 'picks lock individually at each kickoff'},
                   ] : [
                     {id: 'before_each_game', label: 'before each game', desc: 'picks lock at kickoff — predict game by game'},
                     {id: 'before_tournament', label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'},
