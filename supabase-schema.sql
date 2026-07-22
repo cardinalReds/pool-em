@@ -119,6 +119,51 @@ create policy "Pool admins can update weekly payouts" on public.weekly_payouts f
   );
 grant select, insert, update on public.weekly_payouts to authenticated;
 
+-- Single-use invite links for buy-in pools. allow_member_invites previously only hid a
+-- UI button for non-admins — the underlying pools.invite_code was still one static,
+-- unlimited-use code anyone with it could join through repeatedly. For pools with money
+-- on the line, the admin needs individual links they generate one at a time, each usable
+-- by exactly one person, so they always know who's actually in the pool.
+create table if not exists public.pool_invites (
+  id uuid default gen_random_uuid() primary key,
+  pool_id uuid references public.pools(id) on delete cascade not null,
+  token text not null unique,
+  created_by uuid references auth.users(id) not null,
+  used_by uuid references auth.users(id),
+  used_at timestamptz,
+  created_at timestamptz default now()
+);
+
+alter table public.pool_invites enable row level security;
+create policy "Anyone can look up an invite token" on public.pool_invites for select using (true);
+create policy "Pool admins can create invite tokens" on public.pool_invites for insert
+  with check (
+    exists (
+      select 1 from public.pools
+      where pools.id = pool_invites.pool_id
+      and pools.admin_id = auth.uid()
+    )
+  );
+-- Anyone authenticated can claim an unclaimed token (this is how joining works) — the
+-- `using (used_by is null)` clause is what actually enforces single-use: once a row has
+-- used_by set, RLS hides it from matching a further update, so a second claim attempt
+-- affects 0 rows instead of overwriting the first person's claim.
+--
+-- The `with check` is required, not optional: without it, Postgres reuses the `using`
+-- clause as the check too, and since the update SETS used_by to a non-null value, the
+-- written row would fail its own "still null" check and get silently rejected (0 rows
+-- affected) — indistinguishable from someone else having claimed it first.
+create policy "Authenticated users can claim an unused invite token" on public.pool_invites for update
+  using (used_by is null)
+  with check (used_by = auth.uid());
+grant select on public.pool_invites to anon;
+grant select, insert, update on public.pool_invites to authenticated;
+
+-- Force off allow_member_invites for any pool that already has a buy-in configured —
+-- once money's on the line, only the admin should control who gets in.
+update public.pools set allow_member_invites = false
+  where allow_member_invites = true and (coalesce(buy_in_amount, 0) > 0 or coalesce(weekly_buy_in, 0) > 0);
+
 alter table public.pools enable row level security;
 create policy "Members can view their pools" on public.pools for select
   using (

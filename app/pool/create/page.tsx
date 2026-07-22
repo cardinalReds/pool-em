@@ -144,6 +144,10 @@ export default function CreatePoolPage() {
     if (!user) { setError('you must be logged in to create a pool'); setLoading(false); return }
 
     const inviteCode = Math.random().toString(36).substring(2, 8).toUpperCase()
+    // Safety net — buy-in pools never allow member invites, regardless of stale UI state
+    const hasAnyBuyIn = isPL
+      ? !!((plPrizeSeason && plSeasonBuyIn) || (plPrizeWeekly && plWeeklyBuyIn))
+      : !!(buyIn && parseFloat(buyIn) > 0)
     const { data: pool, error: poolError } = await supabase.from('pools').insert({
       name, sport,
       tournament_id: tournamentId,
@@ -163,7 +167,7 @@ export default function CreatePoolPage() {
       zelle_handle: zelleHandle.trim() || null,
       bank_sort_code: sortCode.trim() || null,
       bank_account_number: accountNumber.trim() || null,
-      allow_member_invites: allowMemberInvites,
+      allow_member_invites: hasAnyBuyIn ? false : allowMemberInvites,
       payout_structure: isPL
         ? (plPrizeSeason && plSeasonBuyIn
           ? `${payoutTemplate === 'custom' ? customPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description || ''} · best ${plBestWeeks} of 38 matchdays counted`
@@ -294,6 +298,28 @@ export default function CreatePoolPage() {
               style={{width: 70, border: '1px solid #ddd', padding: '8px', fontSize: '16px', fontFamily: 'inherit', textAlign: 'center'}} />
             <span style={{fontSize: '13px', color: '#888'}}>% of the season pot and weekly pot</span>
           </div>
+        )}
+      </div>
+    )
+  }
+
+  function InviteControlSection({ hasBuyIn }: { hasBuyIn: boolean }) {
+    return (
+      <div style={{marginBottom: 16, padding: '14px', border: '1px solid #e0e0db', background: 'white'}}>
+        {hasBuyIn ? (
+          <div>
+            <div style={{fontWeight: 600, fontSize: '13px', marginBottom: 4}}>invites</div>
+            <div style={{fontSize: '11px', color: '#aaa'}}>only you can invite people to this pool — buy-in pools need every member to come through you, so payments stay trackable. you'll generate a one-time link per person from inside the pool.</div>
+          </div>
+        ) : (
+          <label style={{display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer'}}>
+            <input type="checkbox" checked={allowMemberInvites} onChange={e => setAllowMemberInvites(e.target.checked)}
+              style={{width: 18, height: 18, cursor: 'pointer', marginTop: 2}} />
+            <div>
+              <div style={{fontWeight: 600, fontSize: '13px'}}>allow invitees to invite other users?</div>
+              <div style={{fontSize: '11px', color: '#aaa'}}>if off, only you can share the invite link</div>
+            </div>
+          </label>
         )}
       </div>
     )
@@ -436,15 +462,6 @@ export default function CreatePoolPage() {
               onChange={e => setName(e.target.value)} maxLength={50} autoFocus
               style={{fontSize: '16px', padding: '10px 12px'}} />
             <p style={{fontSize: '11px', color: '#aaa', marginTop: '6px'}}>your friends will see this when they join</p>
-
-            <label style={{display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginTop: '20px'}}>
-              <input type="checkbox" checked={allowMemberInvites} onChange={e => setAllowMemberInvites(e.target.checked)}
-                style={{width: 18, height: 18, cursor: 'pointer'}} />
-              <div>
-                <div style={{fontWeight: 600, fontSize: '13px'}}>allow invitees to invite other users?</div>
-                <div style={{fontSize: '11px', color: '#aaa'}}>if off, only you can share the invite link</div>
-              </div>
-            </label>
 
             <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '20px'}}>
               <button onClick={() => setStep(1)} style={{padding: '10px 16px', fontSize: '13px', background: 'none', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit'}}>← back</button>
@@ -756,6 +773,9 @@ export default function CreatePoolPage() {
             {/* Admin fee */}
             {(plPrizeSeason || plPrizeWeekly) && <AdminFeeSection />}
 
+            {/* Invite control */}
+            <InviteControlSection hasBuyIn={!!((plPrizeSeason && plSeasonBuyIn) || (plPrizeWeekly && plWeeklyBuyIn))} />
+
             {/* Payment handles */}
             {(plPrizeSeason || plPrizeWeekly) && (
               <div style={{marginBottom: 20}}>
@@ -811,6 +831,8 @@ export default function CreatePoolPage() {
                 style={{border: '1px solid #ddd', padding: '8px 10px', fontSize: '16px', width: 100, fontFamily: 'inherit', minHeight: 44}} />
               <span style={{fontSize: '13px', color: '#888'}}>per person</span>
             </div>
+
+            <InviteControlSection hasBuyIn={!!(buyIn && parseFloat(buyIn) > 0)} />
 
             {buyIn && parseFloat(buyIn) > 0 && (
               <>

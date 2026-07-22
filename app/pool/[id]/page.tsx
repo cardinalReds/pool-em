@@ -8,6 +8,7 @@ import F1SessionsList from '@/components/F1SessionsList'
 import MMAFightCard from '@/components/MMAFightCard'
 import ReminderButton from '@/components/ReminderButton'
 import InvitePanel from '@/components/InvitePanel'
+import BuyInInvitePanel from '@/components/BuyInInvitePanel'
 import { DEFAULT_BRACKET_SCORING } from '@/lib/bracketEngine'
 import BracketPicker from '@/components/BracketPicker'
 import BracketViewer from '@/components/BracketViewer'
@@ -759,7 +760,11 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       {/* Invite — admins always, members too if the pool allows it */}
       {(isAdmin || pool.allow_member_invites) && (
         <Section title="invite" defaultOpen={!isMobile}>
-          <InvitePanel poolName={pool.name} inviteUrl={inviteUrl} buyInAmount={pool.buy_in_amount} inviterName={user?.user_metadata?.display_name || user?.email?.split('@')[0] || null} />
+          {(pool.buy_in_amount || pool.weekly_buy_in) ? (
+            <BuyInInvitePanel poolId={pool.id} />
+          ) : (
+            <InvitePanel poolName={pool.name} inviteUrl={inviteUrl} buyInAmount={pool.buy_in_amount} inviterName={user?.user_metadata?.display_name || user?.email?.split('@')[0] || null} />
+          )}
         </Section>
       )}
 
@@ -1046,14 +1051,18 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 {(isAdmin || pool.allow_member_invites) && (
                   <div style={{marginBottom: 20}}>
                     <div style={{fontSize: '10px', fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8}}>invite</div>
-                    <div style={{display: 'flex', gap: 8}}>
-                      <input readOnly value={`${typeof window !== 'undefined' ? window.location.origin : ''}/pool/join/${pool.invite_code}`}
-                        style={{flex: 1, border: '1px solid #e0e0db', padding: '8px', fontSize: '11px', fontFamily: 'inherit', background: '#f7f7f5', color: '#555'}} />
-                      <button type="button" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/pool/join/${pool.invite_code}`)}
-                        style={{padding: '8px 12px', background: '#111', color: 'white', border: 'none', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit'}}>
-                        copy
-                      </button>
-                    </div>
+                    {(pool.buy_in_amount || pool.weekly_buy_in) ? (
+                      <BuyInInvitePanel poolId={pool.id} />
+                    ) : (
+                      <div style={{display: 'flex', gap: 8}}>
+                        <input readOnly value={`${typeof window !== 'undefined' ? window.location.origin : ''}/pool/join/${pool.invite_code}`}
+                          style={{flex: 1, border: '1px solid #e0e0db', padding: '8px', fontSize: '11px', fontFamily: 'inherit', background: '#f7f7f5', color: '#555'}} />
+                        <button type="button" onClick={() => navigator.clipboard.writeText(`${window.location.origin}/pool/join/${pool.invite_code}`)}
+                          style={{padding: '8px 12px', background: '#111', color: 'white', border: 'none', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit'}}>
+                          copy
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 

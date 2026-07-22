@@ -9,17 +9,38 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
   const [loading, setLoading] = useState(true)
   const [joining, setJoining] = useState(false)
   const [notFound, setNotFound] = useState(false)
+  const [alreadyUsed, setAlreadyUsed] = useState(false)
+  const [inviteId, setInviteId] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
       localStorage.setItem('pending_invite', params.code)
-      const { data: pool, error } = await supabase
-        .from('pools')
-        .select('*')
-        .eq('invite_code', params.code)
+
+      // Single-use invite tokens (buy-in pools) take priority over the pool's static
+      // shared invite_code — check those first.
+      const { data: invite } = await supabase
+        .from('pool_invites')
+        .select('id, pool_id, used_by')
+        .eq('token', params.code)
         .maybeSingle()
+
+      let poolId: string | null = null
+      if (invite) {
+        if (invite.used_by && invite.used_by !== session?.user?.id) {
+          setAlreadyUsed(true)
+          setLoading(false)
+          return
+        }
+        setInviteId(invite.id)
+        poolId = invite.pool_id
+      }
+
+      const { data: pool, error } = poolId
+        ? await supabase.from('pools').select('*').eq('id', poolId).maybeSingle()
+        : await supabase.from('pools').select('*').eq('invite_code', params.code).maybeSingle()
+
       if (error) { console.error('pool lookup error:', error); setNotFound(true); setLoading(false); return }
       if (!pool) { setNotFound(true); setLoading(false); return }
       setPool(pool)
@@ -37,6 +58,24 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
     if (!user) { window.location.href = `/auth/signup?invite=${params.code}`; return }
     setJoining(true)
     const supabase = createClient()
+
+    if (inviteId) {
+      // Claim the token — the RLS policy only matches rows where used_by is still null,
+      // so if someone else claimed it a moment ago this affects 0 rows instead of
+      // overwriting their claim.
+      const { data: claimed } = await supabase
+        .from('pool_invites')
+        .update({ used_by: user.id, used_at: new Date().toISOString() })
+        .eq('id', inviteId)
+        .is('used_by', null)
+        .select('id')
+      if (!claimed?.length) {
+        setJoining(false)
+        setAlreadyUsed(true)
+        return
+      }
+    }
+
     await supabase.from('pool_members').insert({
       pool_id: pool.id, user_id: user.id,
       display_name: user.user_metadata?.display_name || user.email?.split('@')[0] || 'Player',
@@ -52,6 +91,15 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
       <div style={{background:'white',border:'1px solid #e0e0db',padding:'24px',maxWidth:360,textAlign:'center',fontSize:'13px'}}>
         <p style={{fontWeight:600,marginBottom:'6px'}}>invite link not found</p>
         <p style={{color:'#888'}}>double-check the link or ask the pool admin to resend it.</p>
+      </div>
+    </div>
+  )
+
+  if (alreadyUsed) return (
+    <div style={{minHeight:'100vh',background:'#f7f7f5',display:'flex',alignItems:'center',justifyContent:'center'}}>
+      <div style={{background:'white',border:'1px solid #e0e0db',padding:'24px',maxWidth:360,textAlign:'center',fontSize:'13px'}}>
+        <p style={{fontWeight:600,marginBottom:'6px'}}>this invite link has already been used</p>
+        <p style={{color:'#888'}}>each link only works for one person. ask the pool admin for your own invite link.</p>
       </div>
     </div>
   )
