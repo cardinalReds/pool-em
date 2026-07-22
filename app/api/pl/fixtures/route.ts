@@ -38,6 +38,8 @@ export async function GET(request: NextRequest) {
         round,
         home_team: f.teams.home.name,
         away_team: f.teams.away.name,
+        home_logo: f.teams.home.logo || null,
+        away_logo: f.teams.away.logo || null,
         date: f.fixture.date,
         api_fixture_id: f.fixture.id,
         status: f.fixture.status.short,

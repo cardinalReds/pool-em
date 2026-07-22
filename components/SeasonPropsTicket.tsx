@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-interface Player { id: number; name: string; team_id: number; position: string; team_name: string }
+interface Team { name: string; logo: string | null }
+interface Player { id: number; name: string; team_name: string; position: string }
 interface Pick { id?: string; value: string }
 
 const PROP_META: Record<string, { label: string; type: 'team' | 'player' | 'goalkeeper' | 'teams3' }> = {
@@ -17,53 +18,96 @@ const PROP_META: Record<string, { label: string; type: 'team' | 'player' | 'goal
   relegated: { label: 'Relegated teams (pick 3)', type: 'teams3' },
 }
 
-// Order categories should render in — top-4 positions grouped together, then the rest
 const CATEGORY_ORDER = ['title_winner', 'top_4_2nd', 'top_4_3rd', 'top_4_4th', 'top_scorer', 'top_assist', 'golden_glove', 'relegated']
 
-function TeamSelect({ value, onChange, teams, disabled, exclude }: {
-  value: string; onChange: (v: string) => void; teams: string[]; disabled: boolean; exclude?: string[]
+// Custom dropdown (not native <select>) so team crests can render inside it
+function TeamDropdown({ value, onChange, teams, disabled, exclude }: {
+  value: string; onChange: (v: string) => void; teams: Team[]; disabled: boolean; exclude?: string[]
 }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    function onClick(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', onClick)
+    return () => document.removeEventListener('mousedown', onClick)
+  }, [])
+  const selected = teams.find(t => t.name === value)
+  const options = teams.filter(t => t.name === value || !exclude?.includes(t.name))
+
   return (
-    <select value={value} disabled={disabled} onChange={e => onChange(e.target.value)}
-      style={{ width: '100%', padding: '8px 10px', border: '1px solid #ddd', fontSize: '13px', fontFamily: 'inherit', background: disabled ? '#f9f9f9' : 'white', color: disabled ? '#aaa' : '#111' }}>
-      <option value=''>select a team...</option>
-      {teams.filter(t => t === value || !exclude?.includes(t)).map(t => <option key={t} value={t}>{t}</option>)}
-    </select>
+    <div ref={ref} style={{ position: 'relative' as const }}>
+      <button type="button" disabled={disabled} onMouseDown={() => !disabled && setOpen(o => !o)}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', border: '1px solid', borderColor: value ? '#C8102E' : '#ddd', background: disabled ? '#f9f9f9' : 'white', cursor: disabled ? 'default' : 'pointer', fontFamily: 'inherit', textAlign: 'left' as const }}>
+        {selected?.logo && <img src={selected.logo} alt="" style={{ width: 20, height: 20, objectFit: 'contain' as const, flexShrink: 0 }} />}
+        <span style={{ flex: 1, fontSize: 13, color: value ? '#111' : '#aaa', fontWeight: value ? 600 : 400 }}>{value || 'select a team...'}</span>
+        <span style={{ fontSize: 10, color: '#aaa' }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute' as const, top: '100%', left: 0, right: 0, zIndex: 50, background: 'white', border: '1px solid #ddd', borderTop: 'none', maxHeight: 240, overflowY: 'auto' as const, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+          {options.map(t => (
+            <button type="button" key={t.name} onMouseDown={e => { e.preventDefault(); onChange(t.name); setOpen(false) }}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: 'none', borderBottom: '1px solid #f5f5f5', background: value === t.name ? '#fff5f5' : 'white', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' as const }}>
+              {t.logo && <img src={t.logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain' as const, flexShrink: 0 }} />}
+              <span style={{ fontSize: 12, color: value === t.name ? '#C8102E' : '#111', fontWeight: value === t.name ? 700 : 400 }}>{t.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
-function PlayerSearch({ value, onChange, players, disabled }: {
+function PlayerDropdown({ value, onChange, players, disabled }: {
   value: string; onChange: (v: string) => void; players: Player[]; disabled: boolean
 }) {
-  const [query, setQuery] = useState(value)
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => { setQuery(value) }, [value])
   useEffect(() => {
     function onClick(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
     document.addEventListener('mousedown', onClick)
     return () => document.removeEventListener('mousedown', onClick)
   }, [])
 
-  const filtered = query.length > 0 ? players.filter(p => p.name.toLowerCase().includes(query.toLowerCase())).slice(0, 8) : []
-
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <input value={query} disabled={disabled} placeholder="search player..."
-        onChange={e => { setQuery(e.target.value); setOpen(true); if (!e.target.value) onChange('') }}
-        onFocus={() => setOpen(true)}
-        style={{ width: '100%', padding: '8px 10px', border: '1px solid #ddd', fontSize: '13px', fontFamily: 'inherit', boxSizing: 'border-box' as const, background: disabled ? '#f9f9f9' : 'white', color: disabled ? '#aaa' : '#111' }} />
-      {open && filtered.length > 0 && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid #ddd', borderTop: 'none', zIndex: 50, maxHeight: 180, overflowY: 'auto' as const }}>
-          {filtered.map(p => (
-            <div key={p.id} onMouseDown={() => { onChange(p.name); setQuery(p.name); setOpen(false) }}
-              style={{ padding: '7px 10px', fontSize: '12px', cursor: 'pointer', borderBottom: '1px solid #f5f5f5' }}>
-              {p.name} <span style={{ color: '#aaa' }}>· {p.team_name}</span>
-            </div>
+    <div ref={ref} style={{ position: 'relative' as const }}>
+      <button type="button" disabled={disabled} onMouseDown={() => !disabled && setOpen(o => !o)}
+        style={{ width: '100%', padding: '7px 10px', border: '1px solid', borderColor: value ? '#C8102E' : '#ddd', background: disabled ? '#f9f9f9' : 'white', cursor: disabled ? 'default' : 'pointer', fontFamily: 'inherit', textAlign: 'left' as const, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 13, color: value ? '#111' : '#aaa', fontWeight: value ? 600 : 400 }}>{value || 'select a player...'}</span>
+        <span style={{ fontSize: 10, color: '#aaa' }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{ position: 'absolute' as const, top: '100%', left: 0, right: 0, zIndex: 50, background: 'white', border: '1px solid #ddd', borderTop: 'none', maxHeight: 200, overflowY: 'auto' as const, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+          {players.length === 0 && <div style={{ padding: '8px 10px', fontSize: 11, color: '#aaa' }}>no players found for this team</div>}
+          {players.map(p => (
+            <button type="button" key={p.id} onMouseDown={e => { e.preventDefault(); onChange(p.name); setOpen(false) }}
+              style={{ width: '100%', padding: '8px 10px', border: 'none', borderBottom: '1px solid #f5f5f5', background: value === p.name ? '#fff5f5' : 'white', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' as const }}>
+              <span style={{ fontSize: 12, color: value === p.name ? '#C8102E' : '#111', fontWeight: value === p.name ? 700 : 400 }}>{p.name}</span>
+              {p.position !== 'Goalkeeper' && <span style={{ fontSize: 10, color: '#aaa', marginLeft: 6 }}>{p.position}</span>}
+            </button>
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// Team → player nested picker. Team selection is derived from the current pick (via players[]),
+// so nothing extra needs to be stored — the DB still only holds the final player name.
+function TeamPlayerPicker({ value, onChange, teams, playersByTeam, disabled, goalkeepersOnly }: {
+  value: string; onChange: (v: string) => void; teams: Team[]
+  playersByTeam: Record<string, Player[]>; disabled: boolean; goalkeepersOnly?: boolean
+}) {
+  const currentTeam = Object.keys(playersByTeam).find(t => playersByTeam[t].some(p => p.name === value)) || ''
+  const [team, setTeam] = useState(currentTeam)
+  useEffect(() => { if (currentTeam) setTeam(currentTeam) }, [currentTeam])
+
+  const teamPlayers = (playersByTeam[team] || []).filter(p => !goalkeepersOnly || p.position === 'Goalkeeper')
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 6 }}>
+      <TeamDropdown value={team} disabled={disabled} teams={teams}
+        onChange={t => { setTeam(t); onChange('') }} />
+      <PlayerDropdown value={value} disabled={disabled || !team} players={teamPlayers} onChange={onChange} />
     </div>
   )
 }
@@ -72,8 +116,8 @@ export default function SeasonPropsTicket({ poolId, userId, tournamentId }: { po
   const [loading, setLoading] = useState(true)
   const [enabledCategories, setEnabledCategories] = useState<string[]>([])
   const [picks, setPicks] = useState<Record<string, Pick>>({})
-  const [teams, setTeams] = useState<string[]>([])
-  const [players, setPlayers] = useState<Player[]>([])
+  const [teams, setTeams] = useState<Team[]>([])
+  const [playersByTeam, setPlayersByTeam] = useState<Record<string, Player[]>>({})
   const [relegatedSlots, setRelegatedSlots] = useState<[string, string, string]>(['', '', ''])
   const [lockTime, setLockTime] = useState<Date | null>(null)
   const [collapsed, setCollapsed] = useState(false)
@@ -86,7 +130,7 @@ export default function SeasonPropsTicket({ poolId, userId, tournamentId }: { po
       const [rulesRes, picksRes, teamsRes, playersRes, fixturesRes] = await Promise.all([
         supabase.from('season_prop_rules').select('category').eq('pool_id', poolId),
         supabase.from('season_props').select('*').eq('pool_id', poolId).eq('user_id', userId),
-        supabase.from('pl_teams').select('id, name').eq('season', 2026).order('name'),
+        supabase.from('pl_teams').select('id, name, logo').eq('season', 2026).order('name'),
         supabase.from('pl_players').select('id, name, team_id, position').eq('season', 2026).order('name'),
         supabase.from('fixtures').select('date').eq('tournament_id', tournamentId).eq('round', 'Matchday 1'),
       ])
@@ -104,8 +148,15 @@ export default function SeasonPropsTicket({ poolId, userId, tournamentId }: { po
 
       const teamMap: Record<number, string> = {}
       ;(teamsRes.data || []).forEach((t: any) => { teamMap[t.id] = t.name })
-      setTeams((teamsRes.data || []).map((t: any) => t.name))
-      setPlayers((playersRes.data || []).map((p: any) => ({ ...p, team_name: teamMap[p.team_id] || '' })))
+      setTeams((teamsRes.data || []).map((t: any) => ({ name: t.name, logo: t.logo })))
+
+      const byTeam: Record<string, Player[]> = {}
+      ;(playersRes.data || []).forEach((p: any) => {
+        const teamName = teamMap[p.team_id] || ''
+        if (!byTeam[teamName]) byTeam[teamName] = []
+        byTeam[teamName].push({ id: p.id, name: p.name, team_name: teamName, position: p.position })
+      })
+      setPlayersByTeam(byTeam)
 
       const dates = (fixturesRes.data || []).map((f: any) => new Date(f.date).getTime())
       if (dates.length > 0) setLockTime(new Date(Math.min(...dates)))
@@ -133,7 +184,7 @@ export default function SeasonPropsTicket({ poolId, userId, tournamentId }: { po
       }
       setSavedFlash(prev => ({ ...prev, [category]: true }))
       setTimeout(() => setSavedFlash(prev => ({ ...prev, [category]: false })), 2000)
-    }, 600)
+    }, 400)
   }
 
   function updateRelegatedSlot(index: 0 | 1 | 2, team: string) {
@@ -158,29 +209,28 @@ export default function SeasonPropsTicket({ poolId, userId, tournamentId }: { po
         <span style={{ fontSize: '12px', color: '#888' }}>{collapsed ? '▼' : '▲'}</span>
       </div>
       {!collapsed && (
-        <div style={{ padding: '12px' }}>
+        <div style={{ padding: '12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
           {enabledCategories.map(cat => {
             const meta = PROP_META[cat]
             if (!meta) return null
             const pick = picks[cat]?.value || ''
             return (
-              <div key={cat} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #f0f0f0' }}>
+              <div key={cat}>
                 <div style={{ fontSize: '11px', fontWeight: 600, color: '#555', marginBottom: 5, display: 'flex', justifyContent: 'space-between' }}>
                   <span>{meta.label}</span>
                   {savedFlash[cat] && <span style={{ color: '#2d7a2d', fontSize: '10px' }}>✓ saved</span>}
                 </div>
                 {meta.type === 'team' && (
-                  <TeamSelect value={pick} disabled={locked} teams={teams} onChange={v => savePick(cat, v)} />
+                  <TeamDropdown value={pick} disabled={locked} teams={teams} onChange={v => savePick(cat, v)} />
                 )}
                 {(meta.type === 'player' || meta.type === 'goalkeeper') && (
-                  <PlayerSearch value={pick} disabled={locked}
-                    players={meta.type === 'goalkeeper' ? players.filter(p => p.position === 'Goalkeeper') : players}
-                    onChange={v => savePick(cat, v)} />
+                  <TeamPlayerPicker value={pick} disabled={locked} teams={teams} playersByTeam={playersByTeam}
+                    goalkeepersOnly={meta.type === 'goalkeeper'} onChange={v => savePick(cat, v)} />
                 )}
                 {meta.type === 'teams3' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 6 }}>
                     {[0, 1, 2].map(i => (
-                      <TeamSelect key={i} value={relegatedSlots[i]} disabled={locked} teams={teams}
+                      <TeamDropdown key={i} value={relegatedSlots[i]} disabled={locked} teams={teams}
                         exclude={relegatedSlots.filter((_, idx) => idx !== i)}
                         onChange={v => updateRelegatedSlot(i as 0 | 1 | 2, v)} />
                     ))}
