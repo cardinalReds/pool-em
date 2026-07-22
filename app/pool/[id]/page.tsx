@@ -158,6 +158,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   }
   const [mobileSortMode, setMobileSortMode] = useState<'date' | 'group' | 'round'>('group')
   const [seasonPropsLocked, setSeasonPropsLocked] = useState(false)
+  const [bracketLockTime, setBracketLockTime] = useState<Date | null>(null)
   const [mobileViewMode, setMobileViewMode] = useState<'pages' | 'list'>('pages')
   const [chatWidth, setChatWidth] = useState(260)
   const [isResizingChat, setIsResizingChat] = useState(false)
@@ -215,7 +216,14 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         const { data: tournament } = await supabase.from('tournaments').select('end_date').eq('id', pool.tournament_id).maybeSingle()
         if (tournament?.end_date) pool.tournament_end_date = tournament.end_date
       }
-      
+
+      // Bracket-style pools lock at the tournament's first kickoff, not a fixed date —
+      // derive it from fixtures the same way SeasonPropsTicket derives matchday-1 lock time.
+      if (pool.deadline_type === 'before_tournament' && pool.sport !== 'mma' && pool.tournament_id) {
+        const { data: firstFixture } = await supabase.from('fixtures').select('date').eq('tournament_id', pool.tournament_id).order('date', { ascending: true }).limit(1).maybeSingle()
+        if (firstFixture?.date) setBracketLockTime(new Date(firstFixture.date))
+      }
+
       setPool(pool)
       setInviteUrl(`${window.location.origin}/pool/join/${pool.invite_code}`)
 
@@ -852,11 +860,11 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 )}
                 {user && pool.deadline_type === 'before_tournament' && pool.sport !== 'mma' ? (
                   <>
-                    <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} isAdmin={isAdmin} tournamentId={pool.tournament_id} />
-                    {new Date() >= new Date('2026-06-11T19:00:00Z') && (
+                    <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={!!bracketLockTime && new Date() >= bracketLockTime} isAdmin={isAdmin} tournamentId={pool.tournament_id} />
+                    {!!bracketLockTime && new Date() >= bracketLockTime && (
                       <div style={{ marginTop: 32 }}>
                         <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 16, paddingTop: 16, borderTop: '1px solid #eee' }}>everyone's picks</div>
-                        <BracketViewer poolId={pool.id} />
+                        <BracketViewer poolId={pool.id} tournamentId={pool.tournament_id} />
                       </div>
                     )}
                   </>
@@ -1132,11 +1140,11 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             <div style={{width: '100%', maxWidth: 560}}>
               {user && pool.deadline_type === 'before_tournament' && pool.sport !== 'mma' ? (
                 <>
-                  <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={new Date() >= new Date('2026-06-11T19:00:00Z')} isAdmin={isAdmin} tournamentId={pool.tournament_id} />
-                  {new Date() >= new Date('2026-06-11T19:00:00Z') && (
+                  <BracketPicker poolId={pool.id} userId={user.id} scoringRules={bracketScoringRules || DEFAULT_BRACKET_SCORING} locked={!!bracketLockTime && new Date() >= bracketLockTime} isAdmin={isAdmin} tournamentId={pool.tournament_id} />
+                  {!!bracketLockTime && new Date() >= bracketLockTime && (
                     <div style={{ marginTop: 32 }}>
                       <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 16, paddingTop: 16, borderTop: '1px solid #eee' }}>everyone's picks</div>
-                      <BracketViewer poolId={pool.id} />
+                      <BracketViewer poolId={pool.id} tournamentId={pool.tournament_id} />
                     </div>
                   )}
                 </>

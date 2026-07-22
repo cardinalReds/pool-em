@@ -18,7 +18,7 @@ interface MemberPick {
 
 const GROUPS = Object.keys(WC_2026_GROUPS).sort()
 
-export default function BracketViewer({ poolId }: { poolId: string }) {
+export default function BracketViewer({ poolId, tournamentId = 'wc_2026' }: { poolId: string; tournamentId?: string }) {
   const [picks, setPicks] = useState<MemberPick[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'member' | 'group'>('member')
@@ -40,7 +40,7 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
           .eq('pool_id', poolId),
         supabase.from('actual_standings')
           .select('group_name, position, team, advances')
-          .eq('tournament_id', 'wc_2026'),
+          .eq('tournament_id', tournamentId),
       ])
 
       // Build actual standings map for group stage checkmarks
@@ -79,7 +79,7 @@ export default function BracketViewer({ poolId }: { poolId: string }) {
       setLoading(false)
     }
     load()
-  }, [poolId])
+  }, [poolId, tournamentId])
 
   if (loading) return <div style={{ color: '#aaa', fontSize: '12px' }}>loading picks...</div>
   if (picks.length === 0) return <div style={{ color: '#aaa', fontSize: '12px' }}>no bracket picks submitted yet</div>

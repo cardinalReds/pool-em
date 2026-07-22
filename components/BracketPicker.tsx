@@ -238,7 +238,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
     const { error } = await supabase.from('bracket_picks').upsert({
       pool_id: poolId,
       user_id: userId,
-      tournament_id: 'wc_2026',
+      tournament_id: tournamentId,
       group_picks: groupPicks,
       best_third_groups: bestThirdGroups,
       bracket_picks: bracketPicks,
@@ -406,7 +406,7 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap' as const, gap: 8 }}>
           <div>
             <h2 style={{ fontWeight: 700, fontSize: '15px', marginBottom: '2px' }}>your bracket</h2>
-            <p style={{ fontSize: '11px', color: '#888' }}>picks are saved · locked at kickoff Jun 12</p>
+            <p style={{ fontSize: '11px', color: '#888' }}>picks are saved · locked at the tournament's first kickoff</p>
           </div>
           {!locked && (
             <button onClick={() => setShowSummary(false)}
