@@ -164,6 +164,34 @@ grant select, insert, update on public.pool_invites to authenticated;
 update public.pools set allow_member_invites = false
   where allow_member_invites = true and (coalesce(buy_in_amount, 0) > 0 or coalesce(weekly_buy_in, 0) > 0);
 
+-- NFL 2026/27 season. Reuses the fixtures table as-is — no new columns needed:
+-- ht_home_score/ht_away_score already exist for halftime scores (derived from the API's
+-- quarter_1+quarter_2), and line_total_goals/line_asian_handicap_home already exist for
+-- the total-points and spread lines. Scoped to Regular Season only for now — postseason
+-- is single-elimination (different shape, like the World Cup bracket) and not built yet.
+insert into public.tournaments (id, name, sport, season, status, api_league_id, end_date)
+values ('nfl_2026', 'NFL 2026/27', 'nfl', 2026, 'active', 1, '2027-02-14T00:00:00Z')
+on conflict (id) do nothing;
+
+-- 1st-half spread/total lines are distinct from the full-game ones already on this
+-- table (line_asian_handicap_home/away, line_total_goals) — needed for nfl_ht_spread
+-- and nfl_ht_total_points_ou. Generic enough that soccer's 1st-half markets could use
+-- them too later, though nothing does yet.
+alter table public.fixtures add column if not exists line_ht_asian_handicap_home numeric;
+alter table public.fixtures add column if not exists line_ht_asian_handicap_away numeric;
+alter table public.fixtures add column if not exists line_ht_total_points numeric;
+
+insert into public.ruleset_categories (id, sport, name, description, default_points, prediction_type, requires_line, input_type, sort_order) values
+('nfl_result', 'nfl', 'Game Winner', 'Pick who wins the game, or a tie.', 1, 'per_game', false, 'wld', 10),
+('nfl_spread', 'nfl', 'Against the Spread', 'Pick who covers the point spread.', 2, 'per_game', true, 'wld', 20),
+('nfl_total_points_ou', 'nfl', 'Total Points Over/Under', 'Will the combined score go over or under the line?', 2, 'per_game', true, 'ou', 30),
+('nfl_exact_score', 'nfl', 'Exact Score', 'Predict the exact final score. Points per correct team score, bonus if both are right.', 5, 'per_game', false, 'exact', 40),
+('nfl_ht_result', 'nfl', 'Halftime Leader', 'Pick who''s ahead at halftime, or tied.', 2, 'per_game', false, 'wld', 50),
+('nfl_ht_spread', 'nfl', 'Halftime Spread', 'Pick who covers the spread at halftime.', 2, 'per_game', true, 'wld', 60),
+('nfl_ht_total_points_ou', 'nfl', 'Halftime Total Points Over/Under', 'Will the combined halftime score go over or under the line?', 2, 'per_game', true, 'ou', 70),
+('nfl_ht_exact_score', 'nfl', 'Halftime Exact Score', 'Predict the exact halftime score.', 4, 'per_game', false, 'exact', 80)
+on conflict (id) do nothing;
+
 alter table public.pools enable row level security;
 create policy "Members can view their pools" on public.pools for select
   using (

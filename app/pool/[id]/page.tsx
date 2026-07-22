@@ -6,6 +6,7 @@ import { RULE_PACKAGES } from '@/types'
 import FixturesList from '@/components/FixturesList'
 import F1SessionsList from '@/components/F1SessionsList'
 import MMAFightCard from '@/components/MMAFightCard'
+import NFLGamesList from '@/components/NFLGamesList'
 import ReminderButton from '@/components/ReminderButton'
 import InvitePanel from '@/components/InvitePanel'
 import BuyInInvitePanel from '@/components/BuyInInvitePanel'
@@ -879,6 +880,8 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                     ? <F1SessionsList poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
                     : pool.sport === 'mma'
                     ? <MMAFightCard poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
+                    : pool.sport === 'nfl'
+                    ? <NFLGamesList poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
                     : <>
                         {pool.season_props_enabled && !seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
                         <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} hideControls={true} externalSortMode={mobileSortMode} externalViewMode={mobileViewMode} isAdmin={isAdmin} />
@@ -1163,6 +1166,8 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                   ? <F1SessionsList poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
                   : pool.sport === 'mma'
                   ? <MMAFightCard poolId={pool.id} userId={user.id} deadlineType={pool.deadline_type} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
+                  : pool.sport === 'nfl'
+                  ? <NFLGamesList poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} isAdmin={isAdmin} />
                   : <>
                       {pool.season_props_enabled && !seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
                       <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} isAdmin={isAdmin} />

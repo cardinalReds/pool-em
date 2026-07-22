@@ -104,6 +104,7 @@ export default function CreatePoolPage() {
         'wc_2026': 'FIFA World Cup 2026',
         'f1_2026': 'Formula 1 2026',
         'ufc_329': 'McGregor vs Holloway · Jul 11',
+        'nfl_2026': 'NFL 2026/27 season',
       }
 
       // Check which tournaments have started (any non-NS fixtures)
@@ -359,12 +360,12 @@ export default function CreatePoolPage() {
             <label style={{display: 'block', fontWeight: 600, marginBottom: '16px'}}>pick a competition</label>
 
             {/* Group by sport, split into in progress / upcoming */}
-            {(['soccer', 'mma', 'f1'] as const).map(sportKey => {
+            {(['soccer', 'mma', 'f1', 'nfl'] as const).map(sportKey => {
               const sportTournaments = TOURNAMENTS.filter(t => t.sport === sportKey)
               if (!sportTournaments.length) return null
               const inProgress = sportTournaments.filter(t => t.started)
               const upcoming = sportTournaments.filter(t => !t.started)
-              const sportLabel: Record<string, string> = { soccer: '⚽ Soccer', mma: '🥊 MMA', f1: '🏎 Formula 1' }
+              const sportLabel: Record<string, string> = { soccer: '⚽ Soccer', mma: '🥊 MMA', f1: '🏎 Formula 1', nfl: '🏈 NFL' }
               return (
                 <div key={sportKey} style={{marginBottom: 20}}>
                   <div style={{fontSize: '10px', fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8}}>{sportLabel[sportKey]}</div>
@@ -429,6 +430,8 @@ export default function CreatePoolPage() {
                   ] : isPL ? [
                     {id: 'before_weekend', label: 'before each match week', desc: 'all picks for the matchday lock before the first game kicks off'},
                     {id: 'before_each_game', label: 'before each game', desc: 'picks lock individually at each kickoff'},
+                  ] : sport === 'nfl' ? [
+                    {id: 'before_each_game', label: 'before each game', desc: 'picks lock at kickoff — predict game by game'},
                   ] : [
                     {id: 'before_each_game', label: 'before each game', desc: 'picks lock at kickoff — predict game by game'},
                     {id: 'before_tournament', label: 'before the tournament', desc: 'predict the whole tournament upfront — group stage + full bracket'},

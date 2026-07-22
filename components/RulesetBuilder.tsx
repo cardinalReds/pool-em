@@ -94,6 +94,19 @@ const EXAMPLE_FIXTURE_F1 = {
   handicap_line: null,
 }
 
+const EXAMPLE_FIXTURE_NFL = {
+  home_team: 'Kansas City Chiefs',
+  away_team: 'Buffalo Bills',
+  home_flag: '',
+  away_flag: '',
+  date: 'Week 1 · Sep 7',
+  round: 'Week 1',
+  goals_line: null,
+  corners_line: null,
+  card_pts_line: null,
+  handicap_line: null,
+}
+
 const F1_DRIVERS_2026 = [
   // McLaren
   'Lando Norris', 'Oscar Piastri',
@@ -214,6 +227,8 @@ const CATEGORY_GROUPS = [
   { label: 'Qualifying', ids: ['f1_pole_position', 'f1_top3_quali', 'f1_q1_eliminated', 'f1_q3_qualifier'] },
   { label: 'Sprint', ids: ['f1_sprint_winner', 'f1_sprint_podium'] },
   { label: 'Head to Head', ids: ['f1_top6_teammate'] },
+  { label: 'Full Game Props', ids: ['nfl_result', 'nfl_spread', 'nfl_total_points_ou', 'nfl_exact_score'] },
+  { label: '1st Half Props', ids: ['nfl_ht_result', 'nfl_ht_spread', 'nfl_ht_total_points_ou', 'nfl_ht_exact_score'] },
 ]
 
 const ROUND_SPECIALS = ['soccer_clean_sheet_round', 'soccer_brace_round', 'soccer_red_card_round', 'soccer_penalty_round']
@@ -325,7 +340,7 @@ export default function RulesetBuilder({ sport, onComplete, isPL, plSelectedProp
   isPL?: boolean
   plSelectedProps?: string[]
 }) {
-  const fixture = sport === 'mma' ? EXAMPLE_FIXTURE_MMA : sport === 'f1' ? EXAMPLE_FIXTURE_F1 : isPL ? EXAMPLE_FIXTURE_PL : EXAMPLE_FIXTURE
+  const fixture = sport === 'mma' ? EXAMPLE_FIXTURE_MMA : sport === 'f1' ? EXAMPLE_FIXTURE_F1 : sport === 'nfl' ? EXAMPLE_FIXTURE_NFL : isPL ? EXAMPLE_FIXTURE_PL : EXAMPLE_FIXTURE
   const [categories, setCategories] = useState<Category[]>([])
   const [rules, setRules] = useState<Record<string, SelectedRule>>({})
   const [loading, setLoading] = useState(true)
