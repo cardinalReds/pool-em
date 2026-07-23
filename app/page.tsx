@@ -12,10 +12,18 @@ export default async function Home() {
   // before a ball's kicked, while F1 pools are being created mid-season. MMA has no
   // season at all (each tournament row is one card), so instead of a vague "ongoing
   // events" label, name the actual next card — or say plainly that none is scheduled.
-  const [{ data: plStarted }, { data: nflStarted }, { data: f1Started }, { data: nextMma }] = await Promise.all([
+  const [
+    { data: plStarted }, { data: plEarliest },
+    { data: nflStarted }, { data: nflEarliest },
+    { data: f1Started }, { data: f1Earliest },
+    { data: nextMma },
+  ] = await Promise.all([
     supabase.from('fixtures').select('id').eq('tournament_id', 'pl_2026').neq('status', 'NS').limit(1),
+    supabase.from('fixtures').select('date').eq('tournament_id', 'pl_2026').order('date', { ascending: true }).limit(1),
     supabase.from('fixtures').select('id').eq('tournament_id', 'nfl_2026').neq('status', 'NS').limit(1),
+    supabase.from('fixtures').select('date').eq('tournament_id', 'nfl_2026').order('date', { ascending: true }).limit(1),
     supabase.from('f1_sessions').select('id').eq('tournament_id', 'f1_2026').eq('status', 'Completed').limit(1),
+    supabase.from('f1_sessions').select('date').eq('tournament_id', 'f1_2026').order('date', { ascending: true }).limit(1),
     supabase.from('tournaments').select('name, event_date').eq('sport', 'mma').eq('status', 'active').gte('event_date', new Date().toISOString()).order('event_date', { ascending: true }).limit(1),
   ])
 
@@ -26,16 +34,31 @@ export default async function Home() {
     'no event scheduled': { color: '#aaa', bg: '#f5f5f5' },
   }
 
+  function startTag(started: boolean, earliestDate: string | undefined) {
+    if (started) return { kind: 'live', label: 'live' }
+    const dateLabel = earliestDate
+      ? new Date(earliestDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+      : null
+    return {
+      kind: 'pools open',
+      label: dateLabel ? `start your pools now, competition starts ${dateLabel}` : 'start your pools now',
+    }
+  }
+
+  const plTag = startTag(!!plStarted?.length, plEarliest?.[0]?.date)
+  const nflTag = startTag(!!nflStarted?.length, nflEarliest?.[0]?.date)
+  const f1Tag = startTag(!!f1Started?.length, f1Earliest?.[0]?.date)
+
   const mmaEvent = nextMma?.[0]
   const mmaTag = mmaEvent
     ? { kind: 'next event', label: `next: ${mmaEvent.name} · ${new Date(mmaEvent.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}` }
     : { kind: 'no event scheduled', label: 'no event scheduled' }
 
   const competitions = [
-    { emoji: '⚽', name: 'Premier League 2026/27', tag: plStarted?.length ? 'live' : 'pools open' },
-    { emoji: '🏎️', name: 'Formula 1 2026', tag: f1Started?.length ? 'live' : 'pools open' },
+    { emoji: '⚽', name: 'Premier League 2026/27', tag: plTag.kind, label: plTag.label },
+    { emoji: '🏎️', name: 'Formula 1 2026', tag: f1Tag.kind, label: f1Tag.label },
     { emoji: '🥊', name: 'MMA', tag: mmaTag.kind, label: mmaTag.label },
-    { emoji: '🏈', name: 'NFL 2026/27', tag: nflStarted?.length ? 'live' : 'pools open' },
+    { emoji: '🏈', name: 'NFL 2026/27', tag: nflTag.kind, label: nflTag.label },
   ]
 
   return (
@@ -83,10 +106,10 @@ export default async function Home() {
           <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', marginBottom: '1rem' }}>available now</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {competitions.map(s => (
-              <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' as const }}>
                 <span style={{ fontSize: '1.1rem' }}>{s.emoji}</span>
                 <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>{s.name}</span>
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: TAG_STYLE[s.tag].color, background: TAG_STYLE[s.tag].bg, padding: '2px 8px', borderRadius: 4 }}>{'label' in s ? s.label : s.tag}</span>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: TAG_STYLE[s.tag].color, background: TAG_STYLE[s.tag].bg, padding: '2px 8px', borderRadius: 4 }}>{s.label}</span>
               </div>
             ))}
           </div>
