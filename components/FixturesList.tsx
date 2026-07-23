@@ -1952,23 +1952,45 @@ export default function FixturesList({
         </div>
       )}
 
-      {isBest5Active && plBest5AdminOverride && isAdmin && pages[safePage] && (() => {
+      {isBest5Active && plBest5AdminOverride && pages[safePage] && (() => {
         const round = pages[safePage].label
-        const lockTime = matchdayLockTime(round)
-        const locked = lockTime ? Date.now() >= lockTime.getTime() : false
+        const selectedIds = best5Selections[round] || []
         const roundFixtures = fixtures.filter(f => f.round === round)
+        const selectedFixtures = roundFixtures.filter(f => selectedIds.includes(f.id))
+        // The 5 selected games need to be announced with enough notice for people to
+        // plan around them — swaps close 48h before the earliest of the FIVE selected
+        // kickoffs, not the round's overall first game (a swap can move the earliest
+        // selected kickoff later or earlier than the round's unfiltered first game).
+        const earliestSelectedKickoff = selectedFixtures.length > 0
+          ? Math.min(...selectedFixtures.map(f => new Date(f.date).getTime()))
+          : null
+        const overrideLockTime = earliestSelectedKickoff !== null ? earliestSelectedKickoff - 48 * 60 * 60 * 1000 : null
+        const locked = overrideLockTime !== null && Date.now() >= overrideLockTime
         return (
-          <Best5Selector
-            poolId={poolId}
-            round={round}
-            selectedIds={best5Selections[round] || []}
-            allFixtures={roundFixtures}
-            locked={locked}
-            onSwap={(oldId, newId) => setBest5Selections(prev => ({
-              ...prev,
-              [round]: (prev[round] || []).map(id => id === oldId ? newId : id),
-            }))}
-          />
+          <>
+            {/* Everyone sees this, not just the admin — the 5 games can still change
+                via override until the lock, so predictions made early on a game that
+                later gets swapped out won't count. */}
+            {!locked && (
+              <div style={{ background: '#fffaf0', border: '1px solid #f0dca0', color: '#8a6d1f', fontSize: '11px', padding: '8px 12px', marginBottom: 8 }}>
+                ⚠️ this pool's admin can still swap out any of these 5 games until {overrideLockTime !== null ? new Date(overrideLockTime).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'kickoff'} — picks on a game that gets swapped out won't count.
+              </div>
+            )}
+            {isAdmin && (
+              <Best5Selector
+                poolId={poolId}
+                round={round}
+                selectedIds={selectedIds}
+                allFixtures={roundFixtures}
+                locked={locked}
+                lockTime={overrideLockTime !== null ? new Date(overrideLockTime) : null}
+                onSwap={(oldId, newId) => setBest5Selections(prev => ({
+                  ...prev,
+                  [round]: (prev[round] || []).map(id => id === oldId ? newId : id),
+                }))}
+              />
+            )}
+          </>
         )
       })()}
 
