@@ -11,6 +11,13 @@ interface SelectedRule {
   enabled: boolean
 }
 
+// Kill switch for buy-ins on NEW pools — set NEXT_PUBLIC_BUYINS_ENABLED=false and redeploy
+// to stop anyone from configuring money on a pool going forward. Deliberately scoped to
+// pool creation only: existing pools that already collected buy-ins keep their payment
+// tracking UI working, since hiding that would strand members mid-payout, not just stop
+// new ones.
+const BUYINS_ENABLED = process.env.NEXT_PUBLIC_BUYINS_ENABLED !== 'false'
+
 export default function CreatePoolPage() {
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
@@ -267,10 +274,10 @@ export default function CreatePoolPage() {
   const isBracket = deadlineType === 'before_tournament'
   const totalSteps = isPL ? 5 : 4
   const stepLabels = isPL
-    ? ['competition', 'name', 'pl config', 'predictions', 'prizes']
+    ? ['competition', 'name', 'pl config', 'predictions', BUYINS_ENABLED ? 'prizes' : 'invites']
     : isBracket
-    ? ['competition', 'name', 'scoring', 'buy-in']
-    : ['competition', 'name', 'predictions', 'buy-in']
+    ? ['competition', 'name', 'scoring', BUYINS_ENABLED ? 'buy-in' : 'invites']
+    : ['competition', 'name', 'predictions', BUYINS_ENABLED ? 'buy-in' : 'invites']
 
   function NumberInput({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
     return (
@@ -680,11 +687,17 @@ export default function CreatePoolPage() {
         {/* ── Step 5: PL Buy-in rules ───────────────────────────────────── */}
         {step === 5 && isPL && (
           <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
-            <div style={{fontWeight: 600, fontSize: '14px', marginBottom: 4}}>buy-in rules</div>
-            <div style={{fontSize: '11px', color: '#aaa', marginBottom: 20}}>set up how winnings work — you can have both</div>
+            {BUYINS_ENABLED ? (
+              <>
+                <div style={{fontWeight: 600, fontSize: '14px', marginBottom: 4}}>buy-in rules</div>
+                <div style={{fontSize: '11px', color: '#aaa', marginBottom: 20}}>set up how winnings work — you can have both</div>
+              </>
+            ) : (
+              <div style={{fontWeight: 600, fontSize: '14px', marginBottom: 20}}>invites</div>
+            )}
 
             {/* Season pot */}
-            <div style={{marginBottom: 16, padding: '14px', border: '1px solid', borderColor: plPrizeSeason ? '#C8102E' : '#e0e0db', background: plPrizeSeason ? '#fff5f5' : 'white'}}>
+            {BUYINS_ENABLED && <div style={{marginBottom: 16, padding: '14px', border: '1px solid', borderColor: plPrizeSeason ? '#C8102E' : '#e0e0db', background: plPrizeSeason ? '#fff5f5' : 'white'}}>
               <label style={{display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: plPrizeSeason ? 12 : 0}}>
                 <input type="checkbox" checked={plPrizeSeason} onChange={e => setPlPrizeSeason(e.target.checked)}
                   style={{width: 18, height: 18, cursor: 'pointer', marginTop: 2}} />
@@ -737,10 +750,10 @@ export default function CreatePoolPage() {
                   )}
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Weekly pot */}
-            <div style={{marginBottom: 20, padding: '14px', border: '1px solid', borderColor: plPrizeWeekly ? '#C8102E' : '#e0e0db', background: plPrizeWeekly ? '#fff5f5' : 'white'}}>
+            {BUYINS_ENABLED && <div style={{marginBottom: 20, padding: '14px', border: '1px solid', borderColor: plPrizeWeekly ? '#C8102E' : '#e0e0db', background: plPrizeWeekly ? '#fff5f5' : 'white'}}>
               <label style={{display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: plPrizeWeekly ? 12 : 0}}>
                 <input type="checkbox" checked={plPrizeWeekly} onChange={e => setPlPrizeWeekly(e.target.checked)}
                   style={{width: 18, height: 18, cursor: 'pointer', marginTop: 2}} />
@@ -783,16 +796,16 @@ export default function CreatePoolPage() {
                   )}
                 </div>
               )}
-            </div>
+            </div>}
 
             {/* Admin fee */}
-            {(plPrizeSeason || plPrizeWeekly) && <AdminFeeSection />}
+            {BUYINS_ENABLED && (plPrizeSeason || plPrizeWeekly) && <AdminFeeSection />}
 
             {/* Invite control */}
             <InviteControlSection hasBuyIn={!!((plPrizeSeason && plSeasonBuyIn) || (plPrizeWeekly && plWeeklyBuyIn))} />
 
             {/* Payment handles */}
-            {(plPrizeSeason || plPrizeWeekly) && (
+            {BUYINS_ENABLED && (plPrizeSeason || plPrizeWeekly) && (
               <div style={{marginBottom: 20}}>
                 <div style={{fontSize: '12px', fontWeight: 600, marginBottom: 8}}>payment handles</div>
                 <div style={{display: 'flex', flexDirection: 'column' as const, gap: 8}}>
@@ -833,23 +846,29 @@ export default function CreatePoolPage() {
         {/* ── Step 4/4: Buy-in (non-PL pools) ─────────────────────────────── */}
         {step === 4 && !isPL && (
           <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
-            <label style={{display: 'block', fontWeight: 600, marginBottom: '4px'}}>
-              buy-in amount <span style={{fontWeight: 400, color: '#aaa'}}>(optional)</span>
-            </label>
-            <p style={{fontSize: '11px', color: '#888', marginBottom: '12px'}}>
-              players will be prompted to pay via venmo or zelle when they join. you handle the money — pool'em never touches it.
-            </p>
-            <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px'}}>
-              <span style={{fontSize: '16px', color: '#555'}}>$</span>
-              <input type="number" min="0" step="1" placeholder="0" value={buyIn}
-                onChange={e => setBuyIn(e.target.value)}
-                style={{border: '1px solid #ddd', padding: '8px 10px', fontSize: '16px', width: 100, fontFamily: 'inherit', minHeight: 44}} />
-              <span style={{fontSize: '13px', color: '#888'}}>per person</span>
-            </div>
+            {BUYINS_ENABLED ? (
+              <>
+                <label style={{display: 'block', fontWeight: 600, marginBottom: '4px'}}>
+                  buy-in amount <span style={{fontWeight: 400, color: '#aaa'}}>(optional)</span>
+                </label>
+                <p style={{fontSize: '11px', color: '#888', marginBottom: '12px'}}>
+                  players will be prompted to pay via venmo or zelle when they join. you handle the money — pool'em never touches it.
+                </p>
+                <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px'}}>
+                  <span style={{fontSize: '16px', color: '#555'}}>$</span>
+                  <input type="number" min="0" step="1" placeholder="0" value={buyIn}
+                    onChange={e => setBuyIn(e.target.value)}
+                    style={{border: '1px solid #ddd', padding: '8px 10px', fontSize: '16px', width: 100, fontFamily: 'inherit', minHeight: 44}} />
+                  <span style={{fontSize: '13px', color: '#888'}}>per person</span>
+                </div>
+              </>
+            ) : (
+              <label style={{display: 'block', fontWeight: 600, marginBottom: '12px'}}>invites</label>
+            )}
 
             <InviteControlSection hasBuyIn={!!(buyIn && parseFloat(buyIn) > 0)} />
 
-            {buyIn && parseFloat(buyIn) > 0 && (
+            {BUYINS_ENABLED && buyIn && parseFloat(buyIn) > 0 && (
               <>
                 <div style={{marginBottom: '16px'}}>
                   <label style={{display: 'block', fontWeight: 600, marginBottom: '6px'}}>your venmo handle <span style={{fontWeight: 400, color: '#aaa'}}>(optional)</span></label>
