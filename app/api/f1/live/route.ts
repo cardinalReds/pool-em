@@ -16,6 +16,10 @@ async function fetchSessionStatus(competitionId: number, season: number): Promis
   })
   if (!res.ok) return []
   const data = await res.json()
+  const errors = data.errors
+  if (errors && (Array.isArray(errors) ? errors.length : Object.keys(errors).length)) {
+    console.error('F1 live route: api-sports error', JSON.stringify(errors))
+  }
   return data.response || []
 }
 
@@ -48,7 +52,9 @@ export async function GET(request: Request) {
 
   try {
     const now = new Date()
-    const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000)
+    // Wide enough to still catch sessions missed during an extended API outage
+    // (e.g. a lapsed/underprovisioned api-sports plan), not just the normal live window.
+    const staleCutoff = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
     const thirtyMinsFromNow = new Date(now.getTime() + 30 * 60 * 1000)
 
     const { data: candidateSessions } = await supabase
@@ -57,7 +63,7 @@ export async function GET(request: Request) {
       .eq('tournament_id', TOURNAMENT_ID)
       .eq('scored', false)
       .neq('status', 'Cancelled')
-      .gte('date', sixHoursAgo.toISOString())
+      .gte('date', staleCutoff.toISOString())
       .lte('date', thirtyMinsFromNow.toISOString())
 
     if (!candidateSessions?.length) {
