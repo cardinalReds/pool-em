@@ -10,6 +10,7 @@ import NFLGamesList from '@/components/NFLGamesList'
 import ReminderButton from '@/components/ReminderButton'
 import InvitePanel from '@/components/InvitePanel'
 import BuyInInvitePanel from '@/components/BuyInInvitePanel'
+import InviteFromContacts from '@/components/InviteFromContacts'
 import { DEFAULT_BRACKET_SCORING } from '@/lib/bracketEngine'
 import BracketPicker from '@/components/BracketPicker'
 import BracketViewer from '@/components/BracketViewer'
@@ -63,7 +64,8 @@ function ArchivePool({ poolId, userId, archived }: { poolId: string; userId: str
 // Every table with a pool_id foreign key — must be cleared before the pools row itself can be deleted
 const POOL_CHILD_TABLES = [
   'predictions', 'predictions_v2', 'ghost_entries', 'pool_rules', 'season_prop_rules',
-  'bracket_scoring_rules', 'bracket_picks', 'pool_changes', 'messages', 'reminders', 'pool_members',
+  'bracket_scoring_rules', 'bracket_picks', 'pool_changes', 'messages', 'reminders',
+  'pool_invitation_inviters', 'pool_invitations', 'pool_members',
 ]
 
 function DeletePool({ poolId }: { poolId: string }) {
@@ -766,6 +768,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           ) : (
             <InvitePanel poolName={pool.name} inviteUrl={inviteUrl} buyInAmount={pool.buy_in_amount} inviterName={user?.user_metadata?.display_name || user?.email?.split('@')[0] || null} />
           )}
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #f5f5f5' }}>
+            <InviteFromContacts poolId={pool.id} />
+          </div>
         </Section>
       )}
 
@@ -1066,6 +1071,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                         </button>
                       </div>
                     )}
+                    <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #f5f5f5' }}>
+                      <InviteFromContacts poolId={pool.id} />
+                    </div>
                   </div>
                 )}
 

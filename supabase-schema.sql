@@ -72,6 +72,15 @@ create policy "Admins can update ghost entries in their pools" on public.ghost_e
     )
   );
 
+-- The live "Authenticated users can read ghost entries" policy (qual: auth.uid() is not
+-- null) let ANY signed-in user read every pool's ghost entries -- it was never this
+-- permissive in this file, so it must have been swapped in directly against the database
+-- at some point. Replacing it with a properly pool-scoped policy, using the same
+-- recursion-safe is_pool_member() helper defined in the pool_members block above.
+drop policy if exists "Authenticated users can read ghost entries" on public.ghost_entries;
+create policy "Pool members can view ghost entries" on public.ghost_entries for select
+  using (public.is_pool_member(ghost_entries.pool_id, auth.uid()));
+
 -- Optional admin fee, taken as a percentage of both the season pot and weekly pot totals.
 -- Null/0 means no fee. One rate applies to both pots (kept simple — no separate rate per pot).
 alter table public.pools add column if not exists admin_fee_percent numeric;
@@ -231,14 +240,31 @@ create table if not exists public.pool_members (
 );
 
 alter table public.pool_members enable row level security;
-create policy "Members can view pool members" on public.pool_members for select
-  using (
-    exists (
-      select 1 from public.pool_members pm
-      where pm.pool_id = pool_members.pool_id
-      and pm.user_id = auth.uid()
-    )
+
+-- A plain self-referencing EXISTS subquery here (checking pool_members from within
+-- pool_members' own policy) is prone to "infinite recursion detected in policy" once any
+-- OTHER table's policy also references pool_members (e.g. pool_invitations) -- evaluating
+-- that other table's RLS re-triggers pool_members' RLS, which re-triggers the other
+-- table's RLS, etc. Route the membership check through a security-definer function
+-- instead, so it bypasses RLS on its own internal query and can't feed back into a cycle.
+create or replace function public.is_pool_member(p_pool_id uuid, p_user_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.pool_members
+    where pool_id = p_pool_id
+    and user_id = p_user_id
   );
+$$;
+
+grant execute on function public.is_pool_member(uuid, uuid) to authenticated;
+
+create policy "Members can view pool members" on public.pool_members for select
+  using (public.is_pool_member(pool_members.pool_id, auth.uid()));
 create policy "Users can join pools" on public.pool_members for insert
   with check (auth.uid() = user_id);
 
@@ -335,3 +361,129 @@ create policy "Pool admins can delete matchweek selections" on public.pool_match
     )
   );
 grant select, insert, delete on public.pool_matchweek_selections to authenticated;
+
+-- ============================================
+-- Contact book invites: invite existing-account contacts into a pool,
+-- track every inviter, require explicit accept/decline.
+-- ============================================
+
+create table if not exists public.pool_invitations (
+  id uuid default gen_random_uuid() primary key,
+  pool_id uuid references public.pools(id) on delete cascade not null,
+  invited_user_id uuid references auth.users(id) on delete cascade not null,
+  status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
+  created_at timestamptz default now(),
+  responded_at timestamptz,
+  unique(pool_id, invited_user_id)
+);
+
+-- pool_id is denormalized here (in addition to invitation_id) so this table fits the
+-- app's existing pool-deletion convention (POOL_CHILD_TABLES in app/pool/[id]/page.tsx),
+-- which deletes every child table with a flat `.eq('pool_id', poolId)` -- no joins.
+create table if not exists public.pool_invitation_inviters (
+  id uuid default gen_random_uuid() primary key,
+  invitation_id uuid references public.pool_invitations(id) on delete cascade not null,
+  pool_id uuid references public.pools(id) on delete cascade not null,
+  inviter_user_id uuid references auth.users(id) on delete cascade not null,
+  created_at timestamptz default now(),
+  unique(invitation_id, inviter_user_id)
+);
+
+alter table public.pool_invitations enable row level security;
+
+create policy "Pool members can view pool invitations" on public.pool_invitations for select
+  using (
+    exists (select 1 from public.pools where pools.id = pool_invitations.pool_id and pools.admin_id = auth.uid())
+    or public.is_pool_member(pool_invitations.pool_id, auth.uid())
+  );
+
+create policy "Invitee can view their own invitation" on public.pool_invitations for select
+  using (invited_user_id = auth.uid());
+
+create policy "Eligible members can create invitations" on public.pool_invitations for insert
+  with check (
+    invited_user_id <> auth.uid()
+    and exists (
+      select 1 from public.pools
+      where pools.id = pool_invitations.pool_id
+      and (
+        pools.admin_id = auth.uid()
+        or (
+          pools.allow_member_invites = true
+          and public.is_pool_member(pools.id, auth.uid())
+        )
+      )
+    )
+  );
+
+create policy "Invitee can respond to their own invitation" on public.pool_invitations for update
+  using (invited_user_id = auth.uid() and status = 'pending')
+  with check (invited_user_id = auth.uid() and status in ('accepted', 'declined'));
+
+create policy "Pool admins can delete invitations" on public.pool_invitations for delete
+  using (exists (select 1 from public.pools where pools.id = pool_invitations.pool_id and pools.admin_id = auth.uid()));
+
+grant select, insert, update, delete on public.pool_invitations to authenticated;
+
+alter table public.pool_invitation_inviters enable row level security;
+
+create policy "Pool members can view invitation inviters" on public.pool_invitation_inviters for select
+  using (
+    exists (select 1 from public.pools where pools.id = pool_invitation_inviters.pool_id and pools.admin_id = auth.uid())
+    or public.is_pool_member(pool_invitation_inviters.pool_id, auth.uid())
+    or exists (select 1 from public.pool_invitations pi where pi.id = pool_invitation_inviters.invitation_id and pi.invited_user_id = auth.uid())
+  );
+
+create policy "Eligible members can add themselves as an inviter" on public.pool_invitation_inviters for insert
+  with check (
+    inviter_user_id = auth.uid()
+    and exists (
+      select 1 from public.pool_invitations pi
+      join public.pools p on p.id = pi.pool_id
+      where pi.id = pool_invitation_inviters.invitation_id
+      and pi.status = 'pending'
+      and (
+        p.admin_id = auth.uid()
+        or (p.allow_member_invites = true and public.is_pool_member(p.id, auth.uid()))
+      )
+    )
+  );
+
+create policy "Pool admins can delete invitation inviters" on public.pool_invitation_inviters for delete
+  using (exists (select 1 from public.pools where pools.id = pool_invitation_inviters.pool_id and pools.admin_id = auth.uid()));
+
+grant select, insert, delete on public.pool_invitation_inviters to authenticated;
+
+-- Lets an invitee preview a pool's member list BEFORE accepting (for "mutual contacts
+-- already in this pool"), scoped tightly to only a pool they have a pending invitation
+-- for. Additive alongside the existing members-only select policy -- doesn't replace it.
+--
+-- This check has to go through a security-definer function rather than a plain EXISTS
+-- subquery: pool_invitations' own select policy checks pool_members, so a plain subquery
+-- here would make the two tables' RLS policies check each other in a cycle (Postgres
+-- errors with "infinite recursion detected in policy", 42P17). A security-definer
+-- function runs with the privileges of its owner, which bypasses RLS on the table it
+-- queries (same as the existing handle_new_user trigger function above), breaking the
+-- cycle at this one point.
+create or replace function public.has_pending_pool_invitation(p_pool_id uuid, p_user_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.pool_invitations
+    where pool_id = p_pool_id
+    and invited_user_id = p_user_id
+    and status = 'pending'
+  );
+$$;
+
+grant execute on function public.has_pending_pool_invitation(uuid, uuid) to authenticated;
+
+create policy "Invited users can preview pool members before accepting" on public.pool_members for select
+  using (public.has_pending_pool_invitation(pool_members.pool_id, auth.uid()));
+
+-- No pool_rules/ruleset_categories policy needed -- confirmed live via anon key that both
+-- are already world-readable (same pattern as `pools`).

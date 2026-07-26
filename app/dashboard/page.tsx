@@ -4,6 +4,19 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { RULE_PACKAGES } from '@/types'
+import { getContacts, getMutualContacts } from '@/lib/contacts'
+import { resolveCategoryDescription } from '@/lib/categoryGroups'
+import InviteCard, { InviteRule } from '@/components/InviteCard'
+
+interface PendingInvite {
+  id: string
+  pool_id: string
+  pool_name: string
+  sport: string
+  inviterNames: string[]
+  mutualContactNames: string[]
+  rules: InviteRule[]
+}
 
 export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
@@ -11,6 +24,7 @@ export default function DashboardPage() {
   const [memberPools, setMemberPools] = useState<any[]>([])
   const [livePoolIds, setLivePoolIds] = useState<Set<string>>(new Set())
   const [overPoolIds, setOverPoolIds] = useState<Set<string>>(new Set())
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([])
   const [loading, setLoading] = useState(true)
   const [showArchived, setShowArchived] = useState(false)
 
@@ -75,7 +89,87 @@ export default function DashboardPage() {
       setOverPoolIds(overIds)
     }
 
+    await loadPendingInvites(supabase, user, admin || [], member || [])
+
     setLoading(false)
+  }
+
+  async function loadPendingInvites(supabase: ReturnType<typeof createClient>, user: any, admin: any[], member: any[]) {
+    // Self-healing safety net: if the accept write path succeeded on pool_members but
+    // failed to flip the invitation's status, don't show a stale invite for a pool
+    // they're already in.
+    const myPoolIds = new Set([...admin.map((p: any) => p.id), ...member.map((m: any) => m.pool_id)])
+
+    const { data: invRows } = await supabase
+      .from('pool_invitations')
+      .select('id, pool_id, created_at, pools(name, sport)')
+      .eq('invited_user_id', user.id)
+      .eq('status', 'pending')
+
+    const relevant = (invRows || []).filter((i: any) => !myPoolIds.has(i.pool_id))
+    if (relevant.length === 0) { setPendingInvites([]); return }
+
+    const invIds = relevant.map((i: any) => i.id)
+    const invPoolIds = [...new Set(relevant.map((i: any) => i.pool_id))]
+
+    const [{ data: inviterRows }, { data: ruleRows }, { data: poolMemberRows }, contactList] = await Promise.all([
+      supabase.from('pool_invitation_inviters').select('invitation_id, pool_id, inviter_user_id').in('invitation_id', invIds),
+      supabase.from('pool_rules').select('pool_id, category_id, points, ruleset_categories(name, description)').in('pool_id', invPoolIds),
+      supabase.from('pool_members').select('pool_id, user_id, display_name').in('pool_id', invPoolIds),
+      getContacts(supabase, user.id),
+    ])
+
+    const enriched: PendingInvite[] = relevant.map((inv: any) => {
+      const inviterIds = (inviterRows || []).filter((r: any) => r.invitation_id === inv.id).map((r: any) => r.inviter_user_id)
+      const inviterNames = inviterIds.map((id: string) =>
+        (poolMemberRows || []).find((m: any) => m.pool_id === inv.pool_id && m.user_id === id)?.display_name || 'someone')
+
+      const poolMemberIds = new Set((poolMemberRows || []).filter((m: any) => m.pool_id === inv.pool_id).map((m: any) => m.user_id))
+      const mutual = getMutualContacts(contactList, poolMemberIds)
+
+      const rules: InviteRule[] = (ruleRows || [])
+        .filter((r: any) => r.pool_id === inv.pool_id)
+        .map((r: any) => ({
+          category_id: r.category_id,
+          name: r.ruleset_categories?.name || r.category_id,
+          description: resolveCategoryDescription(r.category_id, r.ruleset_categories?.description || ''),
+          points: r.points,
+        }))
+
+      return {
+        id: inv.id,
+        pool_id: inv.pool_id,
+        pool_name: inv.pools?.name || 'a pool',
+        sport: inv.pools?.sport || '',
+        inviterNames,
+        mutualContactNames: mutual.map(c => c.displayName),
+        rules,
+      }
+    })
+
+    setPendingInvites(enriched)
+  }
+
+  async function acceptInvite(invite: PendingInvite) {
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'member'
+
+    const { error: memberError } = await supabase.from('pool_members').insert({
+      pool_id: invite.pool_id, user_id: user.id, display_name: displayName,
+    })
+    // 23505 = already a member somehow (e.g. joined by link in the meantime) — fine, continue
+    if (memberError && memberError.code !== '23505') return
+
+    await supabase.from('pool_invitations').update({ status: 'accepted', responded_at: new Date().toISOString() }).eq('id', invite.id)
+    window.location.href = `/pool/${invite.pool_id}`
+  }
+
+  async function declineInvite(invite: PendingInvite) {
+    const supabase = createClient()
+    await supabase.from('pool_invitations').update({ status: 'declined', responded_at: new Date().toISOString() }).eq('id', invite.id)
+    setPendingInvites(prev => prev.filter(p => p.id !== invite.id))
   }
 
   useEffect(() => {
@@ -83,6 +177,19 @@ export default function DashboardPage() {
     const interval = setInterval(load, 120000)
     return () => clearInterval(interval)
   }, [])
+
+  // New invites should show up without waiting for the 120s poll.
+  useEffect(() => {
+    if (!user?.id) return
+    const supabase = createClient()
+    const channel = supabase
+      .channel('dashboard-invitations')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pool_invitations', filter: `invited_user_id=eq.${user.id}` }, () => {
+        load()
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [user?.id])
 
   async function archivePool(poolId: string, archived: boolean) {
     const supabase = createClient()
@@ -115,6 +222,27 @@ export default function DashboardPage() {
           <button className="btn-primary" style={{padding: '10px 18px', fontSize: '13px', minHeight: 44, whiteSpace: 'nowrap'}}>+ new pool</button>
         </Link>
       </div>
+
+      {pendingInvites.length > 0 && (
+        <section style={{marginBottom: '2rem'}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem'}}>
+            <span className="section-label">you've been invited</span>
+            <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
+          </div>
+          {pendingInvites.map(invite => (
+            <InviteCard
+              key={invite.id}
+              poolName={invite.pool_name}
+              sport={invite.sport}
+              inviterNames={invite.inviterNames}
+              mutualContactNames={invite.mutualContactNames}
+              rules={invite.rules}
+              onAccept={() => acceptInvite(invite)}
+              onDecline={() => declineInvite(invite)}
+            />
+          ))}
+        </section>
+      )}
 
       {activeAdmin.length > 0 && (
         <section style={{marginBottom: '2rem'}}>

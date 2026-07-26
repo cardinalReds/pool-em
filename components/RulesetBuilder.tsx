@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { COMMON_IDS, CATEGORY_GROUPS, ROUND_SPECIALS } from '@/lib/categoryGroups'
+import { COMMON_IDS, CATEGORY_GROUPS, ROUND_SPECIALS, resolveCategoryDescription } from '@/lib/categoryGroups'
 
 interface Category {
   id: string
@@ -212,14 +212,6 @@ function checkCorrect(categoryId: string, pick: any, result: ReturnType<typeof g
     case 'soccer_anytime_goalscorer': return false // can't simulate full scorer list
     default: return false
   }
-}
-
-// Descriptions that override whatever is in the DB for display clarity
-const DESCRIPTION_OVERRIDES: Record<string, string> = {
-  soccer_clean_sheet_round: 'Predict which team will keep a clean sheet. Pick 1 team per group, per match week.',
-  soccer_brace_round: 'Predict which player scores 2+ goals across any game that match week. One pick per match week.',
-  soccer_red_card_round: 'Predict which team receives a red card across any game that match week. One pick per match week.',
-  soccer_penalty_round: 'Predict which team earns a penalty across any game that match week. One pick per match week.',
 }
 
 // PlayerSearch: searchable dropdown for player/team picks
@@ -465,9 +457,7 @@ export default function RulesetBuilder({ sport, onComplete, isPL, plSelectedProp
     const isExact = cat.id === 'soccer_exact_score' || cat.id === 'soccer_ht_exact_score'
     const isPodiumOrder = cat.id === 'f1_podium_order'
     const isRound = ROUND_SPECIALS.includes(cat.id)
-    const description = isPodiumOrder
-      ? 'Predict the exact finishing order for P1, P2 and P3.'
-      : (DESCRIPTION_OVERRIDES[cat.id] || cat.description)
+    const description = resolveCategoryDescription(cat.id, cat.description)
 
     return (
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 0', borderBottom: '1px solid #f5f5f5' }}>

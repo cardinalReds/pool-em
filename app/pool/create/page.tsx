@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import RulesetBuilder from '@/components/RulesetBuilder'
+import InviteFromContacts from '@/components/InviteFromContacts'
 
 interface SelectedRule {
   category_id: string
@@ -22,6 +23,7 @@ export default function CreatePoolPage() {
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [createdPool, setCreatedPool] = useState<{ id: string; name: string } | null>(null)
 
   // Step 1 — name
   const [name, setName] = useState('')
@@ -267,7 +269,8 @@ export default function CreatePoolPage() {
     })
     if (memberError) { setError(memberError.message); setLoading(false); return }
 
-    window.location.href = `/pool/${pool.id}`
+    setLoading(false)
+    setCreatedPool({ id: pool.id, name })
   }
 
   // Step labels differ by pool type
@@ -341,7 +344,23 @@ export default function CreatePoolPage() {
         <a href="/dashboard" style={{fontWeight: 700, fontSize: '13px', color: 'white', textDecoration: 'none'}}>pool'em</a>
       </div>
 
-      <div style={{maxWidth: (step === 3 && (!isBracket || sport === 'mma' || sport === 'f1')) || (isPL && step === 4) ? 1100 : 520, margin: '0 auto', padding: '24px 16px'}}>
+      <div style={{maxWidth: createdPool ? 520 : (step === 3 && (!isBracket || sport === 'mma' || sport === 'f1')) || (isPL && step === 4) ? 1100 : 520, margin: '0 auto', padding: '24px 16px'}}>
+        {createdPool ? (
+          <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
+            <h1 style={{fontWeight: 700, fontSize: '15px', marginBottom: '4px'}}>✓ {createdPool.name} created</h1>
+            <p style={{fontSize: '11px', color: '#888', marginBottom: '16px'}}>
+              invite some friends now, or skip and do it later from the pool page.
+            </p>
+            <InviteFromContacts poolId={createdPool.id} />
+            <div style={{marginTop: '16px'}}>
+              <button className="btn-primary" onClick={() => { window.location.href = `/pool/${createdPool.id}` }}
+                style={{width: '100%', padding: '10px 24px', fontSize: '14px', minHeight: 44}}>
+                done — go to pool →
+              </button>
+            </div>
+          </div>
+        ) : (
+        <>
         <div style={{marginBottom: '16px'}}>
           <h1 style={{fontWeight: 700, fontSize: '15px', marginBottom: '2px'}}>new pool</h1>
         </div>
@@ -946,6 +965,8 @@ export default function CreatePoolPage() {
               </button>
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
     </div>

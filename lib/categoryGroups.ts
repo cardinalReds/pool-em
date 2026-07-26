@@ -30,3 +30,18 @@ export function groupKeyFor(categoryId: string): string {
   if (categoryId.startsWith('f1_podium_order_')) return 'f1_podium_order'
   return categoryId
 }
+
+// Descriptions that override whatever is in the DB for display clarity. Shared between
+// the ruleset builder (components/RulesetBuilder.tsx) and the pool-invite preview, so
+// admins and invitees see identical copy for what a pool actually scores.
+export const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  soccer_clean_sheet_round: 'Predict which team will keep a clean sheet. Pick 1 team per group, per match week.',
+  soccer_brace_round: 'Predict which player scores 2+ goals across any game that match week. One pick per match week.',
+  soccer_red_card_round: 'Predict which team receives a red card across any game that match week. One pick per match week.',
+  soccer_penalty_round: 'Predict which team earns a penalty across any game that match week. One pick per match week.',
+}
+
+export function resolveCategoryDescription(categoryId: string, dbDescription: string): string {
+  if (categoryId === 'f1_podium_order') return 'Predict the exact finishing order for P1, P2 and P3.'
+  return DESCRIPTION_OVERRIDES[categoryId] || dbDescription
+}

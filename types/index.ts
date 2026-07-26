@@ -43,6 +43,23 @@ export interface PoolMember {
   joined_at: string
 }
 
+export interface PoolInvitation {
+  id: string
+  pool_id: string
+  invited_user_id: string
+  status: 'pending' | 'accepted' | 'declined'
+  created_at: string
+  responded_at: string | null
+}
+
+export interface PoolInvitationInviter {
+  id: string
+  invitation_id: string
+  pool_id: string
+  inviter_user_id: string
+  created_at: string
+}
+
 export interface Prediction {
   id: string
   pool_id: string
