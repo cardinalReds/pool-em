@@ -105,7 +105,7 @@ export default function CreatePoolPage() {
       const supabase = createClient()
       const { data } = await supabase
         .from('tournaments')
-        .select('id, name, sport, end_date')
+        .select('id, name, sport, end_date, event_date')
         .eq('status', 'active')
         .gt('end_date', new Date().toISOString())
         .order('created_at', { ascending: false })
@@ -113,12 +113,20 @@ export default function CreatePoolPage() {
       const descriptions: Record<string, string> = {
         'wc_2026': 'FIFA World Cup 2026',
         'f1_2026': 'Formula 1 2026',
-        'ufc_329': 'McGregor vs Holloway · Jul 11',
+        'ufc_330': 'UFC 330 · Aug 15',
         'nfl_2026': 'NFL 2026/27 season',
       }
 
+      // MMA cards aren't finalized until fight week -- hide a UFC tournament from pool
+      // creation until 6 days out ("the Sunday before," since cards are always Saturday).
+      // Missing event_date is treated as not-gated rather than hidden forever.
+      const SIX_DAYS_MS = 6 * 24 * 60 * 60 * 1000
+      const visible = (data || []).filter(t =>
+        t.sport !== 'mma' || !t.event_date || (new Date(t.event_date).getTime() - Date.now()) <= SIX_DAYS_MS
+      )
+
       // Check which tournaments have started (any non-NS fixtures)
-      const ids = (data || []).map(t => t.id)
+      const ids = visible.map(t => t.id)
       const { data: startedFixtures } = await supabase
         .from('fixtures')
         .select('tournament_id')
@@ -136,7 +144,7 @@ export default function CreatePoolPage() {
         .limit(10)
       for (const s of startedF1 || []) startedIds.add(s.tournament_id)
 
-      setTOURNAMENTS((data || []).map(t => ({
+      setTOURNAMENTS(visible.map(t => ({
         id: t.id,
         name: t.name,
         sport: t.sport,

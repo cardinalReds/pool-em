@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     // Get all upcoming fixtures in the next 24 hours
     const { data: fixtures } = await supabase
       .from('fixtures')
-      .select('id, date, home_team, away_team, round')
+      .select('id, date, home_team, away_team, round, tournament_id, card_segment')
       .eq('status', 'NS') // not started
       .gte('date', now.toISOString())
       .lte('date', new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString())
@@ -28,9 +28,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, sent: 0 })
     }
 
+    // MMA fight cards get one batched "prelims/main card starting soon" email per
+    // segment instead of one per individual fight -- split those out up front.
+    const tournamentIds = [...new Set(fixtures.map(f => f.tournament_id).filter(Boolean))]
+    const { data: tRows } = await supabase.from('tournaments').select('id, sport, name').in('id', tournamentIds)
+    const sportById: Record<string, string> = {}
+    const nameById: Record<string, string> = {}
+    for (const t of tRows || []) { sportById[t.id] = t.sport; nameById[t.id] = t.name }
+
+    const otherFixtures = fixtures.filter(f => sportById[f.tournament_id] !== 'mma')
+    const mmaFixtures = fixtures.filter(f => sportById[f.tournament_id] === 'mma')
+
     let sent = 0
 
-    for (const fixture of fixtures) {
+    for (const fixture of otherFixtures) {
       const kickoff = new Date(fixture.date)
       const hoursUntilKickoff = (kickoff.getTime() - now.getTime()) / (1000 * 60 * 60)
 
@@ -57,7 +68,7 @@ export async function POST(request: NextRequest) {
           .eq('id', reminder.pool_id)
           .single()
 
-        if (!pool) continue
+        if (!pool || pool.tournament_id !== fixture.tournament_id) continue
 
         // Check user is a member of this pool
         const { data: membership } = await supabase
@@ -156,6 +167,148 @@ export async function POST(request: NextRequest) {
             .eq('id', reminder.id)
         }
         else {
+          const err = await res.json()
+          console.error('Resend error for', reminder.email, err)
+        }
+      }
+    }
+
+    // ── MMA: one email per user per card_segment, anchored to the segment's
+    // earliest fight, instead of one per individual fight ──
+    const segments = new Map<string, typeof mmaFixtures>()
+    for (const f of mmaFixtures) {
+      const key = `${f.tournament_id}::${f.card_segment}`
+      if (!segments.has(key)) segments.set(key, [])
+      segments.get(key)!.push(f)
+    }
+
+    const SEGMENT_LABELS: Record<string, string> = {
+      early_prelims: 'early prelims',
+      prelims: 'prelims',
+      main_card: 'main card',
+    }
+
+    for (const [, group] of segments) {
+      const sorted = [...group].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      const anchor = sorted[0]
+      const segmentFixtureIds = sorted.map(f => f.id)
+      const tournamentId = anchor.tournament_id
+      const segmentLabel = SEGMENT_LABELS[anchor.card_segment] || anchor.card_segment
+      const tournamentName = nameById[tournamentId] || 'the card'
+      const fightCount = sorted.length
+
+      const kickoff = new Date(anchor.date)
+      const hoursUntilKickoff = (kickoff.getTime() - now.getTime()) / (1000 * 60 * 60)
+
+      const { data: allReminders } = await supabase
+        .from('reminders')
+        .select('id, user_id, email, phone, hours_before, pool_id, sent_fixture_ids')
+
+      const matchingReminders = (allReminders || []).filter(r => {
+        const target = r.hours_before * 60
+        const actual = (kickoff.getTime() - now.getTime()) / (1000 * 60)
+        return actual >= target - 15 && actual <= target + 15
+      })
+
+      for (const reminder of matchingReminders) {
+        if ((reminder.sent_fixture_ids || []).includes(anchor.id)) continue
+
+        const { data: pool } = await supabase
+          .from('pools')
+          .select('id, name, tournament_id')
+          .eq('id', reminder.pool_id)
+          .single()
+
+        if (!pool || pool.tournament_id !== tournamentId) continue
+
+        const { data: membership } = await supabase
+          .from('pool_members')
+          .select('id')
+          .eq('pool_id', pool.id)
+          .eq('user_id', reminder.user_id)
+          .maybeSingle()
+
+        if (!membership) continue
+
+        const { data: existingPick } = await supabase
+          .from('predictions_v2')
+          .select('id')
+          .eq('pool_id', pool.id)
+          .eq('user_id', reminder.user_id)
+          .in('fixture_id', segmentFixtureIds)
+          .limit(1)
+          .maybeSingle()
+
+        const hasPicks = !!existingPick
+        const poolUrl = `${process.env.NEXT_PUBLIC_APP_URL}/pool/${pool.id}`
+        const hoursLabel = Math.round(hoursUntilKickoff)
+
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: "pool'em <reminders@pool-em.com>",
+            to: reminder.email,
+            subject: `⏱ ${tournamentName} ${segmentLabel} start in ${hoursLabel}h`,
+            html: `
+              <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; color: #333;">
+                <div style="font-weight: 700; font-size: 16px; margin-bottom: 4px;">pool'em</div>
+                <div style="color: #888; font-size: 12px; margin-bottom: 24px;">${pool.name}</div>
+
+                <div style="background: #111; color: white; padding: 16px; margin-bottom: 16px;">
+                  <div style="font-size: 11px; color: #888; margin-bottom: 8px;">${tournamentName}</div>
+                  <div style="font-weight: 700; font-size: 15px; text-transform: capitalize;">${segmentLabel}</div>
+                  <div style="font-size: 11px; color: #888; margin-top: 8px;">${fightCount} fight${fightCount === 1 ? '' : 's'} · starts in ${hoursLabel} hour${hoursLabel !== 1 ? 's' : ''}</div>
+                </div>
+
+                ${hasPicks
+                  ? `<p style="font-size: 13px; color: #2d7a2d; margin-bottom: 16px;">✓ you've already submitted picks for this card.</p>`
+                  : `<p style="font-size: 13px; color: #C8102E; font-weight: 600; margin-bottom: 16px;">⚠️ you haven't submitted your picks yet!</p>`
+                }
+
+                <a href="${poolUrl}" style="display: inline-block; background: #111; color: white; padding: 10px 24px; text-decoration: none; font-weight: 600; font-size: 13px;">
+                  ${hasPicks ? 'view pool →' : 'submit picks →'}
+                </a>
+
+                <p style="color: #aaa; font-size: 10px; margin-top: 32px;">
+                  you're receiving this because you set a ${hoursLabel}h reminder in ${pool.name}.<br/>
+                  <a href="${poolUrl}" style="color: #aaa;">manage reminders</a>
+                </p>
+              </div>
+            `,
+          }),
+        })
+
+        if (res.ok) {
+          sent++
+
+          if (reminder.phone) {
+            const accountSid = process.env.TWILIO_ACCOUNT_SID
+            const authToken = process.env.TWILIO_AUTH_TOKEN
+            const fromNumber = process.env.TWILIO_PHONE_NUMBER
+            if (accountSid && authToken && fromNumber) {
+              const smsBody = hasPicks
+                ? `pool'em: ${tournamentName} ${segmentLabel} start in ${hoursLabel}h. You've already submitted your picks! ${poolUrl}`
+                : `pool'em: ${tournamentName} ${segmentLabel} start in ${hoursLabel}h. You haven't picked yet — submit now: ${poolUrl} Reply STOP to opt out.`
+              await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'),
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({ From: fromNumber, To: reminder.phone, Body: smsBody }).toString(),
+              })
+            }
+          }
+
+          await supabase
+            .from('reminders')
+            .update({ sent_fixture_ids: [...(reminder.sent_fixture_ids || []), ...segmentFixtureIds] })
+            .eq('id', reminder.id)
+        } else {
           const err = await res.json()
           console.error('Resend error for', reminder.email, err)
         }
