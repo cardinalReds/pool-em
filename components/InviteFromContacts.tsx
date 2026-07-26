@@ -43,6 +43,13 @@ export default function InviteFromContacts({ poolId }: { poolId: string }) {
     })
   }
 
+  function toggleAll(invitableIds: string[]) {
+    setSelected(prev => {
+      const allSelected = invitableIds.length > 0 && invitableIds.every(id => prev.has(id))
+      return allSelected ? new Set() : new Set(invitableIds)
+    })
+  }
+
   async function inviteSelected() {
     setInviting(true)
     const supabase = createClient()
@@ -62,6 +69,13 @@ export default function InviteFromContacts({ poolId }: { poolId: string }) {
           .single()
         if (error || !created) continue
         invitationId = created.id
+        // Fire-and-forget — the in-app dashboard card is the real notification;
+        // this is just an optional email nudge, don't block the UI on it.
+        fetch('/api/invite/notify-pool-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invitationId }),
+        }).catch(() => {})
       }
 
       const { error: inviterError } = await supabase
@@ -85,12 +99,19 @@ export default function InviteFromContacts({ poolId }: { poolId: string }) {
     return <div style={{ fontSize: '11px', color: '#aaa' }}>no contacts to invite yet — invite friends by link, or come back once you've pooled with more people</div>
   }
 
+  const invitableIds = invitable.map(c => c.userId)
+  const allSelected = invitableIds.length > 0 && invitableIds.every(id => selected.has(id))
+
   return (
     <div>
       <div style={{ fontSize: '11px', color: '#888', marginBottom: 10 }}>
         invite people you've pooled with before — they'll see it on their dashboard and can accept or decline.
       </div>
-      <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #e0e0db', marginBottom: 10 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderBottom: '1px solid #f5f5f5', cursor: 'pointer', fontSize: '11px', fontWeight: 600, color: '#555' }}>
+        <input type="checkbox" checked={allSelected} onChange={() => toggleAll(invitableIds)} />
+        select all ({invitableIds.length})
+      </label>
+      <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #e0e0db', borderTop: 'none', marginBottom: 10 }}>
         {invitable.map(c => {
           const pending = invitations[c.userId]?.status === 'pending'
           return (

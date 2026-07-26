@@ -8,6 +8,8 @@ export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [notifyPoolInvites, setNotifyPoolInvites] = useState(true)
+  const [notifyNewCompetitions, setNotifyNewCompetitions] = useState(true)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [inviteCode, setInviteCode] = useState<string | null>(null)
@@ -25,7 +27,11 @@ export default function SignupPage() {
     const supabase = createClient()
     const { data, error } = await supabase.auth.signUp({
       email, password,
-      options: { data: { display_name: displayName } },
+      options: { data: {
+        display_name: displayName,
+        notify_pool_invites: notifyPoolInvites,
+        notify_new_competitions: notifyNewCompetitions,
+      } },
     })
     if (error) {
       setError(error.message)
@@ -64,6 +70,16 @@ export default function SignupPage() {
           <input className="input" type="password" placeholder="min 6 characters" value={password}
             onChange={e => setPassword(e.target.value)} minLength={6} required
             style={{fontSize: '16px', padding: '0.65rem 0.75rem'}} />
+        </div>
+        <div style={{display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem'}}>
+          <label style={{display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-dim)', cursor: 'pointer'}}>
+            <input type="checkbox" checked={notifyPoolInvites} onChange={e => setNotifyPoolInvites(e.target.checked)} />
+            email me when I'm invited to a pool
+          </label>
+          <label style={{display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: 'var(--text-dim)', cursor: 'pointer'}}>
+            <input type="checkbox" checked={notifyNewCompetitions} onChange={e => setNotifyNewCompetitions(e.target.checked)} />
+            email me when a new competition goes live
+          </label>
         </div>
         {error && <p style={{fontSize: '0.8rem', color: 'var(--red)', background: 'var(--red-light)', padding: '0.5rem 0.75rem'}}>{error}</p>}
         <button className="btn-primary" type="submit" disabled={loading}

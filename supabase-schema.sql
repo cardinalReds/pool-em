@@ -487,3 +487,46 @@ create policy "Invited users can preview pool members before accepting" on publi
 
 -- No pool_rules/ruleset_categories policy needed -- confirmed live via anon key that both
 -- are already world-readable (same pattern as `pools`).
+
+-- ============================================
+-- Account settings: email notification preferences, and a pool_members
+-- self-update policy so a display-name change can propagate to existing pools.
+-- ============================================
+
+-- Two independent opt-in/opt-out toggles, separate from the existing per-fixture
+-- `reminders` table (those are set up explicitly per pool; these are account-wide).
+-- Both default true so existing rows, and any signup path that doesn't pass a value,
+-- stay opted in.
+alter table public.profiles add column if not exists notify_pool_invites boolean not null default true;
+alter table public.profiles add column if not exists notify_new_competitions boolean not null default true;
+
+-- Signup already threads display_name through raw_user_meta_data into this trigger;
+-- extend it to also read the two new preference checkboxes (see app/auth/signup/page.tsx).
+-- The trigger itself (on_auth_user_created) is unchanged -- CREATE OR REPLACE on the
+-- function body is enough to pick this up.
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, display_name, notify_pool_invites, notify_new_competitions)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'display_name', split_part(new.email, '@', 1)),
+    coalesce((new.raw_user_meta_data->>'notify_pool_invites')::boolean, true),
+    coalesce((new.raw_user_meta_data->>'notify_new_competitions')::boolean, true)
+  );
+  return new;
+end;
+$$ language plpgsql security definer;
+
+-- Display names live in three places (auth user_metadata, profiles.display_name,
+-- pool_members.display_name -- the one actually rendered in pool UIs). A settings-page
+-- rename should update all three. profiles already allows self-update; pool_members
+-- doesn't (its only UPDATE policy is admin-only). This adds a second, narrower
+-- self-service policy alongside it -- permissive policies OR together, so this only adds
+-- an allowed case, it doesn't loosen the admin one.
+create policy "Users can update their own pool_members row" on public.pool_members for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- Idempotency marker for the daily "new competition live" notify cron.
+alter table public.tournaments add column if not exists notified_at timestamptz;
