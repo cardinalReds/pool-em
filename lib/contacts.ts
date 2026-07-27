@@ -46,3 +46,19 @@ export async function getContacts(supabase: SupabaseClient, userId: string): Pro
 export function getMutualContacts(contacts: Contact[], poolMemberUserIds: Set<string>): Contact[] {
   return contacts.filter(c => poolMemberUserIds.has(c.userId))
 }
+
+// Friends are a one-way personal tag -- no request/accept flow, nothing changes
+// for the tagged person, and they can't see or query this for themselves (see the
+// `friends` table RLS, scoped entirely to auth.uid() = user_id).
+export async function getFriendIds(supabase: SupabaseClient, userId: string): Promise<Set<string>> {
+  const { data } = await supabase.from('friends').select('friend_user_id').eq('user_id', userId)
+  return new Set((data || []).map((r: any) => r.friend_user_id))
+}
+
+export async function addFriend(supabase: SupabaseClient, userId: string, friendUserId: string) {
+  return supabase.from('friends').insert({ user_id: userId, friend_user_id: friendUserId })
+}
+
+export async function removeFriend(supabase: SupabaseClient, userId: string, friendUserId: string) {
+  return supabase.from('friends').delete().eq('user_id', userId).eq('friend_user_id', friendUserId)
+}

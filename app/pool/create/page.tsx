@@ -98,9 +98,13 @@ export default function CreatePoolPage() {
     { id: 'custom', label: 'Custom', description: 'Write your own payout rules' },
   ]
 
-  const [TOURNAMENTS, setTOURNAMENTS] = useState<{id: string, name: string, sport: string, description: string, started: boolean}[]>([])
+  const [TOURNAMENTS, setTOURNAMENTS] = useState<{id: string, name: string, sport: string, description: string, started: boolean, gated: boolean}[]>([])
 
   useEffect(() => {
+    function shortDate(iso: string) {
+      return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+    }
+
     async function loadTournaments() {
       const supabase = createClient()
       const { data } = await supabase
@@ -110,23 +114,21 @@ export default function CreatePoolPage() {
         .gt('end_date', new Date().toISOString())
         .order('created_at', { ascending: false })
 
-      const descriptions: Record<string, string> = {
-        'wc_2026': 'FIFA World Cup 2026',
-        'f1_2026': 'Formula 1 2026',
-        'ufc_330': 'UFC 330 · Aug 15',
-        'nfl_2026': 'NFL 2026/27 season',
-      }
+      const rows = data || []
 
-      // MMA cards aren't finalized until fight week -- hide a UFC tournament from pool
-      // creation until 6 days out ("the Sunday before," since cards are always Saturday).
-      // Missing event_date is treated as not-gated rather than hidden forever.
+      // MMA cards aren't finalized until fight week -- an MMA tournament stays
+      // visible but not clickable until 6 days out ("the Sunday before," since
+      // cards are always Saturday). Missing event_date is treated as not-gated.
       const SIX_DAYS_MS = 6 * 24 * 60 * 60 * 1000
-      const visible = (data || []).filter(t =>
-        t.sport !== 'mma' || !t.event_date || (new Date(t.event_date).getTime() - Date.now()) <= SIX_DAYS_MS
+      const gatedIds = new Set(
+        rows
+          .filter(t => t.sport === 'mma' && t.event_date && (new Date(t.event_date).getTime() - Date.now()) > SIX_DAYS_MS)
+          .map(t => t.id)
       )
 
+      const ids = rows.map(t => t.id)
+
       // Check which tournaments have started (any non-NS fixtures)
-      const ids = visible.map(t => t.id)
       const { data: startedFixtures } = await supabase
         .from('fixtures')
         .select('tournament_id')
@@ -144,12 +146,41 @@ export default function CreatePoolPage() {
         .limit(10)
       for (const s of startedF1 || []) startedIds.add(s.tournament_id)
 
-      setTOURNAMENTS(visible.map(t => ({
+      // Earliest upcoming fixture per tournament, for soccer/NFL's "next fixture/game" copy
+      const { data: upcomingFixtures } = await supabase
+        .from('fixtures')
+        .select('tournament_id, date')
+        .in('tournament_id', ids)
+        .eq('status', 'NS')
+        .order('date', { ascending: true })
+      const nextFixtureDate: Record<string, string> = {}
+      for (const f of upcomingFixtures || []) {
+        if (!nextFixtureDate[f.tournament_id]) nextFixtureDate[f.tournament_id] = f.date
+      }
+
+      function describeTournament(t: { id: string; sport: string; event_date: string | null }): string {
+        if (t.sport === 'f1') return 'create your pool now to catch up!'
+        if (t.sport === 'mma') {
+          if (!t.event_date) return ''
+          const eventStr = shortDate(t.event_date)
+          if (gatedIds.has(t.id)) {
+            const gateOpenIso = new Date(new Date(t.event_date).getTime() - SIX_DAYS_MS).toISOString()
+            return `create your pool ${shortDate(gateOpenIso)}, card starts on ${eventStr}`
+          }
+          return `create your pool now, card starts on ${eventStr}`
+        }
+        const next = nextFixtureDate[t.id]
+        const verb = t.sport === 'nfl' ? 'game' : 'fixture'
+        return next ? `create your pool now, next ${verb} on ${shortDate(next)}` : 'create your pool now'
+      }
+
+      setTOURNAMENTS(rows.map(t => ({
         id: t.id,
         name: t.name,
         sport: t.sport,
-        description: descriptions[t.id] || '',
+        description: describeTournament(t),
         started: startedIds.has(t.id),
+        gated: gatedIds.has(t.id),
       })))
     }
     loadTournaments()
@@ -281,14 +312,69 @@ export default function CreatePoolPage() {
     setCreatedPool({ id: pool.id, name })
   }
 
-  // Step labels differ by pool type
+  // Step labels differ by pool type. "invite" is always the true final step now —
+  // it used to reuse the buy-in step's slot when buy-ins were off; now it's its own
+  // step regardless, since inviting happens after the pool is created either way.
   const isBracket = deadlineType === 'before_tournament'
-  const totalSteps = isPL ? 5 : 4
+  const totalSteps = (isPL ? 5 : 4) + 1
   const stepLabels = isPL
-    ? ['competition', 'name', 'pl config', 'predictions', BUYINS_ENABLED ? 'prizes' : 'invites']
+    ? ['competition', 'name', 'pl config', 'predictions', BUYINS_ENABLED ? 'prizes' : 'settings', 'invite']
     : isBracket
-    ? ['competition', 'name', 'scoring', BUYINS_ENABLED ? 'buy-in' : 'invites']
-    : ['competition', 'name', 'predictions', BUYINS_ENABLED ? 'buy-in' : 'invites']
+    ? ['competition', 'name', 'scoring', BUYINS_ENABLED ? 'buy-in' : 'settings', 'invite']
+    : ['competition', 'name', 'predictions', BUYINS_ENABLED ? 'buy-in' : 'settings', 'invite']
+  // Every existing numbered step keeps its original number/content — this only adds
+  // one genuinely new final step. The pool is actually created at the end of the
+  // second-to-last step (unchanged), and this last "invite" step only renders once
+  // createdPool is set (see the render branch below), since an invitation can't
+  // reference a pool that doesn't exist in the database yet.
+
+  function StepIndicator({ effectiveStep }: { effectiveStep: number }) {
+    return (
+      <div style={{display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '20px', flexWrap: 'wrap' as const}}>
+        {Array.from({length: totalSteps}, (_, i) => i + 1).map((s, i) => (
+          <div key={s} style={{display: 'flex', alignItems: 'center', gap: '4px'}}>
+            <div style={{
+              width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '10px', fontWeight: 600, flexShrink: 0,
+              background: s === effectiveStep ? '#111' : s < effectiveStep ? '#C8102E' : 'transparent',
+              color: s <= effectiveStep ? 'white' : '#bbb',
+              border: `1px solid ${s <= effectiveStep ? 'transparent' : '#ddd'}`,
+            }}>{s < effectiveStep ? '✓' : s}</div>
+            <span style={{fontSize: '11px', color: s === effectiveStep ? '#111' : '#bbb', whiteSpace: 'nowrap' as const}}>{stepLabels[i]}</span>
+            {i < totalSteps - 1 && <span style={{color: '#ddd', margin: '0 2px'}}>→</span>}
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  function TournamentCard({ t }: { t: { id: string; name: string; sport: string; description: string; gated: boolean } }) {
+    if (t.gated) {
+      return (
+        <div style={{display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', border: '1px solid #e0e0db', marginBottom: 4, cursor: 'default', background: '#f5f5f5'}}>
+          <div style={{fontWeight: 600, color: '#aaa'}}>🔒 {t.name}</div>
+          {t.description && <div style={{fontSize: '11px', color: '#aaa', marginTop: 2}}>{t.description}</div>}
+        </div>
+      )
+    }
+    return (
+      <button onClick={() => {
+        setTournamentId(t.id)
+        setSport(t.sport)
+        if (t.sport === 'f1') setDeadlineType('before_weekend' as any)
+        else if (t.sport === 'mma') setDeadlineType('before_tournament')
+        else if (t.id.startsWith('pl_')) setDeadlineType('before_weekend' as any)
+        else setDeadlineType('before_each_game')
+      }} style={{
+        display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', border: '1px solid', marginBottom: 4, cursor: 'pointer',
+        borderColor: tournamentId === t.id ? '#C8102E' : '#e0e0db',
+        background: tournamentId === t.id ? '#fff5f5' : 'white',
+      }}>
+        <div style={{fontWeight: 600, color: tournamentId === t.id ? '#C8102E' : '#111'}}>{t.name}</div>
+        {t.description && <div style={{fontSize: '11px', color: '#888', marginTop: 2}}>{t.description}</div>}
+      </button>
+    )
+  }
 
   function NumberInput({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
     return (
@@ -354,41 +440,32 @@ export default function CreatePoolPage() {
 
       <div style={{maxWidth: createdPool ? 520 : (step === 3 && (!isBracket || sport === 'mma' || sport === 'f1')) || (isPL && step === 4) ? 1100 : 520, margin: '0 auto', padding: '24px 16px'}}>
         {createdPool ? (
-          <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
-            <h1 style={{fontWeight: 700, fontSize: '15px', marginBottom: '4px'}}>✓ {createdPool.name} created</h1>
-            <p style={{fontSize: '11px', color: '#888', marginBottom: '16px'}}>
-              invite some friends now, or skip and do it later from the pool page.
-            </p>
-            <InviteFromContacts poolId={createdPool.id} />
-            <div style={{marginTop: '16px'}}>
-              <button className="btn-primary" onClick={() => { window.location.href = `/pool/${createdPool.id}` }}
-                style={{width: '100%', padding: '10px 24px', fontSize: '14px', minHeight: 44}}>
-                done — go to pool →
-              </button>
+          <>
+            <div style={{marginBottom: '16px'}}>
+              <h1 style={{fontWeight: 700, fontSize: '15px', marginBottom: '2px'}}>new pool</h1>
             </div>
-          </div>
+            <StepIndicator effectiveStep={totalSteps} />
+            <div style={{background: 'white', border: '1px solid #e0e0db', padding: '20px'}}>
+              <div style={{fontWeight: 600, fontSize: '14px', marginBottom: 4}}>invite people to {createdPool.name}</div>
+              <p style={{fontSize: '11px', color: '#888', marginBottom: '16px'}}>
+                optional — invite now, or skip and do it later from the pool page.
+              </p>
+              <InviteFromContacts poolId={createdPool.id} />
+              <div style={{marginTop: '16px'}}>
+                <button className="btn-primary" onClick={() => { window.location.href = `/pool/${createdPool.id}` }}
+                  style={{width: '100%', padding: '10px 24px', fontSize: '14px', minHeight: 44}}>
+                  done — go to pool →
+                </button>
+              </div>
+            </div>
+          </>
         ) : (
         <>
         <div style={{marginBottom: '16px'}}>
           <h1 style={{fontWeight: 700, fontSize: '15px', marginBottom: '2px'}}>new pool</h1>
         </div>
 
-        {/* Step indicator */}
-        <div style={{display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '20px', flexWrap: 'wrap' as const}}>
-          {Array.from({length: totalSteps}, (_, i) => i + 1).map((s, i) => (
-            <div key={s} style={{display: 'flex', alignItems: 'center', gap: '4px'}}>
-              <div style={{
-                width: 22, height: 22, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '10px', fontWeight: 600, flexShrink: 0,
-                background: s === step ? '#111' : s < step ? '#C8102E' : 'transparent',
-                color: s <= step ? 'white' : '#bbb',
-                border: `1px solid ${s <= step ? 'transparent' : '#ddd'}`,
-              }}>{s < step ? '✓' : s}</div>
-              <span style={{fontSize: '11px', color: s === step ? '#111' : '#bbb', whiteSpace: 'nowrap' as const}}>{stepLabels[i]}</span>
-              {i < totalSteps - 1 && <span style={{color: '#ddd', margin: '0 2px'}}>→</span>}
-            </div>
-          ))}
-        </div>
+        <StepIndicator effectiveStep={step} />
 
         {/* ── Step 1: Competition ───────────────────────────────────────── */}
         {step === 1 && (
@@ -408,45 +485,13 @@ export default function CreatePoolPage() {
                   {inProgress.length > 0 && (
                     <div style={{marginBottom: 8}}>
                       <div style={{fontSize: '10px', color: '#2d7a2d', fontWeight: 600, marginBottom: 4}}>● in progress</div>
-                      {inProgress.map(t => (
-                        <button key={t.id} onClick={() => {
-                          setTournamentId(t.id)
-                          setSport(t.sport)
-                          if (t.sport === 'f1') setDeadlineType('before_weekend' as any)
-                          else if (t.sport === 'mma') setDeadlineType('before_tournament')
-                          else if (t.id.startsWith('pl_')) setDeadlineType('before_weekend' as any)
-                          else setDeadlineType('before_each_game')
-                        }} style={{
-                          display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', border: '1px solid', marginBottom: 4, cursor: 'pointer',
-                          borderColor: tournamentId === t.id ? '#C8102E' : '#e0e0db',
-                          background: tournamentId === t.id ? '#fff5f5' : 'white',
-                        }}>
-                          <div style={{fontWeight: 600, color: tournamentId === t.id ? '#C8102E' : '#111'}}>{t.name}</div>
-                          {t.description && <div style={{fontSize: '11px', color: '#888', marginTop: 2}}>{t.description}</div>}
-                        </button>
-                      ))}
+                      {inProgress.map(t => <TournamentCard key={t.id} t={t} />)}
                     </div>
                   )}
                   {upcoming.length > 0 && (
                     <div>
                       {inProgress.length > 0 && <div style={{fontSize: '10px', color: '#aaa', fontWeight: 600, marginBottom: 4}}>upcoming</div>}
-                      {upcoming.map(t => (
-                        <button key={t.id} onClick={() => {
-                          setTournamentId(t.id)
-                          setSport(t.sport)
-                          if (t.sport === 'f1') setDeadlineType('before_weekend' as any)
-                          else if (t.sport === 'mma') setDeadlineType('before_tournament')
-                          else if (t.id.startsWith('pl_')) setDeadlineType('before_weekend' as any)
-                          else setDeadlineType('before_each_game')
-                        }} style={{
-                          display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', border: '1px solid', marginBottom: 4, cursor: 'pointer',
-                          borderColor: tournamentId === t.id ? '#C8102E' : '#e0e0db',
-                          background: tournamentId === t.id ? '#fff5f5' : 'white',
-                        }}>
-                          <div style={{fontWeight: 600, color: tournamentId === t.id ? '#C8102E' : '#111'}}>{t.name}</div>
-                          {t.description && <div style={{fontSize: '11px', color: '#888', marginTop: 2}}>{t.description}</div>}
-                        </button>
-                      ))}
+                      {upcoming.map(t => <TournamentCard key={t.id} t={t} />)}
                     </div>
                   )}
                 </div>

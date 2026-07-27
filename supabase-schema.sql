@@ -530,3 +530,29 @@ create policy "Users can update their own pool_members row" on public.pool_membe
 
 -- Idempotency marker for the daily "new competition live" notify cron.
 alter table public.tournaments add column if not exists notified_at timestamptz;
+
+-- ============================================
+-- Friends: one-way personal tag for organizing invites. Not a relationship --
+-- no request/accept flow, nothing changes for the tagged person, and they cannot
+-- see or query this table for themselves (RLS is scoped entirely to the tagger's
+-- own auth.uid()).
+-- ============================================
+create table if not exists public.friends (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  friend_user_id uuid references auth.users(id) on delete cascade not null,
+  created_at timestamptz default now(),
+  unique(user_id, friend_user_id),
+  check (user_id <> friend_user_id)
+);
+
+alter table public.friends enable row level security;
+
+create policy "Users can view their own friend tags" on public.friends for select
+  using (auth.uid() = user_id);
+create policy "Users can tag their own friends" on public.friends for insert
+  with check (auth.uid() = user_id);
+create policy "Users can untag their own friends" on public.friends for delete
+  using (auth.uid() = user_id);
+
+grant select, insert, delete on public.friends to authenticated;

@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { getContacts, Contact } from '@/lib/contacts'
+import { getContacts, getFriendIds, addFriend, removeFriend, Contact } from '@/lib/contacts'
 
 export default function InviteFromContacts({ poolId }: { poolId: string }) {
+  const [userId, setUserId] = useState<string | null>(null)
   const [contacts, setContacts] = useState<Contact[]>([])
+  const [friendIds, setFriendIds] = useState<Set<string>>(new Set())
   const [memberIds, setMemberIds] = useState<Set<string>>(new Set())
   const [invitations, setInvitations] = useState<Record<string, { id: string; status: string }>>({})
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -13,18 +15,25 @@ export default function InviteFromContacts({ poolId }: { poolId: string }) {
   const [inviting, setInviting] = useState(false)
   const [sentCount, setSentCount] = useState(0)
 
+  const [emailText, setEmailText] = useState('')
+  const [bulkSending, setBulkSending] = useState(false)
+  const [bulkResult, setBulkResult] = useState<{ matched: number; unmatched: number; skipped: number } | null>(null)
+
   async function load() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
+    setUserId(user.id)
 
-    const [contactList, { data: members }, { data: invites }] = await Promise.all([
+    const [contactList, friendSet, { data: members }, { data: invites }] = await Promise.all([
       getContacts(supabase, user.id),
+      getFriendIds(supabase, user.id),
       supabase.from('pool_members').select('user_id').eq('pool_id', poolId),
       supabase.from('pool_invitations').select('id, invited_user_id, status').eq('pool_id', poolId),
     ])
 
     setContacts(contactList)
+    setFriendIds(friendSet)
     setMemberIds(new Set((members || []).map((m: any) => m.user_id)))
     const invMap: Record<string, { id: string; status: string }> = {}
     ;(invites || []).forEach((i: any) => { invMap[i.invited_user_id] = { id: i.id, status: i.status } })
@@ -43,11 +52,17 @@ export default function InviteFromContacts({ poolId }: { poolId: string }) {
     })
   }
 
-  function toggleAll(invitableIds: string[]) {
-    setSelected(prev => {
-      const allSelected = invitableIds.length > 0 && invitableIds.every(id => prev.has(id))
-      return allSelected ? new Set() : new Set(invitableIds)
-    })
+  async function toggleFriend(contactUserId: string) {
+    if (!userId) return
+    if (friendIds.has(contactUserId)) {
+      await removeFriend(createClient(), userId, contactUserId)
+      setFriendIds(prev => { const next = new Set(prev); next.delete(contactUserId); return next })
+    } else {
+      const { error } = await addFriend(createClient(), userId, contactUserId)
+      if (!error || (error as any).code === '23505') {
+        setFriendIds(prev => new Set(prev).add(contactUserId))
+      }
+    }
   }
 
   async function inviteSelected() {
@@ -91,47 +106,115 @@ export default function InviteFromContacts({ poolId }: { poolId: string }) {
     await load()
   }
 
+  async function sendBulkEmail() {
+    const emails = [...new Set(
+      emailText.split(/[\s,;]+/).map(e => e.trim().toLowerCase()).filter(e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
+    )]
+    if (!emails.length) return
+    setBulkSending(true)
+    setBulkResult(null)
+    try {
+      const res = await fetch('/api/invite/bulk-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ poolId, emails }),
+      })
+      const data = await res.json()
+      setBulkResult({
+        matched: (data.matched || []).length,
+        unmatched: (data.unmatched || []).length,
+        skipped: (data.skipped || []).length,
+      })
+      setEmailText('')
+      await load()
+    } finally {
+      setBulkSending(false)
+    }
+  }
+
   if (loading) return <div style={{ fontSize: '11px', color: '#aaa' }}>loading contacts...</div>
 
   const invitable = contacts.filter(c => !memberIds.has(c.userId) && invitations[c.userId]?.status !== 'accepted' && invitations[c.userId]?.status !== 'declined')
-
-  if (invitable.length === 0) {
-    return <div style={{ fontSize: '11px', color: '#aaa' }}>no contacts to invite yet — invite friends by link, or come back once you've pooled with more people</div>
-  }
-
   const invitableIds = invitable.map(c => c.userId)
-  const allSelected = invitableIds.length > 0 && invitableIds.every(id => selected.has(id))
+
+  const modeButtonStyle = {
+    fontSize: '10px', padding: '4px 8px', background: 'white', color: '#555', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit',
+  }
 
   return (
     <div>
       <div style={{ fontSize: '11px', color: '#888', marginBottom: 10 }}>
         invite people you've pooled with before — they'll see it on their dashboard and can accept or decline.
       </div>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderBottom: '1px solid #f5f5f5', cursor: 'pointer', fontSize: '11px', fontWeight: 600, color: '#555' }}>
-        <input type="checkbox" checked={allSelected} onChange={() => toggleAll(invitableIds)} />
-        select all ({invitableIds.length})
-      </label>
-      <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #e0e0db', borderTop: 'none', marginBottom: 10 }}>
-        {invitable.map(c => {
-          const pending = invitations[c.userId]?.status === 'pending'
-          return (
-            <label key={c.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderBottom: '1px solid #f5f5f5', cursor: 'pointer', fontSize: '12px' }}>
-              <input type="checkbox" checked={selected.has(c.userId)} onChange={() => toggle(c.userId)} />
-              <span style={{ flex: 1 }}>{c.displayName}</span>
-              {pending && <span style={{ fontSize: '10px', color: '#aaa' }}>already invited</span>}
-            </label>
-          )
-        })}
-      </div>
-      <button
-        onClick={inviteSelected}
-        disabled={selected.size === 0 || inviting}
-        style={{ width: '100%', padding: '9px', fontSize: '12px', fontWeight: 600, background: '#111', color: 'white', border: 'none', cursor: selected.size === 0 ? 'default' : 'pointer', opacity: selected.size === 0 ? 0.4 : 1, fontFamily: 'inherit' }}>
-        {inviting ? 'inviting...' : `invite selected (${selected.size})`}
-      </button>
-      {sentCount > 0 && !inviting && (
-        <div style={{ fontSize: '11px', color: '#2d7a2d', marginTop: 6 }}>✓ sent {sentCount} invite{sentCount === 1 ? '' : 's'}</div>
+
+      {invitable.length > 0 && (
+        <>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+            <button style={modeButtonStyle} onClick={() => setSelected(new Set(invitableIds))}>everyone ({invitableIds.length})</button>
+            <button style={modeButtonStyle} onClick={() => setSelected(new Set(invitableIds.filter(id => friendIds.has(id))))}>
+              friends ({invitableIds.filter(id => friendIds.has(id)).length})
+            </button>
+            <button style={modeButtonStyle} onClick={() => setSelected(new Set())}>clear</button>
+          </div>
+          <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #e0e0db', marginBottom: 10 }}>
+            {invitable.map(c => {
+              const pending = invitations[c.userId]?.status === 'pending'
+              const isFriend = friendIds.has(c.userId)
+              return (
+                <div key={c.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderBottom: '1px solid #f5f5f5', fontSize: '12px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={selected.has(c.userId)} onChange={() => toggle(c.userId)} />
+                    <span style={{ flex: 1 }}>{c.displayName}</span>
+                  </label>
+                  {pending && <span style={{ fontSize: '10px', color: '#aaa' }}>already invited</span>}
+                  <button
+                    onClick={() => toggleFriend(c.userId)}
+                    title={isFriend ? 'remove friend' : 'mark as friend'}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: isFriend ? '#C8102E' : '#ddd', padding: 0, lineHeight: 1 }}>
+                    {isFriend ? '★' : '☆'}
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+          <button
+            onClick={inviteSelected}
+            disabled={selected.size === 0 || inviting}
+            style={{ width: '100%', padding: '9px', fontSize: '12px', fontWeight: 600, background: '#111', color: 'white', border: 'none', cursor: selected.size === 0 ? 'default' : 'pointer', opacity: selected.size === 0 ? 0.4 : 1, fontFamily: 'inherit' }}>
+            {inviting ? 'inviting...' : `invite selected (${selected.size})`}
+          </button>
+          {sentCount > 0 && !inviting && (
+            <div style={{ fontSize: '11px', color: '#2d7a2d', marginTop: 6 }}>✓ sent {sentCount} invite{sentCount === 1 ? '' : 's'}</div>
+          )}
+        </>
       )}
+
+      {invitable.length === 0 && (
+        <div style={{ fontSize: '11px', color: '#aaa', marginBottom: 10 }}>no contacts to invite yet — come back once you've pooled with more people, or invite by email below.</div>
+      )}
+
+      <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #f5f5f5' }}>
+        <div style={{ fontSize: '11px', color: '#888', marginBottom: 6 }}>or invite by email</div>
+        <textarea
+          value={emailText}
+          onChange={e => setEmailText(e.target.value)}
+          placeholder="paste emails, separated by commas or new lines"
+          rows={3}
+          style={{ width: '100%', border: '1px solid #e0e0db', padding: '8px', fontSize: '12px', fontFamily: 'inherit', resize: 'vertical', boxSizing: 'border-box' as const, marginBottom: 8 }}
+        />
+        <button
+          onClick={sendBulkEmail}
+          disabled={bulkSending || !emailText.trim()}
+          style={{ width: '100%', padding: '9px', fontSize: '12px', fontWeight: 600, background: '#111', color: 'white', border: 'none', cursor: !emailText.trim() ? 'default' : 'pointer', opacity: !emailText.trim() ? 0.4 : 1, fontFamily: 'inherit' }}>
+          {bulkSending ? 'sending...' : 'send email invites'}
+        </button>
+        {bulkResult && (
+          <div style={{ fontSize: '11px', color: '#2d7a2d', marginTop: 6 }}>
+            ✓ {bulkResult.matched} invited in-app, {bulkResult.unmatched} emailed to join
+            {bulkResult.skipped > 0 && `, ${bulkResult.skipped} skipped`}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
