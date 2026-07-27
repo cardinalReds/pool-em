@@ -17,6 +17,6 @@
     { "path": "/api/nfl/score", "schedule": "* * * * *" },
     { "path": "/api/nfl/odds", "schedule": "0 */6 * * *" },
     { "path": "/api/tournaments/notify", "schedule": "0 8 * * *" },
-    { "path": "/api/mma/seed", "schedule": "0 9 * * *" }
+    { "path": "/api/mma/seed", "schedule": "0 */12 * * *" }
   ]
 }
