@@ -235,21 +235,16 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
     bySegment[seg].push(f)
   }
 
-  // Sort within each segment: fight_order 1 = headliner = top. Live bubbles to very top.
+  // Sort within each segment: fight_order 1 = headliner = top, counting down to the
+  // opening fight of the segment at the bottom -- reverse-chronological, same as how a
+  // real fight card poster reads, regardless of whether a fight has already happened.
+  // Live still bubbles to the very top so it's obvious what's happening right now.
   for (const seg of Object.keys(bySegment)) {
     bySegment[seg].sort((a, b) => {
-      // Live first
       const aLive = a.status === 'live' ? 0 : 1
       const bLive = b.status === 'live' ? 0 : 1
       if (aLive !== bLive) return aLive - bLive
-      // FT to bottom, sorted by fight_order descending (last fight fought = bottom)
-      const aFt = a.status === 'FT'
-      const bFt = b.status === 'FT'
-      if (aFt && bFt) return (b.fight_order || 0) - (a.fight_order || 0)
-      if (aFt) return 1
-      if (bFt) return -1
-      // NS: next up = highest fight_order among remaining = top
-      return (b.fight_order || 0) - (a.fight_order || 0)
+      return (a.fight_order || 0) - (b.fight_order || 0)
     })
   }
 
