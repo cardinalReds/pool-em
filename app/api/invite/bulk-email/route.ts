@@ -20,10 +20,17 @@ export async function POST(request: NextRequest) {
 
   const { data: pool } = await supabase
     .from('pools')
-    .select('id, name, admin_id, allow_member_invites, buy_in_amount, payout_structure')
+    .select('id, name, admin_id, allow_member_invites, buy_in_amount, payout_structure, tournament_id')
     .eq('id', poolId)
     .single()
   if (!pool) return NextResponse.json({ error: 'Pool not found' }, { status: 404 })
+
+  const inviterName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'someone'
+  let competitionName: string | null = null
+  if (pool.tournament_id) {
+    const { data: tournament } = await supabase.from('tournaments').select('name').eq('id', pool.tournament_id).maybeSingle()
+    competitionName = tournament?.name ?? null
+  }
 
   const isAdmin = pool.admin_id === user.id
   let isEligibleMember = false
@@ -129,6 +136,8 @@ export async function POST(request: NextRequest) {
           inviteUrl: `${appUrl}/pool/join/${token}`,
           buyInAmount: pool.buy_in_amount,
           payoutStructure: pool.payout_structure,
+          inviterName,
+          competitionName,
         }),
       }).catch(() => {})
       unmatched.push(email)

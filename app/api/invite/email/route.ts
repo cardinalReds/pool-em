@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
-  const { email, poolName, inviteUrl, buyInAmount, payoutStructure } = await req.json()
+  const { email, poolName, inviteUrl, buyInAmount, payoutStructure, inviterName, competitionName } = await req.json()
   if (!email || !inviteUrl) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
 
   const resendKey = process.env.RESEND_API_KEY
@@ -14,6 +14,8 @@ export async function POST(req: NextRequest) {
     </div>
   ` : ''
 
+  const subject = inviterName ? `${inviterName} invited you to join ${poolName}` : `You've been invited to join ${poolName}`
+
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -23,12 +25,14 @@ export async function POST(req: NextRequest) {
     body: JSON.stringify({
       from: "pool'em <invites@pool-em.com>",
       to: email,
-      subject: `You've been invited to join ${poolName}`,
+      subject,
       html: `
         <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
           <div style="font-weight: 700; font-size: 16px; margin-bottom: 4px;">pool'em</div>
           <div style="background: #111; color: white; padding: 16px; margin-bottom: 16px;">
-            <p style="font-size: 11px; color: #888; margin: 0 0 6px;">you've been invited</p>
+            <p style="font-size: 11px; color: #888; margin: 0 0 6px;">
+              ${inviterName ? `${inviterName} invited you` : "you've been invited"}${competitionName ? ` · ${competitionName}` : ''}
+            </p>
             <h2 style="font-size: 18px; font-weight: 700; margin: 0;">${poolName}</h2>
           </div>
           ${buyInSection}

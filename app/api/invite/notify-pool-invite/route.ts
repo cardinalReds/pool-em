@@ -12,12 +12,34 @@ export async function POST(req: NextRequest) {
 
   const { data: inv } = await supabase
     .from('pool_invitations')
-    .select('id, pool_id, invited_user_id, status, pools(name)')
+    .select('id, pool_id, invited_user_id, status, pools(name, tournament_id)')
     .eq('id', invitationId)
     .eq('status', 'pending')
     .single()
 
   if (!inv) return NextResponse.json({ ok: true, skipped: true, reason: 'not found or not pending' })
+
+  const tournamentId = (inv.pools as any)?.tournament_id
+  let competitionName: string | null = null
+  if (tournamentId) {
+    const { data: tournament } = await supabase.from('tournaments').select('name').eq('id', tournamentId).maybeSingle()
+    competitionName = tournament?.name ?? null
+  }
+
+  const { data: inviterRows } = await supabase
+    .from('pool_invitation_inviters')
+    .select('inviter_user_id')
+    .eq('invitation_id', inv.id)
+  const inviterIds = (inviterRows || []).map((r: any) => r.inviter_user_id)
+  let inviterNames: string[] = []
+  if (inviterIds.length) {
+    const { data: inviterMembers } = await supabase
+      .from('pool_members')
+      .select('user_id, display_name')
+      .eq('pool_id', inv.pool_id)
+      .in('user_id', inviterIds)
+    inviterNames = (inviterMembers || []).map((m: any) => m.display_name)
+  }
 
   const { data: profile } = await supabase
     .from('profiles')
@@ -51,18 +73,23 @@ export async function POST(req: NextRequest) {
   const resendKey = process.env.RESEND_API_KEY
   if (!resendKey) return NextResponse.json({ error: 'Email not configured' }, { status: 500 })
 
+  const inviterLabel = inviterNames.length ? inviterNames.join(', ') : null
+  const subject = inviterLabel ? `${inviterLabel} invited you to join ${poolName}` : `You've been invited to join ${poolName}`
+
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       from: "pool'em <invites@pool-em.com>",
       to: invitee.email,
-      subject: `You've been invited to join ${poolName}`,
+      subject,
       html: `
         <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
           <div style="font-weight: 700; font-size: 16px; margin-bottom: 4px;">pool'em</div>
           <div style="background: #111; color: white; padding: 16px; margin-bottom: 16px;">
-            <p style="font-size: 11px; color: #888; margin: 0 0 6px;">you've been invited</p>
+            <p style="font-size: 11px; color: #888; margin: 0 0 6px;">
+              ${inviterLabel ? `${inviterLabel} invited you` : "you've been invited"}${competitionName ? ` · ${competitionName}` : ''}
+            </p>
             <h2 style="font-size: 18px; font-weight: 700; margin: 0;">${poolName}</h2>
           </div>
           ${rulesSection}
