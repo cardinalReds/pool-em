@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient as createServerClient } from '@/lib/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 const supabase = createSupabaseClient(
@@ -8,8 +7,12 @@ const supabase = createSupabaseClient(
 )
 
 export async function POST(request: NextRequest) {
-  const sessionClient = await createServerClient()
-  const { data: { user } } = await sessionClient.auth.getUser()
+  // This app's browser client keeps its session in localStorage, not cookies, so
+  // there's no cookie-session server client to read here -- the caller sends their
+  // own access token instead, verified directly against Supabase auth.
+  const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
+  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { data: { user } } = await supabase.auth.getUser(token)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { poolId, emails } = await request.json()

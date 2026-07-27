@@ -71,14 +71,18 @@ export default function SettingsPage() {
   async function handleDeleteAccount() {
     setDeleting(true)
     setDeleteError('')
-    const res = await fetch('/api/account/delete', { method: 'POST' })
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch('/api/account/delete', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${session?.access_token}` },
+    })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
       setDeleteError(body.error || 'something went wrong — try again')
       setDeleting(false)
       return
     }
-    const supabase = createClient()
     await supabase.auth.signOut()
     window.location.href = '/'
   }
