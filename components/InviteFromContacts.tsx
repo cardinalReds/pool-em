@@ -18,6 +18,7 @@ export default function InviteFromContacts({ poolId }: { poolId: string }) {
   const [emailText, setEmailText] = useState('')
   const [bulkSending, setBulkSending] = useState(false)
   const [bulkResult, setBulkResult] = useState<{ matched: number; unmatched: number; skipped: number } | null>(null)
+  const [bulkError, setBulkError] = useState('')
 
   async function load() {
     const supabase = createClient()
@@ -113,6 +114,7 @@ export default function InviteFromContacts({ poolId }: { poolId: string }) {
     if (!emails.length) return
     setBulkSending(true)
     setBulkResult(null)
+    setBulkError('')
     try {
       const res = await fetch('/api/invite/bulk-email', {
         method: 'POST',
@@ -120,6 +122,10 @@ export default function InviteFromContacts({ poolId }: { poolId: string }) {
         body: JSON.stringify({ poolId, emails }),
       })
       const data = await res.json()
+      if (!res.ok) {
+        setBulkError(data.error || `something went wrong (${res.status})`)
+        return
+      }
       setBulkResult({
         matched: (data.matched || []).length,
         unmatched: (data.unmatched || []).length,
@@ -208,6 +214,9 @@ export default function InviteFromContacts({ poolId }: { poolId: string }) {
           style={{ width: '100%', padding: '9px', fontSize: '12px', fontWeight: 600, background: '#111', color: 'white', border: 'none', cursor: !emailText.trim() ? 'default' : 'pointer', opacity: !emailText.trim() ? 0.4 : 1, fontFamily: 'inherit' }}>
           {bulkSending ? 'sending...' : 'send email invites'}
         </button>
+        {bulkError && (
+          <div style={{ fontSize: '11px', color: '#C8102E', marginTop: 6 }}>✗ {bulkError}</div>
+        )}
         {bulkResult && (
           <div style={{ fontSize: '11px', color: '#2d7a2d', marginTop: 6 }}>
             ✓ {bulkResult.matched} invited in-app, {bulkResult.unmatched} emailed to join

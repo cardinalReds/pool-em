@@ -158,8 +158,30 @@ export default function CreatePoolPage() {
         if (!nextFixtureDate[f.tournament_id]) nextFixtureDate[f.tournament_id] = f.date
       }
 
+      // Earliest upcoming Race session per F1 tournament, for "next race on <date>".
+      // Excludes cancelled races (e.g. Bahrain/Saudi Arabia this season) -- those
+      // stay scored=false forever since they never happened, so without this they'd
+      // permanently masquerade as the "next" race.
+      const { data: upcomingRaces } = await supabase
+        .from('f1_sessions')
+        .select('tournament_id, date')
+        .in('tournament_id', ids)
+        .eq('session_type', 'Race')
+        .eq('scored', false)
+        .neq('status', 'Cancelled')
+        .order('date', { ascending: true })
+      const nextRaceDate: Record<string, string> = {}
+      for (const r of upcomingRaces || []) {
+        if (!nextRaceDate[r.tournament_id]) nextRaceDate[r.tournament_id] = r.date
+      }
+
       function describeTournament(t: { id: string; sport: string; event_date: string | null }): string {
-        if (t.sport === 'f1') return 'create your pool now to catch up!'
+        if (t.sport === 'f1') {
+          const nextRace = nextRaceDate[t.id]
+          return nextRace
+            ? `create your pool now to catch up! next race on ${shortDate(nextRace)}`
+            : 'create your pool now to catch up!'
+        }
         if (t.sport === 'mma') {
           if (!t.event_date) return ''
           const eventStr = shortDate(t.event_date)
