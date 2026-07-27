@@ -29,8 +29,14 @@ async function sendNotification(email: string, tournamentName: string) {
           <a href="${appUrl}/pool/create" style="display: inline-block; background: #111; color: white; padding: 10px 24px; text-decoration: none; font-weight: 600; font-size: 13px;">
             create a pool →
           </a>
+          <p style="color: #aaa; font-size: 10px; margin-top: 32px;">
+            <a href="${appUrl}/dashboard/settings" style="color: #aaa;">manage notification preferences</a>
+          </p>
         </div>
       `,
+      headers: {
+        'List-Unsubscribe': `<${appUrl}/dashboard/settings>, <mailto:support@pool-em.com?subject=unsubscribe>`,
+      },
     }),
   }).catch(err => console.error('tournaments/notify: Resend error', err))
 }

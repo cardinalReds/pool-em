@@ -134,6 +134,9 @@ export async function POST(request: NextRequest) {
                 </p>
               </div>
             `,
+            headers: {
+              'List-Unsubscribe': '<mailto:support@pool-em.com?subject=unsubscribe>',
+            },
           }),
         })
 
@@ -279,6 +282,9 @@ export async function POST(request: NextRequest) {
                 </p>
               </div>
             `,
+            headers: {
+              'List-Unsubscribe': '<mailto:support@pool-em.com?subject=unsubscribe>',
+            },
           }),
         })
 

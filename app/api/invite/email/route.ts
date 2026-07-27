@@ -43,6 +43,9 @@ export async function POST(req: NextRequest) {
           <p style="color: #aaa; font-size: 11px; margin-top: 20px;">or copy this link: ${inviteUrl}</p>
         </div>
       `,
+      headers: {
+        'List-Unsubscribe': '<mailto:support@pool-em.com?subject=unsubscribe>',
+      },
     }),
   })
 

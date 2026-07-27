@@ -99,6 +99,9 @@ export async function POST(req: NextRequest) {
           <p style="color: #aaa; font-size: 11px; margin-top: 20px;">accept or decline from your pool'em dashboard.</p>
         </div>
       `,
+      headers: {
+        'List-Unsubscribe': '<mailto:support@pool-em.com?subject=unsubscribe>',
+      },
     }),
   })
 
