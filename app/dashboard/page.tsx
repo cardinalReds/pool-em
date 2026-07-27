@@ -25,6 +25,7 @@ export default function DashboardPage() {
   const [livePoolIds, setLivePoolIds] = useState<Set<string>>(new Set())
   const [overPoolIds, setOverPoolIds] = useState<Set<string>>(new Set())
   const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([])
+  const [tournamentNames, setTournamentNames] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [showArchived, setShowArchived] = useState(false)
 
@@ -75,7 +76,7 @@ export default function DashboardPage() {
     if (tournamentIds.length > 0) {
       const { data: tournaments } = await supabase
         .from('tournaments')
-        .select('id, end_date')
+        .select('id, name, end_date')
         .in('id', tournamentIds)
       const now = new Date()
       const overTournaments = new Set(
@@ -87,6 +88,10 @@ export default function DashboardPage() {
           .map(p => p.id) as string[]
       )
       setOverPoolIds(overIds)
+
+      const nameById: Record<string, string> = {}
+      for (const t of tournaments || []) nameById[t.id] = t.name
+      setTournamentNames(nameById)
     }
 
     await loadPendingInvites(supabase, user, admin || [], member || [])
@@ -251,7 +256,7 @@ export default function DashboardPage() {
             <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
           </div>
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))', gap: '0.75rem'}}>
-            {activeAdmin.map(pool => <PoolCard key={pool.id} pool={pool} role="admin" isLive={livePoolIds.has(pool.id)} isOver={overPoolIds.has(pool.id)} onArchive={() => archivePool(pool.id, true)} />)}
+            {activeAdmin.map(pool => <PoolCard key={pool.id} pool={pool} role="admin" isLive={livePoolIds.has(pool.id)} isOver={overPoolIds.has(pool.id)} onArchive={() => archivePool(pool.id, true)} tournamentName={tournamentNames[pool.tournament_id]} />)}
           </div>
         </section>
       )}
@@ -263,7 +268,7 @@ export default function DashboardPage() {
             <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
           </div>
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))', gap: '0.75rem'}}>
-            {activeMember.map(m => <PoolCard key={m.id} pool={(m.pools as any)} role="member" isLive={livePoolIds.has((m.pools as any)?.id)} />)}
+            {activeMember.map(m => <PoolCard key={m.id} pool={(m.pools as any)} role="member" isLive={livePoolIds.has((m.pools as any)?.id)} tournamentName={tournamentNames[(m.pools as any)?.tournament_id]} />)}
           </div>
         </section>
       )}
@@ -287,8 +292,8 @@ export default function DashboardPage() {
           </button>
           {showArchived && (
             <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))', gap: '0.75rem'}}>
-              {archivedAdmin.map(pool => <PoolCard key={pool.id} pool={pool} role="admin" isLive={false} onUnarchive={() => archivePool(pool.id, false)} />)}
-              {archivedMember.map(m => <PoolCard key={m.id} pool={(m.pools as any)} role="member" isLive={false} />)}
+              {archivedAdmin.map(pool => <PoolCard key={pool.id} pool={pool} role="admin" isLive={false} onUnarchive={() => archivePool(pool.id, false)} tournamentName={tournamentNames[pool.tournament_id]} />)}
+              {archivedMember.map(m => <PoolCard key={m.id} pool={(m.pools as any)} role="member" isLive={false} tournamentName={tournamentNames[(m.pools as any)?.tournament_id]} />)}
             </div>
           )}
         </section>
@@ -297,13 +302,14 @@ export default function DashboardPage() {
   )
 }
 
-function PoolCard({ pool, role, isLive, isOver, onArchive, onUnarchive }: {
+function PoolCard({ pool, role, isLive, isOver, onArchive, onUnarchive, tournamentName }: {
   pool: any
   role: 'admin' | 'member'
   isLive?: boolean
   isOver?: boolean
   onArchive?: () => void
   onUnarchive?: () => void
+  tournamentName?: string
 }) {
   const pkg = RULE_PACKAGES[pool.package_id as keyof typeof RULE_PACKAGES]
   return (
@@ -326,7 +332,7 @@ function PoolCard({ pool, role, isLive, isOver, onArchive, onUnarchive }: {
             </div>
           </div>
           <div style={{fontWeight: 600, fontSize: '1rem', marginBottom: '0.25rem'}}>{pool.name}</div>
-          <div style={{fontSize: '0.75rem', color: 'var(--text-dim)'}}>{pkg?.name || pool.package_id}</div>
+          <div style={{fontSize: '0.75rem', color: 'var(--text-dim)'}}>{tournamentName || pkg?.name || pool.package_id}</div>
         </div>
       </Link>
       {onArchive && !pool.archived && isOver && (
