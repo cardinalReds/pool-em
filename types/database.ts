@@ -1512,6 +1512,35 @@ export type Database = {
         }
         Relationships: []
       }
+      user_sport_interests: {
+        Row: {
+          created_at: string
+          source: string
+          sport: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          source?: string
+          sport: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          source?: string
+          sport?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_sport_interests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       weekly_payouts: {
         Row: {
           amount: number | null

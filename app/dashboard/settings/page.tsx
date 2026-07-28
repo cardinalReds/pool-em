@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { SPORT_ORDER, SPORT_META } from '@/lib/sportLabels'
 
 export default function SettingsPage() {
   const [userId, setUserId] = useState<string | null>(null)
@@ -9,6 +10,7 @@ export default function SettingsPage() {
   const [nameStatus, setNameStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [notifyPoolInvites, setNotifyPoolInvites] = useState(true)
   const [notifyNewCompetitions, setNotifyNewCompetitions] = useState(true)
+  const [sportInterests, setSportInterests] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -21,21 +23,36 @@ export default function SettingsPage() {
       if (!user) { window.location.href = '/auth/login'; return }
       setUserId(user.id)
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('display_name, notify_pool_invites, notify_new_competitions')
-        .eq('id', user.id)
-        .single()
+      const [{ data: profile }, { data: interests }] = await Promise.all([
+        supabase.from('profiles').select('display_name, notify_pool_invites, notify_new_competitions').eq('id', user.id).single(),
+        supabase.from('user_sport_interests').select('sport').eq('user_id', user.id),
+      ])
 
       if (profile) {
         setDisplayName(profile.display_name)
         setNotifyPoolInvites(profile.notify_pool_invites)
         setNotifyNewCompetitions(profile.notify_new_competitions)
       }
+      setSportInterests(new Set((interests || []).map(i => i.sport)))
       setLoading(false)
     }
     load()
   }, [])
+
+  async function toggleSportInterest(sport: string, checked: boolean) {
+    if (!userId) return
+    setSportInterests(prev => {
+      const next = new Set(prev)
+      if (checked) next.add(sport); else next.delete(sport)
+      return next
+    })
+    const supabase = createClient()
+    if (checked) {
+      await supabase.from('user_sport_interests').upsert({ user_id: userId, sport, source: 'manual' })
+    } else {
+      await supabase.from('user_sport_interests').delete().eq('user_id', userId).eq('sport', sport)
+    }
+  }
 
   async function saveDisplayName() {
     if (!userId || !displayName.trim()) return
@@ -133,6 +150,24 @@ export default function SettingsPage() {
           </label>
           <p style={{fontSize: '0.75rem', color: 'var(--text-faint)'}}>
             per-pool kickoff reminders are set separately, from inside each pool.
+          </p>
+        </div>
+      </section>
+
+      <section style={{marginBottom: '2rem'}}>
+        <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem'}}>
+          <span className="section-label">sports you follow</span>
+          <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
+        </div>
+        <div className="card" style={{display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
+          {SPORT_ORDER.map(sport => (
+            <label key={sport} style={{display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.85rem', cursor: 'pointer'}}>
+              <input type="checkbox" checked={sportInterests.has(sport)} onChange={e => toggleSportInterest(sport, e.target.checked)} />
+              {SPORT_META[sport].emoji} {SPORT_META[sport].label}
+            </label>
+          ))}
+          <p style={{fontSize: '0.75rem', color: 'var(--text-faint)'}}>
+            we check these off automatically when you join a pool for that sport — uncheck any you're not actually into. friends inviting you to a pool will see if it's a sport you don't follow.
           </p>
         </div>
       </section>

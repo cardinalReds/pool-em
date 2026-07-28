@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getContacts, getFriendIds, addFriend, removeFriend, Contact } from '@/lib/contacts'
+import { sportLabel } from '@/lib/sportLabels'
 
 export default function InviteFromContacts({ poolId }: { poolId: string }) {
   const [userId, setUserId] = useState<string | null>(null)
@@ -14,6 +15,8 @@ export default function InviteFromContacts({ poolId }: { poolId: string }) {
   const [loading, setLoading] = useState(true)
   const [inviting, setInviting] = useState(false)
   const [sentCount, setSentCount] = useState(0)
+  const [poolSport, setPoolSport] = useState<string | null>(null)
+  const [interestedIds, setInterestedIds] = useState<Set<string>>(new Set())
 
   const [emailText, setEmailText] = useState('')
   const [bulkSending, setBulkSending] = useState(false)
@@ -26,11 +29,12 @@ export default function InviteFromContacts({ poolId }: { poolId: string }) {
     if (!user) { setLoading(false); return }
     setUserId(user.id)
 
-    const [contactList, friendSet, { data: members }, { data: invites }] = await Promise.all([
+    const [contactList, friendSet, { data: members }, { data: invites }, { data: pool }] = await Promise.all([
       getContacts(supabase, user.id),
       getFriendIds(supabase, user.id),
       supabase.from('pool_members').select('user_id').eq('pool_id', poolId),
       supabase.from('pool_invitations').select('id, invited_user_id, status').eq('pool_id', poolId),
+      supabase.from('pools').select('sport').eq('id', poolId).single(),
     ])
 
     setContacts(contactList)
@@ -39,6 +43,16 @@ export default function InviteFromContacts({ poolId }: { poolId: string }) {
     const invMap: Record<string, { id: string; status: string }> = {}
     ;(invites || []).forEach((i: any) => { invMap[i.invited_user_id] = { id: i.id, status: i.status } })
     setInvitations(invMap)
+    setPoolSport(pool?.sport || null)
+
+    if (pool?.sport && contactList.length > 0) {
+      const { data: interests } = await supabase
+        .from('user_sport_interests')
+        .select('user_id')
+        .eq('sport', pool.sport)
+        .in('user_id', contactList.map(c => c.userId))
+      setInterestedIds(new Set((interests || []).map((i: any) => i.user_id)))
+    }
     setLoading(false)
   }
 
@@ -157,23 +171,34 @@ export default function InviteFromContacts({ poolId }: { poolId: string }) {
 
       {invitable.length > 0 && (
         <>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' as const }}>
             <button style={modeButtonStyle} onClick={() => setSelected(new Set(invitableIds))}>everyone ({invitableIds.length})</button>
             <button style={modeButtonStyle} onClick={() => setSelected(new Set(invitableIds.filter(id => friendIds.has(id))))}>
               friends ({invitableIds.filter(id => friendIds.has(id)).length})
             </button>
+            {poolSport && (
+              <button style={modeButtonStyle} onClick={() => setSelected(new Set(invitableIds.filter(id => interestedIds.has(id))))}>
+                into {sportLabel(poolSport)} ({invitableIds.filter(id => interestedIds.has(id)).length})
+              </button>
+            )}
             <button style={modeButtonStyle} onClick={() => setSelected(new Set())}>clear</button>
           </div>
           <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #e0e0db', marginBottom: 10 }}>
             {invitable.map(c => {
               const pending = invitations[c.userId]?.status === 'pending'
               const isFriend = friendIds.has(c.userId)
+              const notIntoSport = poolSport && !interestedIds.has(c.userId)
               return (
                 <div key={c.userId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderBottom: '1px solid #f5f5f5', fontSize: '12px' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, cursor: 'pointer' }}>
                     <input type="checkbox" checked={selected.has(c.userId)} onChange={() => toggle(c.userId)} />
                     <span style={{ flex: 1 }}>{c.displayName}</span>
                   </label>
+                  {notIntoSport && (
+                    <span title={`hasn't shown interest in ${sportLabel(poolSport!)}`} style={{ fontSize: '10px', color: '#c78a00', whiteSpace: 'nowrap' as const }}>
+                      not into {sportLabel(poolSport!)}
+                    </span>
+                  )}
                   {pending && <span style={{ fontSize: '10px', color: '#aaa' }}>already invited</span>}
                   <button
                     onClick={() => toggleFriend(c.userId)}
