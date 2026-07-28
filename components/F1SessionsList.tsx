@@ -310,7 +310,7 @@ function PodiumOrderPicker({ p1, p2, p3, onChange, disabled }: {
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-interface F1Session { id: number; competition_id: number; competition_name: string; season: number; session_type: string; date: string; status: string; results: any; scored: boolean; teammate_battle_team?: string | null; total_laps?: number | null }
+interface F1Session { id: number; competition_id: number; competition_name: string; season: number; session_type: string; date: string; status: string; results: any; scored: boolean | null; teammate_battle_team?: string | null; total_laps?: number | null }
 interface PoolRule { category_id: string; points: number; bonus_points: number; name: string; input_type: string }
 
 function isLocked(session: F1Session, deadlineType: string, gpSessions: F1Session[]) {

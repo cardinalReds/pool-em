@@ -25,7 +25,7 @@ export default function WeeklyPot({ poolId, userId, isAdmin, weeklyBuyIn, tourna
   const [matchdaysRemaining, setMatchdaysRemaining] = useState(0)
   const [paymentInputs, setPaymentInputs] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState<string | null>(null)
-  const [payouts, setPayouts] = useState<{ matchday: number; winner_user_id: string; payout_rank: number; amount: number }[]>([])
+  const [payouts, setPayouts] = useState<{ matchday: number; winner_user_id: string; payout_rank: number; amount: number | null }[]>([])
 
   async function load() {
     const supabase = createClient()
@@ -156,7 +156,7 @@ export default function WeeklyPot({ poolId, userId, isAdmin, weeklyBuyIn, tourna
               <span style={{ color: '#888' }}>matchday {md}:</span>{' '}
               {rows
                 .slice().sort((a, b) => a.payout_rank - b.payout_rank)
-                .map(r => `${members.find(m => m.user_id === r.winner_user_id)?.display_name || (r.winner_user_id === userId ? 'you' : 'unknown')} won $${r.amount.toFixed(2)}`)
+                .map(r => `${members.find(m => m.user_id === r.winner_user_id)?.display_name || (r.winner_user_id === userId ? 'you' : 'unknown')} won $${(r.amount ?? 0).toFixed(2)}`)
                 .join(' · ')}
             </div>
           ))}

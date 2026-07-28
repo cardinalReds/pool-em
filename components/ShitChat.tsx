@@ -9,7 +9,7 @@ interface Message {
   user_id: string
   display_name: string
   content: string
-  created_at: string
+  created_at: string | null
   reply_to: string | null
   reactions: Record<string, string[]> | null
 }
@@ -44,7 +44,7 @@ export default function ShitChat({ poolId, userId, displayName }: ShitChatProps)
         .eq('pool_id', poolId)
         .order('created_at', { ascending: false })
         .limit(limit)
-      setMessages((data || []).reverse())
+      setMessages((data || []).reverse() as Message[])
       if (count !== null) setTotal(count)
     }
     load()
@@ -230,7 +230,7 @@ export default function ShitChat({ poolId, userId, displayName }: ShitChatProps)
               )}
 
               <span style={{ fontSize: '9px', color: '#ccc', marginTop: 2, marginRight: isMe ? 2 : 0, marginLeft: isMe ? 0 : 2 }}>
-                {formatTime(msg.created_at)}
+                {msg.created_at && formatTime(msg.created_at)}
               </span>
             </div>
           )

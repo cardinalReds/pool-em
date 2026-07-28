@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { COMMON_IDS, CATEGORY_GROUPS, ROUND_SPECIALS, resolveCategoryDescription } from '@/lib/categoryGroups'
+import { WC_SQUADS } from '@/lib/wc_squads'
 
 interface Category {
   id: string
@@ -11,9 +12,9 @@ interface Category {
   description: string
   default_points: number
   prediction_type: string
-  requires_line: boolean
+  requires_line: boolean | null
   input_type: string
-  sort_order: number
+  sort_order: number | null
 }
 
 interface SelectedRule {
@@ -365,9 +366,9 @@ export default function RulesetBuilder({ sport, onComplete, isPL, plSelectedProp
       for (const t of teams || []) teamMap[t.id] = t.name
       const byTeam: Record<string, {id: number, name: string, position: string}[]> = {}
       for (const p of data || []) {
-        const teamName = teamMap[p.team_id] || ''
+        const teamName = (p.team_id != null ? teamMap[p.team_id] : '') || ''
         if (!byTeam[teamName]) byTeam[teamName] = []
-        byTeam[teamName].push({ id: p.id, name: p.name, position: p.position })
+        byTeam[teamName].push({ id: p.id, name: p.name, position: p.position || '' })
       }
       setPlPlayers(byTeam)
     }
@@ -836,7 +837,7 @@ export default function RulesetBuilder({ sport, onComplete, isPL, plSelectedProp
               <div style={{ textAlign: 'center', fontSize: '10px', color: '#aaa' }}>first scorer: {result.first_scorer}</div>
             )}
             <div style={{ textAlign: 'center', fontSize: '10px', color: '#777' }}>
-              handicap: {fixture.home_team} {fixture.handicap_line > 0 ? '+' : ''}{fixture.handicap_line} · goals O/U: {fixture.goals_line} · corners O/U: {fixture.corners_line}
+              handicap: {fixture.home_team} {(fixture.handicap_line ?? 0) > 0 ? '+' : ''}{fixture.handicap_line} · goals O/U: {fixture.goals_line} · corners O/U: {fixture.corners_line}
             </div>
           </div>
         )}

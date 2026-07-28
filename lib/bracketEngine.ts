@@ -3,6 +3,7 @@
 // Each group has 4 teams
 
 import { ANNEX_C } from './annex_c'
+import { getResult } from './soccerScoring'
 
 export const WC_2026_GROUPS: Record<string, string[]> = {
   A: ['Mexico', 'South Africa', 'South Korea', 'Czechia'],

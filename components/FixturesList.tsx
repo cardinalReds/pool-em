@@ -41,6 +41,7 @@ interface Fixture {
   line_total_rounds: number | null
   home_logo: string | null
   away_logo: string | null
+  penalty_winner: string | null
 }
 
 // One row per category per fixture in predictions_v2
@@ -48,7 +49,7 @@ interface PredV2 {
   id?: string
   pool_id: string
   user_id: string
-  fixture_id: number
+  fixture_id: number | null
   category_id: string
   value_wld: string | null
   value_number: number | null
@@ -1909,7 +1910,7 @@ export default function FixturesList({
       {!hideControls && (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 8, flexWrap: 'wrap' as const }}>
         <div style={{ display: 'flex', border: '1px solid #ddd', overflow: 'hidden', borderRadius: 3 }}>
-          {(onlyRoundSpecials ? ['round'] : (isPL ? ['date', 'group'] : ['date', 'group', 'round']) as const).map((mode, i) => (
+          {(onlyRoundSpecials ? ['round'] : (isPL ? ['date', 'group'] : ['date', 'group', 'round'])).map((mode, i) => (
             <button type="button" key={mode} onClick={() => { setSortMode(mode as any); setCurrentPage(0) }}
               style={{ padding: '8px 16px', fontSize: '12px', cursor: 'pointer', border: 'none', borderLeft: i > 0 ? '1px solid #ddd' : 'none', fontFamily: 'inherit', background: sortMode === mode ? '#111' : 'white', color: sortMode === mode ? 'white' : '#888', minHeight: 44 }}>
               {mode === 'group' && isPL ? 'by matchday' : `by ${mode}`}

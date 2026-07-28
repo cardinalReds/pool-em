@@ -41,8 +41,9 @@ interface PoolRule {
 
 interface Pred {
   id?: string
-  fixture_id: number
+  fixture_id: number | null
   category_id: string
+  user_id?: string
   value_wld?: string | null
   value_text?: string | null
   value_yesno?: boolean | null

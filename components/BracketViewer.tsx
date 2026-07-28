@@ -2,15 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { WC_2026_GROUPS, generateR32FromGroupPicks, DEFAULT_BRACKET_SCORING } from '@/lib/bracketEngine'
+import { WC_2026_GROUPS, generateR32FromGroupPicks, DEFAULT_BRACKET_SCORING, type GroupPicks } from '@/lib/bracketEngine'
 import { FLAGS, BracketView } from '@/components/BracketPicker'
 
 interface MemberPick {
   user_id: string
   display_name: string
-  group_picks: Record<string, string[]>
+  group_picks: GroupPicks
   bracket_picks: Record<string, string>
-  bracket_scores: { total: number; breakdown: Record<string, number> } | null
+  bracket_scores: { total: number; max_possible?: number; breakdown: Record<string, number>; eliminated?: string[] } | null
   best_third_groups: string[]
   final_home_score: number | null
   final_away_score: number | null
@@ -62,13 +62,13 @@ export default function BracketViewer({ poolId, tournamentId = 'wc_2026' }: { po
       const memberMap: Record<string, string> = {}
       membersRes.data?.forEach(m => { memberMap[m.user_id] = m.display_name })
 
-      const combined = (bracketRes.data || []).map(b => ({
+      const combined: MemberPick[] = (bracketRes.data || []).map(b => ({
         user_id: b.user_id,
         display_name: memberMap[b.user_id] || 'unknown',
-        group_picks: b.group_picks || {},
-        bracket_picks: b.bracket_picks || {},
-        bracket_scores: b.bracket_scores || null,
-        best_third_groups: b.best_third_groups || [],
+        group_picks: (b.group_picks as GroupPicks) || {},
+        bracket_picks: (b.bracket_picks as Record<string, string>) || {},
+        bracket_scores: b.bracket_scores as MemberPick['bracket_scores'],
+        best_third_groups: (b.best_third_groups as string[]) || [],
         final_home_score: b.final_home_score ?? null,
         final_away_score: b.final_away_score ?? null,
       }))

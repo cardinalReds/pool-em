@@ -51,7 +51,7 @@ export default async function Home() {
 
   const mmaEvent = nextMma?.[0]
   const mmaTag = mmaEvent
-    ? { kind: 'next event', label: `next: ${mmaEvent.name} · ${new Date(mmaEvent.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}` }
+    ? { kind: 'next event', label: `next: ${mmaEvent.name} · ${new Date(mmaEvent.event_date!).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}` }
     : { kind: 'no event scheduled', label: 'no event scheduled' }
 
   const competitions = [

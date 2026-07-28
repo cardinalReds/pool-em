@@ -312,7 +312,7 @@ export async function GET(request: Request) {
     // Get all active tournaments that have live or upcoming fixtures today
     const { data: activeTournaments } = await supabase
       .from('tournaments')
-      .select('id')
+      .select('id, sport')
       .eq('status', 'active')
 
     if (!activeTournaments?.length) {

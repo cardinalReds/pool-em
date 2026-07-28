@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import type { Database } from '@/types/database'
 import { RULE_PACKAGES } from '@/types'
 import FixturesList from '@/components/FixturesList'
 import F1SessionsList from '@/components/F1SessionsList'
@@ -62,7 +63,7 @@ function ArchivePool({ poolId, userId, archived }: { poolId: string; userId: str
 }
 
 // Every table with a pool_id foreign key — must be cleared before the pools row itself can be deleted
-const POOL_CHILD_TABLES = [
+const POOL_CHILD_TABLES: (keyof Database['public']['Tables'])[] = [
   'predictions', 'predictions_v2', 'ghost_entries', 'pool_rules', 'season_prop_rules',
   'bracket_scoring_rules', 'bracket_picks', 'pool_changes', 'messages', 'reminders',
   'pool_invitation_inviters', 'pool_invitations', 'pool_members',
@@ -78,7 +79,7 @@ function DeletePool({ poolId }: { poolId: string }) {
     setError('')
     const supabase = createClient()
     for (const table of POOL_CHILD_TABLES) {
-      const { error: childError } = await supabase.from(table).delete().eq('pool_id', poolId)
+      const { error: childError } = await supabase.from(table as any).delete().eq('pool_id', poolId)
       if (childError) { setError(`failed to delete ${table}: ${childError.message}`); setDeleting(false); return }
     }
     const { error: poolError } = await supabase.from('pools').delete().eq('id', poolId)
@@ -218,7 +219,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       // Fetch tournament end_date to know if competition is over
       if (pool.tournament_id) {
         const { data: tournament } = await supabase.from('tournaments').select('end_date').eq('id', pool.tournament_id).maybeSingle()
-        if (tournament?.end_date) pool.tournament_end_date = tournament.end_date
+        if (tournament?.end_date) (pool as any).tournament_end_date = tournament.end_date
       }
 
       // Bracket-style pools lock at the tournament's first kickoff, not a fixed date —
@@ -272,8 +273,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           .select('user_id, bracket_scores')
           .eq('pool_id', pool.id)
         bracketScores?.forEach(b => {
-          if (b.bracket_scores?.total) pointsMap[b.user_id] = b.bracket_scores.total
-          if (b.bracket_scores?.max_possible != null) maxPossibleMap[b.user_id] = b.bracket_scores.max_possible
+          const scores = b.bracket_scores as { total?: number; max_possible?: number } | null
+          if (scores?.total) pointsMap[b.user_id] = scores.total
+          if (scores?.max_possible != null) maxPossibleMap[b.user_id] = scores.max_possible
         })
       } else if (pool.package_id === 'CUSTOM') {
         const { data: scores } = await supabase.from('predictions_v2').select('user_id, points_earned').eq('pool_id', pool.id)

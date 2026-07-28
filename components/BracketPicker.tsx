@@ -31,7 +31,7 @@ export const FLAGS: Record<string, string> = {
   'England': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'Croatia': '🇭🇷', 'Ghana': '🇬🇭', 'Panama': '🇵🇦',
   // Legacy / other
   'Poland': '🇵🇱', 'Serbia': '🇷🇸', 'Denmark': '🇩🇰', 'Cabo Verde': '🇨🇻',
-  'Chile': '🇨🇱', 'Peru': '🇵🇪', 'Morocco': '🇲🇦',
+  'Chile': '🇨🇱', 'Peru': '🇵🇪',
 }
 
 type PickMode = 'simple' | 'full'
@@ -152,35 +152,42 @@ export default function BracketPicker({ poolId, userId, scoringRules, locked = f
         .maybeSingle()
 
       if (data) {
+        // These jsonb columns hold app-defined shapes (GroupPicks/BracketPicks/scoring
+        // results) that Supabase's generated types can't express beyond the generic Json type.
+        const groupPicksData = data.group_picks as GroupPicks | null
+        const bestThirdGroupsData = data.best_third_groups as string[] | null
+        const bracketPicksData = data.bracket_picks as BracketPicks | null
+        const bracketScoresData = data.bracket_scores as ({ breakdown?: Record<string, number>; eliminated?: string[] } & Record<string, string>) | null
+
         const defaults: GroupPicks = {}
         Object.entries(WC_2026_GROUPS).forEach(([g, teams]) => {
           defaults[g] = [...teams] as [string, string, string, string]
         })
-        const loadedGroupPicks = { ...defaults, ...(data.group_picks || {}) }
-        const loadedThirds = (data.best_third_groups && data.best_third_groups.length > 0) 
-          ? data.best_third_groups 
+        const loadedGroupPicks = { ...defaults, ...(groupPicksData || {}) }
+        const loadedThirds = (bestThirdGroupsData && bestThirdGroupsData.length > 0)
+          ? bestThirdGroupsData
           : Object.keys(WC_2026_GROUPS)
         setGroupPicks(loadedGroupPicks)
         setBestThirdGroups(loadedThirds)
-        setBracketPicks(data.bracket_picks || {})
+        setBracketPicks(bracketPicksData || {})
         // Load scoring breakdown
-        if (data.bracket_scores?.breakdown) {
-          setScoringBreakdown(data.bracket_scores.breakdown)
+        if (bracketScoresData?.breakdown) {
+          setScoringBreakdown(bracketScoresData.breakdown)
         }
-        if (data.bracket_scores?.eliminated) {
-          setEliminatedTeams(new Set(data.bracket_scores.eliminated))
+        if (bracketScoresData?.eliminated) {
+          setEliminatedTeams(new Set(bracketScoresData.eliminated))
         }
         // Restore final score from dedicated columns
         if (data.final_home_score != null && data.final_away_score != null) {
           setBracketScores({ FINAL: `${data.final_home_score}-${data.final_away_score}` })
         } else {
-          setBracketScores(data.bracket_scores || {})
+          setBracketScores(bracketScoresData || {})
         }
         // Regenerate r32Bracket immediately so summary view is correct
         if (Object.keys(loadedGroupPicks).length === 12) {
           setR32Bracket(generateR32FromGroupPicks(loadedGroupPicks, loadedThirds.slice(0, 8)))
         }
-        if (Object.keys(data.bracket_picks || {}).length > 0) {
+        if (Object.keys(bracketPicksData || {}).length > 0) {
           setShowSummary(true)
         }
       } else {

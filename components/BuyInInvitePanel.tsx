@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
-interface Invite { id: string; token: string; used_by: string | null; used_at: string | null; created_at: string }
+interface Invite { id: string; token: string; used_by: string | null; used_at: string | null; created_at: string | null }
 
 export default function BuyInInvitePanel({ poolId }: { poolId: string }) {
   const [invites, setInvites] = useState<Invite[]>([])
