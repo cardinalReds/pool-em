@@ -1009,11 +1009,12 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                                   const assignedTeam = session.teammate_battle_team || sorted.find(s => s.session_type === 'Race')?.teammate_battle_team || null
                                   if (assignedTeam) {
                                     const teamDrivers = F1_GRID.find(t => t.name === assignedTeam)?.drivers || []
-                                    const d1 = results.find((r: any) => r.driver_name && teamDrivers.some((d: any) => d.name === r.driver_name))
-                                    const d2 = results.find((r: any) => r.driver_name && teamDrivers.some((d: any) => d.name === r.driver_name) && r.driver_id !== d1?.driver_id)
+                                    const d1 = results.find((r: any) => r.driver_name && teamDrivers.some((d: any) => driverNameMatches(d.name, r.driver_name)))
+                                    const d2 = results.find((r: any) => r.driver_name && teamDrivers.some((d: any) => driverNameMatches(d.name, r.driver_name)) && r.driver_id !== d1?.driver_id)
                                     if (d1 && d2) {
-                                      const winner = d1.position < d2.position ? d1.driver_name : d2.driver_name
-                                      actual = winner.split(' ').pop() || winner
+                                      const winnerName = d1.position < d2.position ? d1.driver_name : d2.driver_name
+                                      const rosterName = teamDrivers.find((d: any) => driverNameMatches(d.name, winnerName))?.name || winnerName
+                                      actual = rosterName.split(' ').pop() || rosterName
                                     }
                                   }
                                 }
