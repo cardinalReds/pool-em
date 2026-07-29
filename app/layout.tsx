@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { Analytics } from '@vercel/analytics/next'
 
-const description = "Your group chat's prediction pool. World Cup, Premier League, F1, MMA, NFL and more."
+const description = "Build a free, non-gambling prediction pool with your friends, family, or coworkers — like an office pool, but for World Cup, Premier League, F1, MMA, and NFL. Set your own rules, invite your group, picks score automatically."
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://pool-em.com'),
@@ -13,7 +13,11 @@ export const metadata: Metadata = {
   description,
   alternates: { canonical: '/' },
   applicationName: "pool'em",
-  keywords: ["pool'em", 'poolem', 'prediction pool', 'sports pool', 'World Cup pool', 'Premier League pool', 'F1 pool', 'UFC pool', 'NFL pool', 'friends pool'],
+  keywords: [
+    "pool'em", 'poolem', 'prediction pool', 'sports pool', 'office pool', 'free office pool', 'office pool maker', 'office pool app',
+    'non-gambling pool', 'pick em pool', "pick 'em pool", 'group prediction app', 'custom pool maker', 'pool creator',
+    'World Cup pool', 'Premier League pool', 'F1 pool', 'UFC pool', 'MMA pool', 'NFL pool', 'bracket pool', 'friends pool', 'family pool',
+  ],
   icons: { icon: '/logo-badge.svg' },
   openGraph: {
     title: "pool'em",
