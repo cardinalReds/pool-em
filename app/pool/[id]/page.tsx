@@ -196,6 +196,8 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   }, [])
 
   useEffect(() => {
+    let fixturesChannel: ReturnType<ReturnType<typeof createClient>['channel']> | null = null
+
     async function load() {
       const supabase = createClient()
       let currentUser = null
@@ -215,7 +217,24 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
       const { data: pool } = await supabase.from('pools').select('*').eq('id', params.id).single()
       if (!pool) { setNotFound(true); setLoading(false); return }
-      
+
+      // Subscribe to fixture status changes for the live indicator, scoped to this
+      // pool's own tournament — set up here (rather than synchronously above) because
+      // the filter needs pool.tournament_id, which we've only just fetched.
+      if (pool.tournament_id) {
+        fixturesChannel = supabase
+          .channel('pool-live-status')
+          .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fixtures', filter: `tournament_id=eq.${pool.tournament_id}` }, (payload: any) => {
+            if (payload.new.status === 'live') setIsLive(true)
+            else if (payload.new.status === 'finished' || payload.new.status === 'NS') {
+              // Re-check if any games still live
+              supabase.from('fixtures').select('id').eq('tournament_id', pool.tournament_id).eq('status', 'live').limit(1)
+                .then(({ data }) => setIsLive((data?.length ?? 0) > 0))
+            }
+          })
+          .subscribe()
+      }
+
       // Fetch tournament end_date to know if competition is over
       if (pool.tournament_id) {
         const { data: tournament } = await supabase.from('tournaments').select('end_date').eq('id', pool.tournament_id).maybeSingle()
@@ -376,22 +395,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
     }
     load()
 
-    // Subscribe to fixture status changes for live indicator
-    const supabase = createClient()
-    const channel = supabase
-      .channel('pool-live-status')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fixtures' }, (payload) => {
-        if (payload.new.status === 'live') setIsLive(true)
-        else if (payload.new.status === 'finished' || payload.new.status === 'NS') {
-          // Re-check if any games still live
-          supabase.from('fixtures').select('id').eq('status', 'live').limit(1)
-            .then(({ data }) => setIsLive((data?.length ?? 0) > 0))
-        }
-      })
-      .subscribe()
-
     // Ghost entries are added from the picks tab (a different component) — subscribe
     // so the leaderboard picks up new/removed entries without a manual page refresh.
+    const supabase = createClient()
     const ghostChannel = supabase
       .channel('pool-ghost-entries')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ghost_entries', filter: `pool_id=eq.${params.id}` }, (payload) => {
@@ -405,7 +411,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       })
       .subscribe()
 
-    return () => { supabase.removeChannel(channel); supabase.removeChannel(ghostChannel) }
+    return () => { if (fixturesChannel) supabase.removeChannel(fixturesChannel); supabase.removeChannel(ghostChannel) }
   }, [params.id])
 
   async function togglePaid(member: any) {

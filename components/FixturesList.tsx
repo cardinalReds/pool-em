@@ -1249,13 +1249,14 @@ export default function FixturesList({
         event: 'UPDATE',
         schema: 'public',
         table: 'fixtures',
+        filter: `tournament_id=eq.${tournamentId || 'wc_2026'}`,
       }, (payload) => {
         const updated = payload.new as Fixture
         setFixtures(prev => prev.map(f => f.id === updated.id ? { ...f, ...updated } : f))
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [])
+  }, [tournamentId])
   const MATCHDAY_ROUNDS = [
     { id: 'round_1', label: 'Round 1', start: '2026-06-11', end: '2026-06-17' },
     { id: 'round_2', label: 'Round 2', start: '2026-06-18', end: '2026-06-23' },

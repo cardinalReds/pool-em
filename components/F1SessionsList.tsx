@@ -475,13 +475,14 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
         event: 'UPDATE',
         schema: 'public',
         table: 'f1_sessions',
+        filter: `tournament_id=eq.${tournamentId}`,
       }, (payload) => {
         const updated = payload.new as F1Session
         setSessions(prev => prev.map(s => s.id === updated.id ? { ...s, ...updated } : s))
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [])
+  }, [tournamentId])
 
   function updatePred(sessionId: number, categoryId: string, value: any) {
     const scrollY = window.scrollY

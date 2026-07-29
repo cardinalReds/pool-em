@@ -175,10 +175,10 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
 
     // Realtime
     const channel = supabase.channel('mma-fixtures-live')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fixtures' }, (payload) => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'fixtures', filter: `tournament_id=eq.${tournamentId}` }, (payload) => {
         setFixtures(prev => prev.map(f => f.id === payload.new.id ? { ...f, ...payload.new } : f))
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'predictions_v2' }, () => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'predictions_v2', filter: `pool_id=eq.${poolId}` }, () => {
         // refresh all preds
         supabase.from('predictions_v2').select('*').eq('pool_id', poolId).then(({ data }) => {
           if (data) setAllPreds(data)
