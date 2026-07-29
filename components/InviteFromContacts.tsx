@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { getContacts, getFriendIds, addFriend, removeFriend, Contact } from '@/lib/contacts'
-import { sportLabel } from '@/lib/sportLabels'
+import { sportLabel, canonicalSport } from '@/lib/sportLabels'
 
 export default function InviteFromContacts({ poolId }: { poolId: string }) {
   const [userId, setUserId] = useState<string | null>(null)
@@ -43,13 +43,14 @@ export default function InviteFromContacts({ poolId }: { poolId: string }) {
     const invMap: Record<string, { id: string; status: string }> = {}
     ;(invites || []).forEach((i: any) => { invMap[i.invited_user_id] = { id: i.id, status: i.status } })
     setInvitations(invMap)
-    setPoolSport(pool?.sport || null)
+    const sport = pool?.sport ? canonicalSport(pool.sport) : null
+    setPoolSport(sport)
 
-    if (pool?.sport && contactList.length > 0) {
+    if (sport && contactList.length > 0) {
       const { data: interests } = await supabase
         .from('user_sport_interests')
         .select('user_id')
-        .eq('sport', pool.sport)
+        .eq('sport', sport)
         .in('user_id', contactList.map(c => c.userId))
       setInterestedIds(new Set((interests || []).map((i: any) => i.user_id)))
     }
