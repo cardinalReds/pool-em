@@ -815,6 +815,7 @@ export default function FixturesList({
   const [roundFacts, setRoundFacts] = useState<Record<string, any>>({}) // matchday → facts
   const [showMemberPicksMap, setShowMemberPicksMap] = useState<Record<number, boolean>>({})
   const [roundSpecialSaving, setRoundSpecialSaving] = useState<string | null>(null)
+  const [roundSpecialError, setRoundSpecialError] = useState<string | null>(null)
   const [roundSpecialSaved, setRoundSpecialSaved] = useState<Record<string, boolean>>({})
   const [braceTeamByMatchday, setBraceTeamByMatchday] = useState<Record<string, string>>({})
   const [ghostEntries, setGhostEntries] = useState<{ id: string; name: string }[]>([])
@@ -1327,9 +1328,13 @@ export default function FixturesList({
         submitted_at: new Date().toISOString(),
       }))
     if (rows.length > 0) {
-      await supabase.from('predictions_v2').upsert(rows, {
-        onConflict: 'pool_id,user_id,fixture_id,category_id,matchday',
+      // fixture_id is always null here (round specials apply to a whole matchday, not
+      // one fixture) — leaving it out of the conflict target since a plain unique index
+      // on (pool_id,user_id,category_id,matchday) is what actually exists.
+      const { error } = await supabase.from('predictions_v2').upsert(rows, {
+        onConflict: 'pool_id,user_id,category_id,matchday',
       })
+      setRoundSpecialError(error ? 'failed to save — try again' : null)
     }
     setRoundSpecialSaving(null)
     setRoundSpecialSaved(prev => ({ ...prev, [matchday]: true }))
@@ -1401,6 +1406,8 @@ export default function FixturesList({
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, paddingTop: 8, borderTop: '1px solid #f0f0f0' }}>
               {roundSpecialSaving === matchday
                 ? <span style={{ fontSize: '11px', color: '#aaa' }}>saving...</span>
+                : roundSpecialError
+                ? <span style={{ fontSize: '11px', color: '#C8102E' }}>✗ {roundSpecialError}</span>
                 : <span style={{ fontSize: '11px', color: '#2d7a2d' }}>✓ predictions are automatically saved</span>
               }
             </div>
