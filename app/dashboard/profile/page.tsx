@@ -31,11 +31,20 @@ interface CategoryStat {
   total: number
 }
 
+interface CompetitionStat {
+  tournamentId: string
+  name: string
+  status: string
+  hits: number
+  total: number
+}
+
 interface SportStat {
   sport: string
   hits: number
   total: number
   groups: { label: string; categories: CategoryStat[] }[]
+  competitions: CompetitionStat[]
 }
 
 function groupCategoriesForSport(categoryList: CategoryStat[]) {
@@ -90,7 +99,7 @@ export default function ProfilePage() {
 
       if (poolIds.length === 0) { setLoading(false); return }
 
-      const [{ data: preds }, { data: categories }, { data: poolRules }] = await Promise.all([
+      const [{ data: preds }, { data: categories }, { data: poolRules }, { data: pools }] = await Promise.all([
         supabase.from('predictions_v2')
           .select('pool_id, category_id, points_earned, is_correct')
           .eq('user_id', user.id)
@@ -98,9 +107,16 @@ export default function ProfilePage() {
           .not('points_earned', 'is', null),
         supabase.from('ruleset_categories').select('id, sport, name, sort_order'),
         supabase.from('pool_rules').select('pool_id, category_id, points, bonus_points').in('pool_id', poolIds),
+        supabase.from('pools').select('id, tournament_id').in('id', poolIds),
       ])
 
       const categoryMap = new Map((categories || []).map(c => [c.id, c]))
+      const poolToTournament = new Map((pools || []).map(p => [p.id, p.tournament_id]))
+      const tournamentIds = [...new Set((pools || []).map(p => p.tournament_id))]
+      const { data: tournaments } = tournamentIds.length
+        ? await supabase.from('tournaments').select('id, name, status').in('id', tournamentIds)
+        : { data: [] as { id: string; name: string; status: string }[] }
+      const tournamentMap = new Map((tournaments || []).map(t => [t.id, t]))
 
       // f1_podium_order_1/_2/_3 are scored individually but configured as one pool_rules
       // row under the base 'f1_podium_order' id — mirrors the ruleMap remap in
@@ -127,25 +143,44 @@ export default function ProfilePage() {
       }
 
       const bySport: Record<string, Record<string, CategoryStat>> = {}
+      const byCompetition: Record<string, Record<string, { hits: number; total: number }>> = {}
       let sawPartialCredit = false
 
       for (const p of preds || []) {
         const cat = categoryMap.get(p.category_id)
         if (!cat) continue
         if (PARTIAL_CREDIT_CATEGORIES.has(p.category_id)) sawPartialCredit = true
+        const hit = isFullyCorrect(p)
 
         bySport[cat.sport] ??= {}
         bySport[cat.sport][p.category_id] ??= { categoryId: p.category_id, name: cat.name, sortOrder: cat.sort_order ?? 0, hits: 0, total: 0 }
         const stat = bySport[cat.sport][p.category_id]
         stat.total += 1
-        if (isFullyCorrect(p)) stat.hits += 1
+        if (hit) stat.hits += 1
+
+        const tournamentId = poolToTournament.get(p.pool_id)
+        if (tournamentId) {
+          byCompetition[cat.sport] ??= {}
+          byCompetition[cat.sport][tournamentId] ??= { hits: 0, total: 0 }
+          byCompetition[cat.sport][tournamentId].total += 1
+          if (hit) byCompetition[cat.sport][tournamentId].hits += 1
+        }
       }
 
       const sports: SportStat[] = Object.entries(bySport).map(([sport, cats]) => {
         const categoryList = Object.values(cats).sort((a, b) => a.sortOrder - b.sortOrder)
         const hits = categoryList.reduce((sum, c) => sum + c.hits, 0)
         const total = categoryList.reduce((sum, c) => sum + c.total, 0)
-        return { sport, hits, total, groups: groupCategoriesForSport(categoryList) }
+        const competitions: CompetitionStat[] = Object.entries(byCompetition[sport] || {})
+          .map(([tournamentId, stat]) => ({
+            tournamentId,
+            name: tournamentMap.get(tournamentId)?.name || tournamentId,
+            status: tournamentMap.get(tournamentId)?.status || '',
+            hits: stat.hits,
+            total: stat.total,
+          }))
+          .sort((a, b) => b.total - a.total)
+        return { sport, hits, total, groups: groupCategoriesForSport(categoryList), competitions }
       }).sort((a, b) => {
         const ai = SPORT_ORDER.indexOf(a.sport), bi = SPORT_ORDER.indexOf(b.sport)
         return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
@@ -186,6 +221,24 @@ export default function ProfilePage() {
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>{pct}% · {s.hits}/{s.total}</span>
                   <div style={{ flex: 1, borderTop: '1px solid var(--border-light)' }} />
                 </div>
+
+                {s.competitions.length > 1 && (
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' as const, marginBottom: '1rem' }}>
+                    {s.competitions.map(c => {
+                      const cPct = c.total > 0 ? Math.round((c.hits / c.total) * 100) : 0
+                      return (
+                        <div key={c.tournamentId} style={{
+                          display: 'flex', alignItems: 'center', gap: '0.4rem',
+                          padding: '0.4rem 0.65rem', fontSize: '0.75rem', background: 'var(--bg-subtle, #fafafa)', border: '1px solid var(--border-light)',
+                        }}>
+                          <span style={{ fontWeight: 600 }}>{c.name}</span>
+                          {c.status && <span style={{ color: 'var(--text-faint)', textTransform: 'lowercase' as const }}>{c.status}</span>}
+                          <span style={{ color: 'var(--text-dim)' }}>{cPct}% ({c.hits}/{c.total})</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
 
                 {s.groups.map(group => (
                   <div key={group.label} style={{ marginBottom: '0.85rem' }}>
