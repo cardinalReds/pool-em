@@ -27,21 +27,38 @@ export default async function Home() {
     supabase.from('tournaments').select('name, event_date').eq('sport', 'mma').eq('status', 'active').gte('event_date', new Date().toISOString()).order('event_date', { ascending: true }).limit(1),
   ])
 
-  function startLabel(started: boolean, earliestDate: string | undefined) {
-    if (started) return 'live'
+  const TAG_STYLE: Record<string, { color: string; bg: string }> = {
+    'live': { color: '#2d7a2d', bg: '#f0faf0' },
+    'pools open': { color: '#1a56db', bg: '#eef3fe' },
+    'next event': { color: '#9a6b00', bg: '#fdf6e3' },
+    'no event scheduled': { color: '#aaa', bg: '#f5f5f5' },
+  }
+
+  function startTag(started: boolean, earliestDate: string | undefined) {
+    if (started) return { kind: 'live', label: 'live' }
     const dateLabel = earliestDate
       ? new Date(earliestDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
       : null
-    return dateLabel ? `pools open, starts ${dateLabel}` : 'pools open'
+    return {
+      kind: 'pools open',
+      label: dateLabel ? `start your pools now, competition starts ${dateLabel}` : 'start your pools now',
+    }
   }
 
+  const plTag = startTag(!!plStarted?.length, plEarliest?.[0]?.date)
+  const nflTag = startTag(!!nflStarted?.length, nflEarliest?.[0]?.date)
+  const f1Tag = startTag(!!f1Started?.length, f1Earliest?.[0]?.date)
+
   const mmaEvent = nextMma?.[0]
+  const mmaTag = mmaEvent
+    ? { kind: 'next event', label: `next: ${mmaEvent.name} · ${new Date(mmaEvent.event_date!).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}` }
+    : { kind: 'no event scheduled', label: 'no event scheduled' }
 
   const competitions = [
-    { name: 'Premier League 2026/27', label: startLabel(!!plStarted?.length, plEarliest?.[0]?.date) },
-    { name: 'Formula 1 2026', label: startLabel(!!f1Started?.length, f1Earliest?.[0]?.date) },
-    { name: 'MMA', label: mmaEvent ? `next: ${mmaEvent.name}, ${new Date(mmaEvent.event_date!).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}` : 'no event scheduled' },
-    { name: 'NFL 2026/27', label: startLabel(!!nflStarted?.length, nflEarliest?.[0]?.date) },
+    { emoji: '⚽', name: 'Premier League 2026/27', tag: plTag.kind, label: plTag.label },
+    { emoji: '🏎️', name: 'Formula 1 2026', tag: f1Tag.kind, label: f1Tag.label },
+    { emoji: '🥊', name: 'MMA', tag: mmaTag.kind, label: mmaTag.label },
+    { emoji: '🏈', name: 'NFL 2026/27', tag: nflTag.kind, label: nflTag.label },
   ]
 
   const paths = [
@@ -88,26 +105,38 @@ export default async function Home() {
         </div>
 
         <div style={{ marginBottom: '3rem' }}>
-          <div className="section-label" style={{ marginBottom: '0.75rem' }}>available now</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <div className="section-label" style={{ marginBottom: '1rem' }}>available now</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {competitions.map(s => (
-              <div key={s.name} style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem', flexWrap: 'wrap' as const, fontSize: '0.85rem' }}>
-                <span style={{ fontWeight: 500, minWidth: 170 }}>{s.name}</span>
-                <span style={{ color: s.label === 'live' ? 'var(--green)' : 'var(--text-dim)' }}>{s.label}</span>
+              <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' as const }}>
+                <span style={{ fontSize: '1.1rem' }}>{s.emoji}</span>
+                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>{s.name}</span>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: TAG_STYLE[s.tag].color, background: TAG_STYLE[s.tag].bg, padding: '2px 8px', borderRadius: 4 }}>{s.label}</span>
               </div>
             ))}
           </div>
 
-          <div className="section-label" style={{ marginBottom: '0.75rem', marginTop: '1.5rem' }}>coming soon</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {['MLB Playoffs', 'NCAA Football', 'Tennis'].map(name => (
-              <div key={name} style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>{name}</div>
+          <div className="section-label" style={{ marginBottom: '1rem', marginTop: '1.5rem' }}>coming soon</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {[
+              { emoji: '⚾', name: 'MLB Playoffs' },
+              { emoji: '🏈', name: 'NCAA Football' },
+              { emoji: '🎾', name: 'Tennis' },
+            ].map(s => (
+              <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <span style={{ fontSize: '1.1rem' }}>{s.emoji}</span>
+                <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>{s.name}</span>
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#aaa', background: '#f5f5f5', padding: '2px 8px', borderRadius: 4 }}>coming</span>
+              </div>
             ))}
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginTop: '0.25rem' }}>
-              don't see your sport?{' '}
-              <a href="mailto:fred@pool-em.com?subject=Competition request" style={{ color: 'var(--red)' }}>
-                request it
-              </a>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
+              <span style={{ fontSize: '1.1rem' }}>➕</span>
+              <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>
+                Don't see your sport?{' '}
+                <a href="mailto:fred@pool-em.com?subject=Competition request" style={{ color: 'var(--red)', textDecoration: 'none' }}>
+                  request it here
+                </a>
+              </span>
             </div>
           </div>
         </div>
