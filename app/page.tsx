@@ -57,7 +57,7 @@ export default async function Home() {
   const competitions = [
     { emoji: '⚽', name: 'Premier League 2026/27', tag: plTag.kind, label: plTag.label },
     { emoji: '🏎️', name: 'Formula 1 2026', tag: f1Tag.kind, label: f1Tag.label },
-    { emoji: '🥊', name: 'MMA', tag: mmaTag.kind, label: mmaTag.label },
+    { emoji: '🥊', name: 'UFC', tag: mmaTag.kind, label: mmaTag.label },
     { emoji: '🏈', name: 'NFL 2026/27', tag: nflTag.kind, label: nflTag.label },
   ]
 
@@ -83,7 +83,7 @@ export default async function Home() {
           Build a pool. Predict with your friends. Keep score.
         </h1>
         <p style={{ color: 'var(--text-dim)', marginBottom: '2.5rem', fontSize: '0.9rem', lineHeight: 1.6, maxWidth: 520 }}>
-          A free, non-gambling prediction pool — pick your own rules, invite-only or open to anyone, and every result scores automatically. World Cup, Premier League, F1, MMA, NFL.
+          A free, non-gambling prediction pool — pick your own rules, invite-only or open to anyone, and every result scores automatically. World Cup, Premier League, F1, UFC, NFL.
         </p>
 
         <div style={{ marginBottom: '3rem' }}>
@@ -121,7 +121,8 @@ export default async function Home() {
             {[
               { emoji: '⚾', name: 'MLB Playoffs' },
               { emoji: '🏈', name: 'NCAA Football' },
-              { emoji: '🎾', name: 'Tennis' },
+              { emoji: '🏀', name: 'NBA Playoffs' },
+              { emoji: '⚽', name: 'Champions League 2026/27' },
             ].map(s => (
               <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <span style={{ fontSize: '1.1rem' }}>{s.emoji}</span>
