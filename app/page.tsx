@@ -17,6 +17,7 @@ export default async function Home() {
     { data: nflStarted }, { data: nflEarliest },
     { data: f1Started }, { data: f1Earliest },
     { data: nextMma },
+    { data: publicF1Pools },
   ] = await Promise.all([
     supabase.from('fixtures').select('id').eq('tournament_id', 'pl_2026').neq('status', 'NS').limit(1),
     supabase.from('fixtures').select('date').eq('tournament_id', 'pl_2026').order('date', { ascending: true }).limit(1),
@@ -25,7 +26,9 @@ export default async function Home() {
     supabase.from('f1_sessions').select('id').eq('tournament_id', 'f1_2026').eq('status', 'Completed').limit(1),
     supabase.from('f1_sessions').select('date').eq('tournament_id', 'f1_2026').order('date', { ascending: true }).limit(1),
     supabase.from('tournaments').select('name, event_date').eq('sport', 'mma').eq('status', 'active').gte('event_date', new Date().toISOString()).order('event_date', { ascending: true }).limit(1),
+    supabase.from('pools').select('id').eq('tournament_id', 'f1_2026').eq('is_public', true).eq('is_active', true).limit(1),
   ])
+  const hasPublicF1Pool = !!publicF1Pools?.length
 
   const TAG_STYLE: Record<string, { color: string; bg: string }> = {
     'live': { color: '#2d7a2d', bg: '#f0faf0' },
@@ -41,13 +44,13 @@ export default async function Home() {
       : null
     return {
       kind: 'pools open',
-      label: dateLabel ? `start your pools now, competition starts ${dateLabel}` : 'start your pools now',
+      label: dateLabel ? `setup your pools now, competition starts ${dateLabel}` : 'setup your pools now',
     }
   }
 
   const plTag = startTag(!!plStarted?.length, plEarliest?.[0]?.date)
   const nflTag = startTag(!!nflStarted?.length, nflEarliest?.[0]?.date)
-  const f1Tag = startTag(!!f1Started?.length, f1Earliest?.[0]?.date)
+  const f1Started_ = !!f1Started?.length
 
   const mmaEvent = nextMma?.[0]
   const mmaTag = mmaEvent
@@ -56,7 +59,6 @@ export default async function Home() {
 
   const competitions = [
     { emoji: '⚽', name: 'Premier League 2026/27', tag: plTag.kind, label: plTag.label },
-    { emoji: '🏎️', name: 'Formula 1 2026', tag: f1Tag.kind, label: f1Tag.label },
     { emoji: '🥊', name: 'UFC', tag: mmaTag.kind, label: mmaTag.label },
     { emoji: '🏈', name: 'NFL 2026/27', tag: nflTag.kind, label: nflTag.label },
   ]
@@ -107,6 +109,25 @@ export default async function Home() {
         <div style={{ marginBottom: '3rem' }}>
           <div className="section-label" style={{ marginBottom: '1rem' }}>available now</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' as const }}>
+              <span style={{ fontSize: '1.1rem' }}>🏎️</span>
+              <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>Formula 1 2026</span>
+              {f1Started_ && hasPublicF1Pool ? (
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                  the season is going —{' '}
+                  <Link href="/dashboard/pools" style={{ color: 'var(--red)', fontWeight: 600 }}>join the public pool</Link>
+                  {', or '}
+                  <Link href="/pool/create" style={{ color: 'var(--red)', fontWeight: 600 }}>start one now</Link>
+                </span>
+              ) : f1Started_ ? (
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
+                  the season is going —{' '}
+                  <Link href="/pool/create" style={{ color: 'var(--red)', fontWeight: 600 }}>start one now</Link>
+                </span>
+              ) : (
+                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: TAG_STYLE['pools open'].color, background: TAG_STYLE['pools open'].bg, padding: '2px 8px', borderRadius: 4 }}>setup your pools now</span>
+              )}
+            </div>
             {competitions.map(s => (
               <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' as const }}>
                 <span style={{ fontSize: '1.1rem' }}>{s.emoji}</span>
