@@ -27,8 +27,7 @@ export default function CreatePoolPage() {
 
   // Step 1 — name
   const [name, setName] = useState('')
-  const [allowMemberInvites, setAllowMemberInvites] = useState(false)
-  const [isPublic, setIsPublic] = useState(false)
+  const [visibility, setVisibility] = useState<'admin_only' | 'member_invites' | 'public'>('admin_only')
 
   // Step 2 — tournament + deadline
   const [sport, setSport] = useState('soccer')
@@ -240,10 +239,10 @@ export default function CreatePoolPage() {
       zelle_handle: zelleHandle.trim() || null,
       bank_sort_code: sortCode.trim() || null,
       bank_account_number: accountNumber.trim() || null,
-      allow_member_invites: hasAnyBuyIn ? false : allowMemberInvites,
       // Buy-in pools stay invite-only — a stranger showing up to a pool that's already
       // collecting money is a different risk than a stranger joining a free one.
-      is_public: hasAnyBuyIn ? false : isPublic,
+      allow_member_invites: hasAnyBuyIn ? false : visibility === 'member_invites',
+      is_public: hasAnyBuyIn ? false : visibility === 'public',
       payout_structure: isPL
         ? (plPrizeSeason && plSeasonBuyIn
           ? `${payoutTemplate === 'custom' ? customPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description || ''} · best ${plBestWeeks} of 38 matchdays counted`
@@ -436,6 +435,12 @@ export default function CreatePoolPage() {
     )
   }
 
+  const VISIBILITY_OPTIONS: { id: 'admin_only' | 'member_invites' | 'public'; title: string; desc: string }[] = [
+    { id: 'admin_only', title: 'only I can invite', desc: 'you share the invite link — that\'s the only way in' },
+    { id: 'member_invites', title: 'anyone in the pool can invite', desc: 'members can share the invite link with others too' },
+    { id: 'public', title: 'public', desc: 'anyone can find and join it from the browse page — no invite link needed' },
+  ]
+
   function InviteControlSection({ hasBuyIn }: { hasBuyIn: boolean }) {
     return (
       <div style={{marginBottom: 16, padding: '14px', border: '1px solid #e0e0db', background: 'white'}}>
@@ -446,22 +451,17 @@ export default function CreatePoolPage() {
           </div>
         ) : (
           <>
-            <label style={{display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: 14}}>
-              <input type="checkbox" checked={allowMemberInvites} onChange={e => setAllowMemberInvites(e.target.checked)}
-                style={{width: 18, height: 18, cursor: 'pointer', marginTop: 2}} />
-              <div>
-                <div style={{fontWeight: 600, fontSize: '13px'}}>allow invitees to invite other users?</div>
-                <div style={{fontSize: '11px', color: '#aaa'}}>if off, only you can share the invite link</div>
-              </div>
-            </label>
-            <label style={{display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer'}}>
-              <input type="checkbox" checked={isPublic} onChange={e => setIsPublic(e.target.checked)}
-                style={{width: 18, height: 18, cursor: 'pointer', marginTop: 2}} />
-              <div>
-                <div style={{fontWeight: 600, fontSize: '13px'}}>make this pool public?</div>
-                <div style={{fontSize: '11px', color: '#aaa'}}>anyone can find and join it from the browse page — no invite link needed. you can turn this off later.</div>
-              </div>
-            </label>
+            <div style={{fontWeight: 600, fontSize: '13px', marginBottom: 10}}>who can join?</div>
+            {VISIBILITY_OPTIONS.map(opt => (
+              <label key={opt.id} style={{display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: 12}}>
+                <input type="radio" name="visibility" checked={visibility === opt.id} onChange={() => setVisibility(opt.id)}
+                  style={{width: 18, height: 18, cursor: 'pointer', marginTop: 2}} />
+                <div>
+                  <div style={{fontWeight: 600, fontSize: '13px'}}>{opt.title}</div>
+                  <div style={{fontSize: '11px', color: '#aaa'}}>{opt.desc}</div>
+                </div>
+              </label>
+            ))}
           </>
         )}
       </div>
