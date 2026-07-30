@@ -28,6 +28,7 @@ export default function CreatePoolPage() {
   // Step 1 — name
   const [name, setName] = useState('')
   const [allowMemberInvites, setAllowMemberInvites] = useState(false)
+  const [isPublic, setIsPublic] = useState(false)
 
   // Step 2 — tournament + deadline
   const [sport, setSport] = useState('soccer')
@@ -240,6 +241,9 @@ export default function CreatePoolPage() {
       bank_sort_code: sortCode.trim() || null,
       bank_account_number: accountNumber.trim() || null,
       allow_member_invites: hasAnyBuyIn ? false : allowMemberInvites,
+      // Buy-in pools stay invite-only — a stranger showing up to a pool that's already
+      // collecting money is a different risk than a stranger joining a free one.
+      is_public: hasAnyBuyIn ? false : isPublic,
       payout_structure: isPL
         ? (plPrizeSeason && plSeasonBuyIn
           ? `${payoutTemplate === 'custom' ? customPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description || ''} · best ${plBestWeeks} of 38 matchdays counted`
@@ -441,14 +445,24 @@ export default function CreatePoolPage() {
             <div style={{fontSize: '11px', color: '#aaa'}}>only you can invite people to this pool — buy-in pools need every member to come through you, so payments stay trackable. you'll generate a one-time link per person from inside the pool.</div>
           </div>
         ) : (
-          <label style={{display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer'}}>
-            <input type="checkbox" checked={allowMemberInvites} onChange={e => setAllowMemberInvites(e.target.checked)}
-              style={{width: 18, height: 18, cursor: 'pointer', marginTop: 2}} />
-            <div>
-              <div style={{fontWeight: 600, fontSize: '13px'}}>allow invitees to invite other users?</div>
-              <div style={{fontSize: '11px', color: '#aaa'}}>if off, only you can share the invite link</div>
-            </div>
-          </label>
+          <>
+            <label style={{display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: 14}}>
+              <input type="checkbox" checked={allowMemberInvites} onChange={e => setAllowMemberInvites(e.target.checked)}
+                style={{width: 18, height: 18, cursor: 'pointer', marginTop: 2}} />
+              <div>
+                <div style={{fontWeight: 600, fontSize: '13px'}}>allow invitees to invite other users?</div>
+                <div style={{fontSize: '11px', color: '#aaa'}}>if off, only you can share the invite link</div>
+              </div>
+            </label>
+            <label style={{display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer'}}>
+              <input type="checkbox" checked={isPublic} onChange={e => setIsPublic(e.target.checked)}
+                style={{width: 18, height: 18, cursor: 'pointer', marginTop: 2}} />
+              <div>
+                <div style={{fontWeight: 600, fontSize: '13px'}}>make this pool public?</div>
+                <div style={{fontSize: '11px', color: '#aaa'}}>anyone can find and join it from the browse page — no invite link needed. you can turn this off later.</div>
+              </div>
+            </label>
+          </>
         )}
       </div>
     )

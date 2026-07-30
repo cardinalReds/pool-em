@@ -25,6 +25,7 @@ export default function EditPoolPage() {
 
   // Editable fields
   const [name, setName] = useState('')
+  const [isPublic, setIsPublic] = useState(false)
   const [buyIn, setBuyIn] = useState('')
   const [venmoHandle, setVenmoHandle] = useState('')
   const [zelleHandle, setZelleHandle] = useState('')
@@ -51,6 +52,7 @@ export default function EditPoolPage() {
 
       setPool(poolData)
       setName(poolData.name || '')
+      setIsPublic(!!poolData.is_public)
       setBuyIn(poolData.buy_in_amount?.toString() || '')
       setVenmoHandle(poolData.venmo_handle || '')
       setZelleHandle(poolData.zelle_handle || '')
@@ -93,6 +95,10 @@ export default function EditPoolPage() {
     // Build changelog diff
     const changes: Record<string, { from: any; to: any }> = {}
     if (name !== pool.name) changes.name = { from: pool.name, to: name }
+    // Buy-in pools stay invite-only, same rule as pool creation — force public off if a
+    // buy-in is set, regardless of what the checkbox shows.
+    const newIsPublic = (buyIn && parseFloat(buyIn) > 0) ? false : isPublic
+    if (newIsPublic !== !!pool.is_public) changes.is_public = { from: !!pool.is_public, to: newIsPublic }
     const newBuyIn = buyIn ? parseFloat(buyIn) : null
     if (newBuyIn !== pool.buy_in_amount) changes.buy_in_amount = { from: pool.buy_in_amount, to: newBuyIn }
     const cleanVenmo = venmoHandle.replace('@', '').trim() || null
@@ -117,6 +123,7 @@ export default function EditPoolPage() {
     // Update pool
     const { error: poolError } = await supabase.from('pools').update({
       name,
+      is_public: newIsPublic,
       buy_in_amount: newBuyIn,
       venmo_handle: cleanVenmo,
       zelle_handle: cleanZelle,
@@ -168,6 +175,25 @@ export default function EditPoolPage() {
         <label style={{ display: 'block', fontWeight: 600, fontSize: 13, marginBottom: 8 }}>pool name</label>
         <input value={name} onChange={e => setName(e.target.value)}
           style={{ width: '100%', border: '1px solid #ddd', padding: '10px 12px', fontSize: 15, fontFamily: 'inherit', boxSizing: 'border-box' as const, minHeight: 44 }} />
+      </section>
+
+      {/* Public / private */}
+      <section style={{ marginBottom: 28 }}>
+        {buyIn && parseFloat(buyIn) > 0 ? (
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>visibility</div>
+            <p style={{ fontSize: 11, color: '#aaa' }}>this pool has a buy-in, so it stays invite-only — remove the buy-in to make it public.</p>
+          </div>
+        ) : (
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+            <input type="checkbox" checked={isPublic} onChange={e => setIsPublic(e.target.checked)}
+              style={{ width: 18, height: 18, cursor: 'pointer', marginTop: 2 }} />
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>public pool</div>
+              <div style={{ fontSize: 11, color: '#aaa' }}>anyone can find and join it from the browse page — no invite link needed</div>
+            </div>
+          </label>
+        )}
       </section>
 
       {/* Buy-in */}

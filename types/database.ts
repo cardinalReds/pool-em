@@ -1059,6 +1059,7 @@ export type Database = {
           id: string
           invite_code: string
           is_active: boolean | null
+          is_public: boolean
           name: string
           package_id: string
           payout_structure: string | null
@@ -1092,6 +1093,7 @@ export type Database = {
           id?: string
           invite_code: string
           is_active?: boolean | null
+          is_public?: boolean
           name: string
           package_id: string
           payout_structure?: string | null
@@ -1125,6 +1127,7 @@ export type Database = {
           id?: string
           invite_code?: string
           is_active?: boolean | null
+          is_public?: boolean
           name?: string
           package_id?: string
           payout_structure?: string | null
