@@ -196,6 +196,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   }, [])
 
   useEffect(() => {
+    let cancelled = false
     let fixturesChannel: ReturnType<ReturnType<typeof createClient>['channel']> | null = null
 
     async function load() {
@@ -217,6 +218,10 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
       const { data: pool } = await supabase.from('pools').select('*').eq('id', params.id).single()
       if (!pool) { setNotFound(true); setLoading(false); return }
+      // Effect already cleaned up (e.g. React Strict Mode's mount-unmount-remount in dev,
+      // or a fast params.id change) — bail before subscribing so we never leak a channel
+      // the cleanup below has already run past.
+      if (cancelled) return
 
       // Subscribe to fixture status changes for the live indicator, scoped to this
       // pool's own tournament — set up here (rather than synchronously above) because
@@ -411,7 +416,11 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       })
       .subscribe()
 
-    return () => { if (fixturesChannel) supabase.removeChannel(fixturesChannel); supabase.removeChannel(ghostChannel) }
+    return () => {
+      cancelled = true
+      if (fixturesChannel) supabase.removeChannel(fixturesChannel)
+      supabase.removeChannel(ghostChannel)
+    }
   }, [params.id])
 
   async function togglePaid(member: any) {
