@@ -54,13 +54,13 @@ export default function DashboardPage() {
       .eq('is_public', true)
       .eq('is_active', true)
       .order('created_at', { ascending: false })
-    const notJoined = (publicPoolRows || []).filter(p => !myPoolIds.has(p.id))
-    setPublicPools(notJoined)
-    if (notJoined.length > 0) {
-      const publicIds = notJoined.map(p => p.id)
+    const allPublic = publicPoolRows || []
+    setPublicPools(allPublic)
+    if (allPublic.length > 0) {
+      const publicIds = allPublic.map(p => p.id)
       const [{ data: pubMembers }, { data: pubAdmins }] = await Promise.all([
         supabase.from('pool_members').select('pool_id').in('pool_id', publicIds),
-        supabase.from('profiles').select('id, display_name').in('id', [...new Set(notJoined.map(p => p.admin_id))]),
+        supabase.from('profiles').select('id, display_name').in('id', [...new Set(allPublic.map(p => p.admin_id))]),
       ])
       const counts: Record<string, number> = {}
       for (const m of pubMembers || []) counts[m.pool_id] = (counts[m.pool_id] || 0) + 1
@@ -258,6 +258,7 @@ export default function DashboardPage() {
   const activeMember = memberPools.filter(m => !(m.pools as any)?.archived)
   const archivedMember = memberPools.filter(m => (m.pools as any)?.archived)
   const hasArchived = archivedAdmin.length > 0 || archivedMember.length > 0
+  const myPoolIds = new Set([...adminPools.map(p => p.id), ...memberPools.map(m => (m.pools as any)?.id)])
 
   return (
     <div>
@@ -323,23 +324,35 @@ export default function DashboardPage() {
             <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
           </div>
           <div style={{display: 'flex', flexDirection: 'column', gap: '0.6rem'}}>
-            {publicPools.map(pool => (
-              <div key={pool.id} className="card" style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap'}}>
-                <div>
-                  <div style={{fontWeight: 600, fontSize: '0.9rem'}}>{pool.name}</div>
-                  <div style={{fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: 2}}>
-                    {tournamentNames[pool.tournament_id] || pool.sport} · run by {publicPoolAdminNames[pool.admin_id] || 'someone'} · {publicPoolMemberCounts[pool.id] || 0} member{publicPoolMemberCounts[pool.id] === 1 ? '' : 's'}
+            {publicPools.map(pool => {
+              const alreadyIn = myPoolIds.has(pool.id)
+              return (
+                <div key={pool.id} className="card" style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap'}}>
+                  <div>
+                    <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                      <span style={{fontWeight: 600, fontSize: '0.9rem'}}>{pool.name}</span>
+                      {alreadyIn && <span style={{fontSize: '0.65rem', fontWeight: 600, color: 'var(--green)', background: '#f0faf0', border: '1px solid #b7edb7', padding: '1px 6px'}}>you're in this pool</span>}
+                    </div>
+                    <div style={{fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: 2}}>
+                      {tournamentNames[pool.tournament_id] || pool.sport} · run by {publicPoolAdminNames[pool.admin_id] || 'someone'} · {publicPoolMemberCounts[pool.id] || 0} member{publicPoolMemberCounts[pool.id] === 1 ? '' : 's'}
+                    </div>
                   </div>
+                  {alreadyIn ? (
+                    <Link href={`/pool/${pool.id}`}>
+                      <button className="btn-secondary" style={{padding: '8px 16px', fontSize: '0.8rem', minHeight: 40}}>open</button>
+                    </Link>
+                  ) : (
+                    <button
+                      className="btn-primary"
+                      disabled={joiningPublicId === pool.id}
+                      onClick={() => joinPublicPool(pool.id)}
+                      style={{padding: '8px 16px', fontSize: '0.8rem', minHeight: 40}}>
+                      {joiningPublicId === pool.id ? 'joining...' : 'join'}
+                    </button>
+                  )}
                 </div>
-                <button
-                  className="btn-primary"
-                  disabled={joiningPublicId === pool.id}
-                  onClick={() => joinPublicPool(pool.id)}
-                  style={{padding: '8px 16px', fontSize: '0.8rem', minHeight: 40}}>
-                  {joiningPublicId === pool.id ? 'joining...' : 'join'}
-                </button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </section>
       )}
@@ -390,7 +403,10 @@ function PoolCard({ pool, role, isLive, isOver, onArchive, onUnarchive, tourname
           onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--text-dim)')}
           onMouseLeave={e => (e.currentTarget.style.borderColor = isLive ? '#2d7a2d' : 'var(--border)')}>
           <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem'}}>
-            <span style={{fontSize: '0.7rem', color: role === 'admin' ? 'var(--red)' : 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase'}}>{role}</span>
+            <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
+              <span style={{fontSize: '0.7rem', color: role === 'admin' ? 'var(--red)' : 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase'}}>{role}</span>
+              <span style={{fontSize: '0.65rem', color: 'var(--text-faint)'}}>· {pool.is_public ? 'public' : 'private'}</span>
+            </div>
             <div style={{display: 'flex', alignItems: 'center', gap: 6}}>
               {isLive && (
                 <span style={{display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.65rem', fontWeight: 700, color: '#2d7a2d', background: '#f0fff0', border: '1px solid #b7edb7', padding: '1px 6px'}}>
@@ -399,7 +415,6 @@ function PoolCard({ pool, role, isLive, isOver, onArchive, onUnarchive, tourname
                 </span>
               )}
               {pool.archived && <span style={{fontSize: '0.65rem', color: 'var(--text-faint)', background: 'var(--border-light)', padding: '1px 6px'}}>archived</span>}
-              <span style={{fontSize: '0.7rem', color: 'var(--text-faint)'}}>{pool.tournament_scope?.replace('_', ' ')}</span>
             </div>
           </div>
           <div style={{fontWeight: 600, fontSize: '1rem', marginBottom: '0.25rem'}}>{pool.name}</div>
