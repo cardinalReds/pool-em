@@ -88,19 +88,15 @@ export default async function Home() {
           A free, non-gambling prediction pool — pick your own rules, invite-only or open to anyone, and every result scores automatically. World Cup, Premier League, F1, UFC, NFL.
         </p>
 
-        <div style={{ marginBottom: '3rem' }}>
-          {paths.map((p, i) => (
-            <div key={p.title} style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' as const,
-              padding: '0.9rem 0', borderTop: i === 0 ? '1px solid var(--border)' : '1px solid var(--border-light)',
-              borderBottom: i === paths.length - 1 ? '1px solid var(--border)' : 'none',
-            }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem', marginBottom: '3rem' }}>
+          {paths.map(p => (
+            <div key={p.title} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
               <div>
                 <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{p.title}</div>
                 <div style={{ color: 'var(--text-dim)', fontSize: '0.8rem', marginTop: '0.15rem' }}>{p.desc}</div>
               </div>
               <Link href={p.href}>
-                <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '0.8rem', minHeight: 38, whiteSpace: 'nowrap' as const }}>{p.cta}</button>
+                <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '0.8rem', minHeight: 38, whiteSpace: 'nowrap' as const, width: '100%' }}>{p.cta}</button>
               </Link>
             </div>
           ))}
