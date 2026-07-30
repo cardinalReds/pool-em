@@ -90,7 +90,7 @@ export default async function Home() {
 
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 160px), 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
           {paths.map(p => (
-            <div key={p.title} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            <div key={p.title} style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 190 }}>
               <div style={{ fontWeight: 600, marginBottom: '0.3rem', color: 'var(--red)' }}>{p.title}</div>
               <div style={{ color: 'var(--text-dim)', fontSize: '0.85rem', lineHeight: 1.5 }}>{p.desc}</div>
               <Link href={p.href} style={{ marginTop: 'auto', paddingTop: '0.85rem' }}>
