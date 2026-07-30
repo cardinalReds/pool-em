@@ -88,7 +88,7 @@ export default async function Home() {
           A free, non-gambling prediction pool — pick your own rules, invite-only or open to anyone, and every result scores automatically. World Cup, Premier League, F1, UFC, NFL.
         </p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 160px), 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 160px), 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
           {paths.map(p => (
             <div key={p.title} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
               <div style={{ fontWeight: 600, marginBottom: '0.3rem', color: 'var(--red)' }}>{p.title}</div>
@@ -100,7 +100,7 @@ export default async function Home() {
           ))}
         </div>
 
-        <div style={{ marginBottom: '3rem' }}>
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem', marginBottom: '3rem' }}>
           <div className="section-label" style={{ marginBottom: '1rem' }}>available now</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' as const }}>
@@ -159,7 +159,7 @@ export default async function Home() {
 
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
           <a href={`https://venmo.com/fred-krynen?txn=pay&note=${encodeURIComponent("Support pool'em")}`} target="_blank" rel="noopener noreferrer">
-            <button className="btn-ghost" style={{ fontSize: '0.75rem', padding: '5px 12px', minHeight: 32 }}>donate</button>
+            <button className="btn-ghost" style={{ fontSize: '0.75rem', padding: '5px 12px', minHeight: 32 }}>❤️ donate</button>
           </a>
         </div>
         <div style={{ paddingTop: '0.75rem', display: 'flex', gap: '1rem' }}>
