@@ -27,123 +27,94 @@ export default async function Home() {
     supabase.from('tournaments').select('name, event_date').eq('sport', 'mma').eq('status', 'active').gte('event_date', new Date().toISOString()).order('event_date', { ascending: true }).limit(1),
   ])
 
-  const TAG_STYLE: Record<string, { color: string; bg: string }> = {
-    'live': { color: '#2d7a2d', bg: '#f0faf0' },
-    'pools open': { color: '#1a56db', bg: '#eef3fe' },
-    'next event': { color: '#9a6b00', bg: '#fdf6e3' },
-    'no event scheduled': { color: '#aaa', bg: '#f5f5f5' },
-  }
-
-  function startTag(started: boolean, earliestDate: string | undefined) {
-    if (started) return { kind: 'live', label: 'live' }
+  function startLabel(started: boolean, earliestDate: string | undefined) {
+    if (started) return 'live'
     const dateLabel = earliestDate
       ? new Date(earliestDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
       : null
-    return {
-      kind: 'pools open',
-      label: dateLabel ? `start your pools now, competition starts ${dateLabel}` : 'start your pools now',
-    }
+    return dateLabel ? `pools open, starts ${dateLabel}` : 'pools open'
   }
 
-  const plTag = startTag(!!plStarted?.length, plEarliest?.[0]?.date)
-  const nflTag = startTag(!!nflStarted?.length, nflEarliest?.[0]?.date)
-  const f1Tag = startTag(!!f1Started?.length, f1Earliest?.[0]?.date)
-
   const mmaEvent = nextMma?.[0]
-  const mmaTag = mmaEvent
-    ? { kind: 'next event', label: `next: ${mmaEvent.name} · ${new Date(mmaEvent.event_date!).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}` }
-    : { kind: 'no event scheduled', label: 'no event scheduled' }
 
   const competitions = [
-    { emoji: '⚽', name: 'Premier League 2026/27', tag: plTag.kind, label: plTag.label },
-    { emoji: '🏎️', name: 'Formula 1 2026', tag: f1Tag.kind, label: f1Tag.label },
-    { emoji: '🥊', name: 'MMA', tag: mmaTag.kind, label: mmaTag.label },
-    { emoji: '🏈', name: 'NFL 2026/27', tag: nflTag.kind, label: nflTag.label },
+    { name: 'Premier League 2026/27', label: startLabel(!!plStarted?.length, plEarliest?.[0]?.date) },
+    { name: 'Formula 1 2026', label: startLabel(!!f1Started?.length, f1Earliest?.[0]?.date) },
+    { name: 'MMA', label: mmaEvent ? `next: ${mmaEvent.name}, ${new Date(mmaEvent.event_date!).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}` : 'no event scheduled' },
+    { name: 'NFL 2026/27', label: startLabel(!!nflStarted?.length, nflEarliest?.[0]?.date) },
+  ]
+
+  const paths = [
+    { title: 'got invited to a pool?', desc: "log in and it'll be waiting on your dashboard.", cta: 'log in', href: '/auth/login' },
+    { title: 'looking for a pool to join?', desc: 'browse open pools anyone can join, no invite needed.', cta: 'browse pools', href: '/auth/signup' },
+    { title: 'want to run one for your group?', desc: 'set your own rules, then decide who gets in — invite-only or open to everyone.', cta: 'create a pool', href: '/auth/signup' },
   ]
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', fontSize: '14px' }}>
       {/* Nav */}
       <div style={{ borderBottom: '1px solid var(--border)', background: 'white', padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--red)' }}>pool'em</span>
+        <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--red)' }}>pool'em</span>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <Link href="/auth/login"><button className="btn-ghost" style={{ minHeight: 40, padding: '0 14px' }}>log in</button></Link>
-          <Link href="/auth/signup"><button className="btn-primary" style={{ minHeight: 40, padding: '0 14px' }}>sign up</button></Link>
+          <Link href="/auth/login"><button className="btn-ghost" style={{ minHeight: 36, padding: '0 12px', fontSize: '0.8rem' }}>log in</button></Link>
+          <Link href="/auth/signup"><button className="btn-primary" style={{ minHeight: 36, padding: '0 12px', fontSize: '0.8rem' }}>sign up</button></Link>
         </div>
       </div>
 
-      <div style={{ maxWidth: 600, margin: '0 auto', padding: '56px 1.25rem 3rem' }}>
-        <h1 style={{ fontSize: 'clamp(1.75rem, 5vw, 2.25rem)', fontWeight: 700, marginBottom: '0.75rem', lineHeight: 1.2 }}>
-          Your group chat's prediction pool.
+      <div style={{ maxWidth: 640, margin: '0 auto', padding: '48px 1.25rem 3rem' }}>
+        <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem', lineHeight: 1.3 }}>
+          Build a pool. Predict with your friends. Keep score.
         </h1>
-        <p style={{ color: 'var(--text-dim)', marginBottom: '2rem', fontSize: '1rem', lineHeight: 1.7, maxWidth: 480 }}>
-          A private prediction pool for your friends, family, or coworkers. Set your own rules, invite your group with a link, and watch picks score automatically once games kick off. Premier League, F1, MMA, and more. Free, no ads, no nonsense.
+        <p style={{ color: 'var(--text-dim)', marginBottom: '2.5rem', fontSize: '0.9rem', lineHeight: 1.6, maxWidth: 520 }}>
+          A free, non-gambling prediction pool — pick your own rules, invite-only or open to anyone, and every result scores automatically. World Cup, Premier League, F1, MMA, NFL.
         </p>
 
-        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '3.5rem', flexWrap: 'wrap' }}>
-          <Link href="/auth/signup">
-            <button className="btn-primary" style={{ padding: '12px 28px', fontSize: '1rem', minHeight: 48 }}>create a pool</button>
-          </Link>
-          <Link href="/auth/login">
-            <button className="btn-secondary" style={{ padding: '12px 28px', fontSize: '1rem', minHeight: 48 }}>join a pool</button>
-          </Link>
-        </div>
-
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 160px), 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
-          {[
-            { title: 'your rules', desc: 'Exact scores, first scorer, podium order, team to advance — pick what matters to your group.' },
-            { title: 'invite only', desc: 'One link. Private pool. No strangers, no noise.' },
-            { title: 'live scoring', desc: 'Results come in, points update automatically. Leaderboard don\'t lie.' },
-          ].map(f => (
-            <div key={f.title}>
-              <div style={{ fontWeight: 600, marginBottom: '0.3rem', color: 'var(--red)' }}>{f.title}</div>
-              <div style={{ color: 'var(--text-dim)', fontSize: '0.85rem', lineHeight: 1.5 }}>{f.desc}</div>
+        <div style={{ marginBottom: '3rem' }}>
+          {paths.map((p, i) => (
+            <div key={p.title} style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' as const,
+              padding: '0.9rem 0', borderTop: i === 0 ? '1px solid var(--border)' : '1px solid var(--border-light)',
+              borderBottom: i === paths.length - 1 ? '1px solid var(--border)' : 'none',
+            }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{p.title}</div>
+                <div style={{ color: 'var(--text-dim)', fontSize: '0.8rem', marginTop: '0.15rem' }}>{p.desc}</div>
+              </div>
+              <Link href={p.href}>
+                <button className="btn-secondary" style={{ padding: '8px 16px', fontSize: '0.8rem', minHeight: 38, whiteSpace: 'nowrap' as const }}>{p.cta}</button>
+              </Link>
             </div>
           ))}
         </div>
 
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem', marginBottom: '3rem' }}>
-          <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', marginBottom: '1rem' }}>available now</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        <div style={{ marginBottom: '3rem' }}>
+          <div className="section-label" style={{ marginBottom: '0.75rem' }}>available now</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {competitions.map(s => (
-              <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' as const }}>
-                <span style={{ fontSize: '1.1rem' }}>{s.emoji}</span>
-                <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>{s.name}</span>
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: TAG_STYLE[s.tag].color, background: TAG_STYLE[s.tag].bg, padding: '2px 8px', borderRadius: 4 }}>{s.label}</span>
+              <div key={s.name} style={{ display: 'flex', alignItems: 'baseline', gap: '0.6rem', flexWrap: 'wrap' as const, fontSize: '0.85rem' }}>
+                <span style={{ fontWeight: 500, minWidth: 170 }}>{s.name}</span>
+                <span style={{ color: s.label === 'live' ? 'var(--green)' : 'var(--text-dim)' }}>{s.label}</span>
               </div>
             ))}
           </div>
 
-          <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#bbb', marginBottom: '1rem', marginTop: '1.5rem' }}>coming soon</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {[
-              { emoji: '⚾', name: 'MLB Playoffs' },
-              { emoji: '🏈', name: 'NCAA Football' },
-              { emoji: '🎾', name: 'Tennis' },
-            ].map(s => (
-              <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <span style={{ fontSize: '1.1rem' }}>{s.emoji}</span>
-                <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>{s.name}</span>
-                <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#aaa', background: '#f5f5f5', padding: '2px 8px', borderRadius: 4 }}>coming</span>
-              </div>
+          <div className="section-label" style={{ marginBottom: '0.75rem', marginTop: '1.5rem' }}>coming soon</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {['MLB Playoffs', 'NCAA Football', 'Tennis'].map(name => (
+              <div key={name} style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>{name}</div>
             ))}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
-              <span style={{ fontSize: '1.1rem' }}>➕</span>
-              <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>
-                Don't see your sport?{' '}
-                <a href="mailto:fred@pool-em.com?subject=Competition request" style={{ color: 'var(--red)', textDecoration: 'none' }}>
-                  request it here
-                </a>
-              </span>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginTop: '0.25rem' }}>
+              don't see your sport?{' '}
+              <a href="mailto:fred@pool-em.com?subject=Competition request" style={{ color: 'var(--red)' }}>
+                request it
+              </a>
             </div>
           </div>
         </div>
 
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '0.75rem' }}>
-          <a href={`https://venmo.com/fred-krynen?txn=pay&note=${encodeURIComponent("Support pool'em")}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-            <button style={{ fontSize: '0.75rem', fontWeight: 600, padding: '6px 14px', background: 'none', border: '1px solid var(--border)', color: 'var(--text-dim)', cursor: 'pointer', borderRadius: 6 }}>
-              💛 donate
-            </button>
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+          <a href={`https://venmo.com/fred-krynen?txn=pay&note=${encodeURIComponent("Support pool'em")}`} target="_blank" rel="noopener noreferrer">
+            <button className="btn-ghost" style={{ fontSize: '0.75rem', padding: '5px 12px', minHeight: 32 }}>donate</button>
           </a>
         </div>
         <div style={{ paddingTop: '0.75rem', display: 'flex', gap: '1rem' }}>
