@@ -52,9 +52,23 @@ export default async function Home() {
   const nflTag = startTag(!!nflStarted?.length, nflEarliest?.[0]?.date)
   const f1Started_ = !!f1Started?.length
 
+  function shortDate(iso: string) {
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+  }
+
+  // Pool creation for an MMA card is gated until 6 days out (the Sunday before, since
+  // cards are always Saturday) — mirrors app/pool/create/page.tsx's gating logic, so the
+  // front page never promises "setup now" for a card that isn't actually creatable yet.
+  const SIX_DAYS_MS = 6 * 24 * 60 * 60 * 1000
   const mmaEvent = nextMma?.[0]
+  const mmaGated = !!mmaEvent?.event_date && (new Date(mmaEvent.event_date).getTime() - Date.now()) > SIX_DAYS_MS
   const mmaTag = mmaEvent
-    ? { kind: 'next event', label: `next: ${mmaEvent.name} · ${new Date(mmaEvent.event_date!).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}` }
+    ? {
+        kind: 'next event',
+        label: mmaGated
+          ? `setup your pool ${shortDate(new Date(new Date(mmaEvent.event_date!).getTime() - SIX_DAYS_MS).toISOString())}, event starts ${shortDate(mmaEvent.event_date!)}`
+          : `setup your pool now, event starts ${shortDate(mmaEvent.event_date!)}`,
+      }
     : { kind: 'no event scheduled', label: 'no event scheduled' }
 
   const competitions = [
