@@ -28,6 +28,10 @@ export default function DashboardPage() {
   const [tournamentNames, setTournamentNames] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [showArchived, setShowArchived] = useState(false)
+  const [publicPools, setPublicPools] = useState<any[]>([])
+  const [publicPoolMemberCounts, setPublicPoolMemberCounts] = useState<Record<string, number>>({})
+  const [publicPoolAdminNames, setPublicPoolAdminNames] = useState<Record<string, string>>({})
+  const [joiningPublicId, setJoiningPublicId] = useState<string | null>(null)
 
   async function load() {
     const supabase = createClient()
@@ -42,6 +46,29 @@ export default function DashboardPage() {
     setMemberPools((member || []).filter(m => (m.pools as any)?.admin_id !== user.id))
 
     const allPools = [...(admin || []), ...((member || []).map(m => m.pools as any))]
+    const myPoolIds = new Set(allPools.filter(Boolean).map(p => p.id))
+
+    const { data: publicPoolRows } = await supabase
+      .from('pools')
+      .select('id, name, sport, tournament_id, admin_id, created_at')
+      .eq('is_public', true)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+    const notJoined = (publicPoolRows || []).filter(p => !myPoolIds.has(p.id))
+    setPublicPools(notJoined)
+    if (notJoined.length > 0) {
+      const publicIds = notJoined.map(p => p.id)
+      const [{ data: pubMembers }, { data: pubAdmins }] = await Promise.all([
+        supabase.from('pool_members').select('pool_id').in('pool_id', publicIds),
+        supabase.from('profiles').select('id, display_name').in('id', [...new Set(notJoined.map(p => p.admin_id))]),
+      ])
+      const counts: Record<string, number> = {}
+      for (const m of pubMembers || []) counts[m.pool_id] = (counts[m.pool_id] || 0) + 1
+      setPublicPoolMemberCounts(counts)
+      const names: Record<string, string> = {}
+      for (const a of pubAdmins || []) names[a.id] = a.display_name
+      setPublicPoolAdminNames(names)
+    }
 
     const { data: liveFixtures } = await supabase.from('fixtures').select('tournament_id').eq('status', 'live')
     const { data: liveF1Sessions } = await supabase.from('f1_sessions').select('tournament_id').eq('status', 'In Progress')
@@ -196,6 +223,22 @@ export default function DashboardPage() {
     return () => { supabase.removeChannel(channel) }
   }, [user?.id])
 
+  async function joinPublicPool(poolId: string) {
+    if (!user) return
+    setJoiningPublicId(poolId)
+    const supabase = createClient()
+    const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'member'
+    const { error } = await supabase.from('pool_members').insert({
+      pool_id: poolId, user_id: user.id, display_name: displayName,
+    })
+    // 23505 = already a member — fine, just go to the pool
+    if (!error || error.code === '23505') {
+      window.location.href = `/pool/${poolId}`
+      return
+    }
+    setJoiningPublicId(null)
+  }
+
   async function archivePool(poolId: string, archived: boolean) {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -273,7 +316,35 @@ export default function DashboardPage() {
         </section>
       )}
 
-      {activeAdmin.length === 0 && activeMember.length === 0 && !hasArchived && (
+      {publicPools.length > 0 && (
+        <section style={{marginBottom: '2rem'}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem'}}>
+            <span className="section-label">public pools</span>
+            <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
+          </div>
+          <div style={{display: 'flex', flexDirection: 'column', gap: '0.6rem'}}>
+            {publicPools.map(pool => (
+              <div key={pool.id} className="card" style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap'}}>
+                <div>
+                  <div style={{fontWeight: 600, fontSize: '0.9rem'}}>{pool.name}</div>
+                  <div style={{fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: 2}}>
+                    {tournamentNames[pool.tournament_id] || pool.sport} · run by {publicPoolAdminNames[pool.admin_id] || 'someone'} · {publicPoolMemberCounts[pool.id] || 0} member{publicPoolMemberCounts[pool.id] === 1 ? '' : 's'}
+                  </div>
+                </div>
+                <button
+                  className="btn-primary"
+                  disabled={joiningPublicId === pool.id}
+                  onClick={() => joinPublicPool(pool.id)}
+                  style={{padding: '8px 16px', fontSize: '0.8rem', minHeight: 40}}>
+                  {joiningPublicId === pool.id ? 'joining...' : 'join'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {activeAdmin.length === 0 && activeMember.length === 0 && publicPools.length === 0 && !hasArchived && (
         <div style={{textAlign: 'center', padding: '4rem 0', borderTop: '1px solid var(--border)'}}>
           <p style={{color: 'var(--text-dim)', marginBottom: '1rem'}}>no pools yet.</p>
           <Link href="/pool/create">
@@ -286,7 +357,7 @@ export default function DashboardPage() {
         <section style={{marginBottom: '2rem'}}>
           <button onClick={() => setShowArchived(s => !s)}
             style={{display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0, width: '100%', marginBottom: showArchived ? '0.75rem' : 0}}>
-            <span className="section-label" style={{color: 'var(--text-faint)'}}>archived</span>
+            <span className="section-label" style={{color: 'var(--text-faint)'}}>archived pools</span>
             <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
             <span style={{fontSize: '11px', color: 'var(--text-faint)'}}>{showArchived ? '▲' : '▼'}</span>
           </button>

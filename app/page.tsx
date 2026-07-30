@@ -123,7 +123,7 @@ export default async function Home() {
               {f1Started_ && hasPublicF1Pool ? (
                 <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
                   <span style={{ color: 'var(--green)', fontWeight: 600 }}>the season is going</span> —{' '}
-                  <Link href="/dashboard/pools" style={{ color: 'var(--red)', fontWeight: 600 }}>join the public pool</Link>
+                  <Link href="/dashboard" style={{ color: 'var(--red)', fontWeight: 600 }}>join the public pool</Link>
                   {', or '}
                   <Link href="/pool/create" style={{ color: 'var(--red)', fontWeight: 600 }}>start one now</Link>
                 </span>
