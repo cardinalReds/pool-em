@@ -88,7 +88,7 @@ export default async function Home() {
           A free, non-gambling prediction pool — pick your own rules, invite-only or open to anyone, and every result scores automatically. World Cup, Premier League, F1, UFC, NFL.
         </p>
 
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 160px), 1fr))', gap: '1.5rem', marginBottom: '3rem' }}>
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 160px), 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
           {paths.map(p => (
             <div key={p.title} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
               <div style={{ fontWeight: 600, marginBottom: '0.3rem', color: 'var(--red)' }}>{p.title}</div>
