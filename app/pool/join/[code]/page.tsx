@@ -115,8 +115,8 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
 
   return (
     <div style={{minHeight:'100vh',background:'#f7f7f5',fontFamily:"'Inter', system-ui, sans-serif",fontSize:'13px'}}>
-      <div style={{background:'#111',color:'white',padding:'10px 20px'}}>
-        <span style={{fontWeight:700,fontSize:'13px'}}>pool'em</span>
+      <div style={{background:'#111',color:'white',padding:'0.75rem 1.25rem'}}>
+        <span style={{fontWeight:700,fontSize:'1.4rem'}}>pool'em</span>
       </div>
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'center',padding:'24px 16px',minHeight:'calc(100vh - 41px)'}}>
         <div style={{width:'100%',maxWidth:420}}>

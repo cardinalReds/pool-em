@@ -814,8 +814,8 @@ export default function PoolPage({ params }: { params: { id: string } }) {
     <div style={{minHeight: '100vh', background: '#f7f7f5', fontFamily: "'Inter', system-ui, sans-serif", fontSize: '13px'}}>
 
       {/* Nav */}
-      <div style={{background: '#111', color: 'white', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 50}}>
-        <a href="/dashboard" style={{fontWeight: 700, fontSize: '13px', color: 'white', textDecoration: 'none'}}>pool'em</a>
+      <div style={{background: '#111', color: 'white', padding: '0.75rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 50}}>
+        <a href="/dashboard" style={{fontWeight: 700, fontSize: '1.4rem', color: 'white', textDecoration: 'none'}}>pool'em</a>
         <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
           <span style={{fontSize: '11px', color: '#888'}}>
             {user?.user_metadata?.display_name || user?.email?.split('@')[0]} ·{' '}
