@@ -98,7 +98,7 @@ export default async function Home() {
         <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem', lineHeight: 1.3 }}>
           Build a pool. Predict with your friends. Keep score.
         </h1>
-        <p style={{ color: 'var(--text-dim)', marginBottom: '2.5rem', fontSize: '0.9rem', lineHeight: 1.6, maxWidth: 520 }}>
+        <p style={{ color: 'var(--text-dim)', marginBottom: '2.5rem', fontSize: '0.9rem', lineHeight: 1.6 }}>
           A free, non-gambling prediction pool — pick your own rules, invite-only or open to anyone, and every result scores automatically. World Cup, Premier League, F1, UFC, NFL.
         </p>
 
