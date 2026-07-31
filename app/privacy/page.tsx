@@ -1,8 +1,11 @@
 export default function PrivacyPage() {
   return (
-    <div style={{ fontFamily: "'Inter', system-ui, sans-serif", maxWidth: 680, margin: '0 auto', padding: '60px 24px', fontSize: '14px', lineHeight: 1.8, color: '#333' }}>
-      <a href="/" style={{ fontSize: '13px', fontWeight: 700, color: '#111', textDecoration: 'none' }}>pool'em</a>
-      <h1 style={{ fontSize: '24px', fontWeight: 700, marginTop: '32px', marginBottom: '8px' }}>Privacy Policy</h1>
+    <div style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <div style={{ borderBottom: '1px solid var(--border)', background: 'white', padding: '0.75rem 1.25rem' }}>
+        <a href="/" style={{ fontWeight: 700, fontSize: '1.4rem', color: 'var(--red)', textDecoration: 'none' }}>pool'em</a>
+      </div>
+      <div style={{ maxWidth: 680, margin: '0 auto', padding: '60px 24px', fontSize: '14px', lineHeight: 1.8, color: '#333' }}>
+      <h1 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '8px' }}>Privacy Policy</h1>
       <p style={{ color: '#888', fontSize: '12px', marginBottom: '40px' }}>Last updated: June 7, 2026</p>
 
       <h2 style={{ fontSize: '16px', fontWeight: 700, marginTop: '32px', marginBottom: '8px' }}>1. Information We Collect</h2>
@@ -58,6 +61,7 @@ export default function PrivacyPage() {
 
       <div style={{ marginTop: '60px', paddingTop: '20px', borderTop: '1px solid #eee', fontSize: '12px', color: '#aaa' }}>
         <a href="/terms" style={{ color: '#aaa' }}>Terms & Conditions</a> · <a href="/" style={{ color: '#aaa' }}>pool'em</a>
+      </div>
       </div>
     </div>
   )

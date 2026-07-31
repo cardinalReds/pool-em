@@ -289,11 +289,11 @@ function MsgActions({ onReply, onReact, pickerOpen, onPick }: {
   return (
     <div style={{ position: 'relative' as const, display: 'flex', gap: 2, opacity: 0.5 }}>
       <button type="button" onClick={onReact} title="react"
-        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', padding: 2 }}>
+        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', minWidth: 32, minHeight: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         😊
       </button>
       <button type="button" onClick={onReply} title="reply"
-        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', padding: 2 }}>
+        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', minWidth: 32, minHeight: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         ↩
       </button>
       {pickerOpen && (
@@ -305,7 +305,7 @@ function MsgActions({ onReply, onReact, pickerOpen, onPick }: {
         }}>
           {REACTION_EMOJIS.map(emoji => (
             <button key={emoji} type="button" onClick={() => onPick(emoji)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', padding: 2 }}>
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', minWidth: 32, minHeight: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {emoji}
             </button>
           ))}
