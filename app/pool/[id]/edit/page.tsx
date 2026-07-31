@@ -129,7 +129,7 @@ export default function EditPoolPage() {
     <div style={{ ...s, maxWidth: 560, margin: '0 auto', padding: '32px 20px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 32 }}>
         <button onClick={() => router.push(`/pool/${poolId}`)}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#888', padding: 0 }}>←</button>
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 20, color: '#888', minWidth: 36, minHeight: 36 }}>←</button>
         <h1 style={{ fontWeight: 700, fontSize: 20 }}>edit pool</h1>
       </div>
 

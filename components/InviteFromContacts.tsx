@@ -204,7 +204,7 @@ export default function InviteFromContacts({ poolId }: { poolId: string }) {
                   <button
                     onClick={() => toggleFriend(c.userId)}
                     title={isFriend ? 'remove friend' : 'mark as friend'}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: isFriend ? '#C8102E' : '#ddd', padding: 0, lineHeight: 1 }}>
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: isFriend ? '#C8102E' : '#ddd', minWidth: 32, minHeight: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     {isFriend ? '★' : '☆'}
                   </button>
                 </div>

@@ -542,7 +542,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '10px 12px', marginBottom: '12px', fontSize: '11px'}}>
           <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px'}}>
             <span style={{fontWeight: 600, color: '#888'}}>pool was updated</span>
-            <button onClick={() => setChangesDismissed(true)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', fontSize: '14px', padding: 0}}>×</button>
+            <button onClick={() => setChangesDismissed(true)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', fontSize: '14px', minWidth: 32, minHeight: 32}}>×</button>
           </div>
           {recentChanges.map((c, i) => (
             <div key={i} style={{marginBottom: i < recentChanges.length - 1 ? 4 : 0}}>
@@ -662,7 +662,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                   await supabase.from('predictions_v2').delete().eq('pool_id', pool.id).eq('user_id', member.user_id)
                   await supabase.from('ghost_entries').delete().eq('id', member.user_id)
                   setLeaderboard(prev => prev.filter(m => m.user_id !== member.user_id))
-                }} style={{fontSize: '11px', color: '#C8102E', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit'}}>
+                }} style={{fontSize: '11px', color: '#C8102E', background: 'none', border: 'none', cursor: 'pointer', padding: '8px 0', fontFamily: 'inherit'}}>
                   delete
                 </button>
               )}
@@ -844,7 +844,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '10px 12px', marginBottom: '12px', fontSize: '11px'}}>
                 <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px'}}>
                   <span style={{fontWeight: 600, color: '#888'}}>pool was updated</span>
-                  <button onClick={() => setChangesDismissed(true)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', fontSize: '14px', padding: 0}}>×</button>
+                  <button onClick={() => setChangesDismissed(true)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', fontSize: '14px', minWidth: 32, minHeight: 32}}>×</button>
                 </div>
                 {recentChanges.map((c, i) => (
                   <div key={i} style={{marginBottom: i < recentChanges.length - 1 ? 4 : 0}}>
@@ -997,7 +997,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                           await supabase.from('predictions_v2').delete().eq('pool_id', pool.id).eq('user_id', member.user_id)
                           await supabase.from('ghost_entries').delete().eq('id', member.user_id)
                           setLeaderboard(prev => prev.filter(m => m.user_id !== member.user_id))
-                        }} style={{fontSize: '11px', color: '#C8102E', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'inherit'}}>
+                        }} style={{fontSize: '11px', color: '#C8102E', background: 'none', border: 'none', cursor: 'pointer', padding: '8px 0', fontFamily: 'inherit'}}>
                           delete
                         </button>
                       )}
