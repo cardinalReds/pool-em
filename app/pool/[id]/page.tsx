@@ -140,17 +140,15 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const [pool, setPool] = useState<any>(null)
   const [user, setUser] = useState<any>(null)
   const [leaderboard, setLeaderboard] = useState<any[]>([])
-  const [yourLeaderboard, setYourLeaderboard] = useState<any[]>([])
-  const [yourLeaderboardFixtureCount, setYourLeaderboardFixtureCount] = useState(0)
-  const [leaderboardTab, setLeaderboardTab] = useState<'overall' | 'yours' | 'h2h' | 'round'>('overall')
-  const [h2hOpponent, setH2hOpponent] = useState<any>(null)
+  const [leaderboardScope, setLeaderboardScope] = useState<'all' | 'yours' | 'rival'>('all')
+  const [rival, setRival] = useState<any>(null)
   const [allPredsCached, setAllPredsCached] = useState<any[]>([])
   const [finishedFixtureIds, setFinishedFixtureIds] = useState<Set<number>>(new Set())
   const [totalFixtureCount, setTotalFixtureCount] = useState(0)
   const [finishedFixtureCount, setFinishedFixtureCount] = useState(0)
   const [roundByFixtureId, setRoundByFixtureId] = useState<Record<number, string>>({})
   const [roundsInOrder, setRoundsInOrder] = useState<string[]>([])
-  const [selectedRound, setSelectedRound] = useState<string | null>(null)
+  const [selectedRound, setSelectedRound] = useState<string>('all')
   const [poolRules, setPoolRules] = useState<any[]>([])
   const [bracketScoringRules, setBracketScoringRules] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -365,29 +363,6 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         })
         setRoundByFixtureId(roundMap)
         setRoundsInOrder(Object.keys(earliestByRound).sort((a, b) => earliestByRound[b] - earliestByRound[a]))
-
-        // Step 1: find the finished fixtures THIS user predicted on
-        const myFixtureIds = new Set<number>()
-        allPreds?.forEach(p => {
-          if (p.user_id !== currentUser.id || p.fixture_id === null) return
-          if (!finishedIds.has(p.fixture_id)) return
-          const hasValue = p.value_wld || p.value_text || p.value_ou || p.value_yesno !== null || p.value_number !== null
-          if (hasValue) myFixtureIds.add(p.fixture_id)
-        })
-
-        // Step 2: sum everyone's points, but only for fixtures in myFixtureIds
-        const restrictedPointsMap: Record<string, number> = {}
-        allPreds?.forEach(p => {
-          if (p.fixture_id === null || !myFixtureIds.has(p.fixture_id)) return
-          restrictedPointsMap[p.user_id] = (restrictedPointsMap[p.user_id] || 0) + (p.points_earned ?? 0)
-        })
-
-        const perPickLeaderboard = (members || [])
-          .map(m => ({ ...m, points: restrictedPointsMap[m.user_id] || 0 }))
-          .sort((a, b) => b.points - a.points)
-
-        setYourLeaderboard(perPickLeaderboard)
-        setYourLeaderboardFixtureCount(myFixtureIds.size)
       }
 
       if (pool.package_id === 'CUSTOM') {
@@ -510,34 +485,72 @@ export default function PoolPage({ params }: { params: { id: string } }) {
     )
   }
 
-  // Three different lenses on the same underlying points, which is exactly what confused
-  // people when they were three separately-labeled sections with no shared framing:
-  // "overall" = everyone's total across every game; "your picks" = everyone's total
-  // restricted to just the games the logged-in user personally picked (a fairer
-  // comparison if you joined late or skipped games); "head to head" = just you vs one
-  // other person, restricted to games you BOTH picked.
-  function LeaderboardTabs() {
-    const activeRound = selectedRound ?? roundsInOrder[0] ?? null
-    const allTabs = [
-      { id: 'overall' as const, label: 'overall', blurb: 'everyone’s total points across every game in the pool.' },
-      { id: 'yours' as const, label: 'your picks', blurb: `everyone’s points, but counting only the games you personally picked — a fairer comparison if you haven’t played every game. you’ve picked ${yourLeaderboardFixtureCount} of ${finishedFixtureCount} finished games.` },
-      { id: 'h2h' as const, label: 'head to head', blurb: 'just you vs one other person, based only on games you both picked.' },
-      { id: 'round' as const, label: 'by round', blurb: `everyone’s points for just ${activeRound || 'one round'} — pick a different round below to see how that one went.` },
-    ]
-    const tabs = allTabs
-      .filter(t => t.id !== 'yours' || yourLeaderboard.length > 0)
-      .filter(t => t.id !== 'round' || roundsInOrder.length > 1)
+  // One leaderboard, two orthogonal filters: scope (which games count toward points —
+  // all of them, just yours, or just the ones you and a rival both picked) and round
+  // (a time filter, composes freely with scope). Replaces what used to be four separate
+  // tabs that all rendered the same list of names with different, unexplained totals.
+  function ScopedLeaderboard() {
+    const hasScopedData = allPredsCached.length > 0
+    const myId = user?.id
+    const hasValue = (p: any) => p.value_wld || p.value_text || p.value_ou || p.value_yesno !== null || p.value_number !== null
 
-    const roundLeaderboard = leaderboardTab === 'round' && activeRound
-      ? leaderboard.map(m => {
-          const points = allPredsCached
-            .filter(p => p.user_id === m.user_id && roundByFixtureId[p.fixture_id] === activeRound)
-            .reduce((sum, p) => sum + (p.points_earned || 0), 0)
-          return { ...m, points }
-        }).sort((a, b) => b.points - a.points)
-      : []
+    const roundFilteredIds = selectedRound === 'all'
+      ? finishedFixtureIds
+      : new Set([...finishedFixtureIds].filter(id => roundByFixtureId[id] === selectedRound))
 
-    function renderRow(member: any, i: number, opts?: { restricted?: boolean }) {
+    // Distinct-fixture count from a member's own predictions, intersected with a given
+    // fixture set — this is the "games counted" figure on each row.
+    function gamesAndPoints(userId: string, fixtureIds: Set<number>) {
+      const rows = allPredsCached.filter(p => p.user_id === userId && hasValue(p) && fixtureIds.has(p.fixture_id))
+      const distinctFixtures = new Set(rows.map(p => p.fixture_id))
+      const points = rows.reduce((sum, p) => sum + (p.points_earned || 0), 0)
+      return { points, games: distinctFixtures.size }
+    }
+
+    let countedFixtureIds = roundFilteredIds
+    if (leaderboardScope === 'yours' && myId) {
+      const myFixtures = new Set(allPredsCached.filter(p => p.user_id === myId && hasValue(p)).map(p => p.fixture_id))
+      countedFixtureIds = new Set([...roundFilteredIds].filter(id => myFixtures.has(id)))
+    } else if (leaderboardScope === 'rival' && myId && rival) {
+      const myFixtures = new Set(allPredsCached.filter(p => p.user_id === myId && hasValue(p)).map(p => p.fixture_id))
+      const rivalFixtures = new Set(allPredsCached.filter(p => p.user_id === rival.user_id && hasValue(p)).map(p => p.fixture_id))
+      countedFixtureIds = new Set([...roundFilteredIds].filter(id => myFixtures.has(id) && rivalFixtures.has(id)))
+    }
+
+    const isUnrestrictedOverall = leaderboardScope === 'all' && selectedRound === 'all'
+    const members = leaderboardScope === 'rival' && rival
+      ? leaderboard.filter(m => m.user_id === myId || m.user_id === rival.user_id)
+      : leaderboard
+
+    const rows = members.map(m => {
+      if (isUnrestrictedOverall) {
+        // Exact parity with the pre-existing server-computed total — points come
+        // straight from `leaderboard`, never recomputed client-side.
+        const games = hasScopedData ? gamesAndPoints(m.user_id, finishedFixtureIds).games : null
+        return { ...m, games }
+      }
+      const { points, games } = gamesAndPoints(m.user_id, countedFixtureIds)
+      return { ...m, points, games }
+    }).sort((a, b) => b.points - a.points)
+
+    const n = countedFixtureIds.size
+    const explainer = leaderboardScope === 'all'
+      ? 'everyone’s total points across every game in the pool.'
+      : leaderboardScope === 'yours'
+      ? `fair fight — everyone re-scored using only the ${n} game${n === 1 ? '' : 's'} you picked. good if you joined late.`
+      : rival
+      ? `just you vs. ${rival.display_name}, counting only the ${n} game${n === 1 ? '' : 's'} you both picked.`
+      : 'pick a rival below to compare.'
+
+    const emptyState = leaderboardScope === 'yours' && n === 0
+      ? 'you haven’t made any picks yet — this view will make sense once you do.'
+      : leaderboardScope === 'rival' && !rival
+      ? 'pick a rival above to see the comparison.'
+      : leaderboardScope === 'rival' && rival && n === 0
+      ? `you and ${rival.display_name} haven’t picked any of the same games yet.`
+      : null
+
+    function renderRow(member: any, i: number) {
       return (
         <div key={member.id || member.user_id} style={{
           display: 'flex', alignItems: 'center',
@@ -549,7 +562,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             {i + 1}. {member.display_name}{member.is_ghost ? <span style={{fontSize: '10px', color: '#bbb', marginLeft: 4}}>ghost</span> : ''}
           </span>
           <div style={{display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0}}>
-            {!opts?.restricted && isAdmin && member.is_ghost && (
+            {isUnrestrictedOverall && isAdmin && member.is_ghost && (
               <button onClick={async () => {
                 if (!confirm(`Delete ${member.display_name}?`)) return
                 const supabase = (await import('@/lib/supabase/client')).createClient()
@@ -560,15 +573,15 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 delete
               </button>
             )}
-            {!opts?.restricted && pool.buy_in_amount && !member.is_ghost && (
+            {isUnrestrictedOverall && pool.buy_in_amount && !member.is_ghost && (
               <div style={{width: 68, display: 'flex', justifyContent: 'center', flexShrink: 0}}>
                 <PaidPill member={member} />
               </div>
             )}
-            <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', width: 40, textAlign: 'center' as const, flexShrink: 0}}>
-              {member.points}
+            <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', textAlign: 'right' as const, flexShrink: 0, whiteSpace: 'nowrap' as const}}>
+              {member.points}{member.games != null && <span style={{fontSize: '10px', fontWeight: 400, color: '#bbb'}}> · {member.games} game{member.games === 1 ? '' : 's'}</span>}
             </span>
-            {!opts?.restricted && pool.deadline_type === 'before_tournament' && (
+            {isUnrestrictedOverall && pool.deadline_type === 'before_tournament' && (
               <span style={{fontSize: '11px', color: '#bbb', width: 40, textAlign: 'center' as const, flexShrink: 0}}>
                 {member.maxPossible != null ? member.maxPossible : ''}
               </span>
@@ -587,101 +600,67 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           </div>
         )}
 
-        {tabs.length > 1 && (
-          <div style={{display: 'flex', gap: 4, marginBottom: 10, borderBottom: '1px solid #eee'}}>
-            {tabs.map(t => (
-              <button key={t.id} onClick={() => setLeaderboardTab(t.id)}
-                style={{
-                  padding: '6px 10px', fontSize: '12px', fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
-                  background: 'none', border: 'none', borderBottom: leaderboardTab === t.id ? '2px solid #C8102E' : '2px solid transparent',
-                  color: leaderboardTab === t.id ? '#C8102E' : '#888', marginBottom: -1,
-                }}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div style={{fontSize: '11px', color: '#aaa', marginBottom: 10}}>
-          {tabs.find(t => t.id === leaderboardTab)?.blurb ?? tabs[0].blurb}
-        </div>
-
-        {leaderboardTab === 'round' && (
-          <div style={{marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8}}>
-            <span style={{fontSize: '11px', color: '#aaa', flexShrink: 0}}>round:</span>
-            <select value={activeRound || ''} onChange={e => setSelectedRound(e.target.value)}
-              style={{fontSize: '12px', border: '1px solid #ddd', padding: '4px 8px', fontFamily: 'inherit', flex: 1, color: '#333', background: 'white'}}>
-              {roundsInOrder.map(r => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {leaderboardTab === 'h2h' && (
-          <div style={{marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8}}>
-            <span style={{fontSize: '11px', color: '#aaa', flexShrink: 0}}>compare with:</span>
-            <select value={h2hOpponent?.user_id || ''} onChange={e => {
-              const opp = leaderboard.find(m => m.user_id === e.target.value)
-              setH2hOpponent(opp || null)
-            }} style={{fontSize: '12px', border: '1px solid #ddd', padding: '4px 8px', fontFamily: 'inherit', flex: 1, color: '#333', background: 'white'}}>
-              <option value=''>pick a player...</option>
-              {leaderboard.filter(m => m.user_id !== user?.id).map(m => (
-                <option key={m.user_id} value={m.user_id}>{m.display_name}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {leaderboardTab === 'h2h' && h2hOpponent && (() => {
-          const myId = user?.id
-          const oppId = h2hOpponent.user_id
-          const hasValue = (p: any) => p.value_wld || p.value_text || p.value_ou || p.value_yesno !== null || p.value_number !== null
-          const myFixtures = new Set(allPredsCached.filter(p => p.user_id === myId && hasValue(p) && finishedFixtureIds.has(p.fixture_id)).map(p => p.fixture_id))
-          const oppFixtures = new Set(allPredsCached.filter(p => p.user_id === oppId && hasValue(p) && finishedFixtureIds.has(p.fixture_id)).map(p => p.fixture_id))
-          const sharedFixtures = new Set([...myFixtures].filter(id => oppFixtures.has(id)))
-          const myPts = allPredsCached.filter(p => p.user_id === myId && sharedFixtures.has(p.fixture_id)).reduce((sum, p) => sum + (p.points_earned || 0), 0)
-          const oppPts = allPredsCached.filter(p => p.user_id === oppId && sharedFixtures.has(p.fixture_id)).reduce((sum, p) => sum + (p.points_earned || 0), 0)
-          const myName = leaderboard.find(m => m.user_id === myId)?.display_name || 'you'
-          const winner = myPts > oppPts ? myName : oppPts > myPts ? h2hOpponent.display_name : null
-          return (
-            <div style={{marginBottom: 12, padding: '10px 12px', background: '#f9f9f9', border: '1px solid #e0e0db'}}>
-              <div style={{fontSize: '10px', color: '#aaa', marginBottom: 8}}>{sharedFixtures.size} games predicted by both</div>
-              <div style={{display: 'flex', gap: 8}}>
-                {[{name: myName, pts: myPts, isMe: true}, {name: h2hOpponent.display_name, pts: oppPts, isMe: false}]
-                  .sort((a, b) => b.pts - a.pts)
-                  .map((p, i) => (
-                    <div key={p.name} style={{flex: 1, padding: '8px 10px', background: 'white', border: '1px solid',
-                      borderColor: i === 0 && winner ? '#2d7a2d' : '#e0e0db',
-                      borderLeft: `3px solid ${p.isMe ? '#C8102E' : '#ddd'}`}}>
-                      <div style={{fontSize: '11px', color: p.isMe ? '#C8102E' : '#555', fontWeight: 600, marginBottom: 2}}>{p.name}{p.isMe ? ' (you)' : ''}</div>
-                      <div style={{fontSize: '20px', fontWeight: 700, color: i === 0 && winner ? '#2d7a2d' : '#888'}}>{p.pts}</div>
-                    </div>
-                  ))}
-              </div>
-              {winner && <div style={{fontSize: '11px', color: '#2d7a2d', marginTop: 8, textAlign: 'center' as const}}>{winner === myName ? 'you win 🎉' : `${winner} wins`}</div>}
-              {!winner && <div style={{fontSize: '11px', color: '#aaa', marginTop: 8, textAlign: 'center' as const}}>draw</div>}
+        {hasScopedData && (
+          <>
+            <div style={{marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8}}>
+              <span style={{fontSize: '11px', color: '#aaa', flexShrink: 0}}>counting points from:</span>
+              <select value={leaderboardScope} onChange={e => setLeaderboardScope(e.target.value as any)}
+                style={{fontSize: '12px', border: '1px solid #ddd', padding: '4px 8px', fontFamily: 'inherit', flex: 1, color: '#333', background: 'white'}}>
+                <option value='all'>all games</option>
+                <option value='yours'>only games I picked</option>
+                <option value='rival'>games me + a rival both picked</option>
+              </select>
             </div>
-          )
-        })()}
 
-        {leaderboardTab !== 'h2h' && (
+            {leaderboardScope === 'rival' && (
+              <div style={{marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8}}>
+                <span style={{fontSize: '11px', color: '#aaa', flexShrink: 0}}>compare with:</span>
+                <select value={rival?.user_id || ''} onChange={e => {
+                  const opp = leaderboard.find(m => m.user_id === e.target.value)
+                  setRival(opp || null)
+                }} style={{fontSize: '12px', border: '1px solid #ddd', padding: '4px 8px', fontFamily: 'inherit', flex: 1, color: '#333', background: 'white'}}>
+                  <option value=''>pick a player...</option>
+                  {leaderboard.filter(m => m.user_id !== user?.id).map(m => (
+                    <option key={m.user_id} value={m.user_id}>{m.display_name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {roundsInOrder.length > 1 && (
+              <div style={{marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8}}>
+                <span style={{fontSize: '11px', color: '#aaa', flexShrink: 0}}>round:</span>
+                <select value={selectedRound} onChange={e => setSelectedRound(e.target.value)}
+                  style={{fontSize: '12px', border: '1px solid #ddd', padding: '4px 8px', fontFamily: 'inherit', flex: 1, color: '#333', background: 'white'}}>
+                  <option value='all'>all rounds</option>
+                  {roundsInOrder.map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div style={{fontSize: '11px', color: '#aaa', marginBottom: 10}}>{explainer}</div>
+          </>
+        )}
+
+        {emptyState ? (
+          <div style={{fontSize: '12px', color: '#aaa', padding: '16px 0', textAlign: 'center' as const}}>{emptyState}</div>
+        ) : (
           <>
             <div style={{fontSize: '10px', color: '#aaa', marginBottom: '8px', display: 'flex', alignItems: 'center'}}>
               <span style={{flex: 1, minWidth: 0, textAlign: 'left' as const}}>player</span>
               <div style={{display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0}}>
-                {leaderboardTab === 'overall' && pool.buy_in_amount && <span style={{width: 68, textAlign: 'center' as const, flexShrink: 0}}>paid</span>}
-                <span style={{width: 40, textAlign: 'center' as const, flexShrink: 0}}>pts</span>
-                {leaderboardTab === 'overall' && pool.deadline_type === 'before_tournament' && <span style={{width: 40, textAlign: 'center' as const, flexShrink: 0}}>max possible</span>}
+                {isUnrestrictedOverall && pool.buy_in_amount && <span style={{width: 68, textAlign: 'center' as const, flexShrink: 0}}>paid</span>}
+                <span style={{textAlign: 'right' as const, flexShrink: 0}}>pts</span>
+                {isUnrestrictedOverall && pool.deadline_type === 'before_tournament' && <span style={{width: 40, textAlign: 'center' as const, flexShrink: 0}}>max possible</span>}
               </div>
             </div>
-            {(leaderboardTab === 'overall' ? leaderboard : leaderboardTab === 'round' ? roundLeaderboard : yourLeaderboard).map((member, i) =>
-              renderRow(member, i, { restricted: leaderboardTab !== 'overall' })
-            )}
+            {rows.map((member, i) => renderRow(member, i))}
           </>
         )}
 
-        {leaderboardTab === 'overall' && user && pool.weekly_buy_in > 0 && <WeeklyLeaderboard poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} />}
+        {isUnrestrictedOverall && user && pool.weekly_buy_in > 0 && <WeeklyLeaderboard poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} />}
       </div>
     )
   }
@@ -779,7 +758,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       )}
       {/* Leaderboard */}
       <Section title="leaderboard" defaultOpen={true}>
-        <LeaderboardTabs />
+        <ScopedLeaderboard />
       </Section>
 
       {/* Scoring */}
@@ -1000,7 +979,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             {mobilePanel === 'leaderboard' && (
               <div style={{padding: '16px', background: 'white', minHeight: '100%'}}>
                 <div style={{fontWeight: 700, fontSize: '15px', marginBottom: 12}}>{pool.name}</div>
-                <LeaderboardTabs />
+                <ScopedLeaderboard />
 
                 {(pool.buy_in_amount || pool.weekly_buy_in) && <div style={{marginTop: 20}}><PrizesPanel pool={pool} /></div>}
                 {user && pool.weekly_buy_in > 0 && <WeeklyPot poolId={pool.id} userId={user.id} isAdmin={isAdmin} weeklyBuyIn={pool.weekly_buy_in} tournamentId={pool.tournament_id} poolName={pool.name} venmoHandle={pool.venmo_handle} zelleHandle={pool.zelle_handle} weeklyPayoutStructure={pool.weekly_payout_structure} adminFeePercent={pool.admin_fee_percent} />}
