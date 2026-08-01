@@ -80,7 +80,7 @@ export default async function Home() {
   const paths = [
     { title: 'got invited to a pool?', desc: "log in and it'll be waiting on your dashboard.", cta: 'log in', href: '/auth/login' },
     { title: 'looking for a pool to join?', desc: 'browse open pools anyone can join, no invite needed.', cta: 'browse pools', href: '/auth/signup' },
-    { title: 'want to run one for your group?', desc: 'set your own rules, then decide who gets in — invite-only or open to everyone.', cta: 'create a pool', href: '/auth/signup' },
+    { title: 'want to run one and invite people?', desc: 'set your own rules, then decide who gets in — invite-only or open to everyone.', cta: 'create a pool', href: '/auth/signup' },
   ]
 
   return (
