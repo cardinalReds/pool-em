@@ -142,12 +142,15 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const [leaderboard, setLeaderboard] = useState<any[]>([])
   const [yourLeaderboard, setYourLeaderboard] = useState<any[]>([])
   const [yourLeaderboardFixtureCount, setYourLeaderboardFixtureCount] = useState(0)
-  const [leaderboardTab, setLeaderboardTab] = useState<'overall' | 'yours' | 'h2h'>('overall')
+  const [leaderboardTab, setLeaderboardTab] = useState<'overall' | 'yours' | 'h2h' | 'round'>('overall')
   const [h2hOpponent, setH2hOpponent] = useState<any>(null)
   const [allPredsCached, setAllPredsCached] = useState<any[]>([])
   const [finishedFixtureIds, setFinishedFixtureIds] = useState<Set<number>>(new Set())
   const [totalFixtureCount, setTotalFixtureCount] = useState(0)
   const [finishedFixtureCount, setFinishedFixtureCount] = useState(0)
+  const [roundByFixtureId, setRoundByFixtureId] = useState<Record<number, string>>({})
+  const [roundsInOrder, setRoundsInOrder] = useState<string[]>([])
+  const [selectedRound, setSelectedRound] = useState<string | null>(null)
   const [poolRules, setPoolRules] = useState<any[]>([])
   const [bracketScoringRules, setBracketScoringRules] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -338,11 +341,26 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
         // Only count finished games for the predicted count display
         const { data: finishedFixtures } = isF1
-          ? await supabase.from(gameTable).select('id').eq('tournament_id', pool.tournament_id).eq('scored', true)
-          : await supabase.from(gameTable).select('id').eq('tournament_id', pool.tournament_id).eq('status', 'FT')
+          ? await supabase.from(gameTable).select('id, round, date').eq('tournament_id', pool.tournament_id).eq('scored', true)
+          : await supabase.from(gameTable).select('id, round, date').eq('tournament_id', pool.tournament_id).eq('status', 'FT')
         const finishedIds = new Set((finishedFixtures || []).map((f: any) => f.id))
         setFinishedFixtureIds(finishedIds)
         setFinishedFixtureCount(finishedFixtures?.length || 0)
+
+        // Round/week breakdown — only meaningful for pools with a repeating per-game
+        // cadence (PL/NFL matchdays), not bracket tournaments (one long progression) or
+        // MMA (single card). Self-determines relevance below via roundsInOrder.length > 1
+        // rather than checking sport/deadline_type directly.
+        const roundMap: Record<number, string> = {}
+        const earliestByRound: Record<string, number> = {}
+        ;(finishedFixtures || []).forEach((f: any) => {
+          if (!f.round) return
+          roundMap[f.id] = f.round
+          const t = new Date(f.date).getTime()
+          if (!(f.round in earliestByRound) || t < earliestByRound[f.round]) earliestByRound[f.round] = t
+        })
+        setRoundByFixtureId(roundMap)
+        setRoundsInOrder(Object.keys(earliestByRound).sort((a, b) => earliestByRound[b] - earliestByRound[a]))
 
         // Step 1: find the finished fixtures THIS user predicted on
         const myFixtureIds = new Set<number>()
@@ -495,12 +513,25 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   // comparison if you joined late or skipped games); "head to head" = just you vs one
   // other person, restricted to games you BOTH picked.
   function LeaderboardTabs() {
+    const activeRound = selectedRound ?? roundsInOrder[0] ?? null
     const allTabs = [
       { id: 'overall' as const, label: 'overall', blurb: 'everyone’s total points across every game in the pool.' },
       { id: 'yours' as const, label: 'your picks', blurb: `everyone’s points, but counting only the games you personally picked — a fairer comparison if you haven’t played every game. you’ve picked ${yourLeaderboardFixtureCount} of ${finishedFixtureCount} finished games.` },
       { id: 'h2h' as const, label: 'head to head', blurb: 'just you vs one other person, based only on games you both picked.' },
+      { id: 'round' as const, label: 'by round', blurb: `everyone’s points for just ${activeRound || 'one round'} — pick a different round below to see how that one went.` },
     ]
-    const tabs = allTabs.filter(t => t.id !== 'yours' || yourLeaderboard.length > 0)
+    const tabs = allTabs
+      .filter(t => t.id !== 'yours' || yourLeaderboard.length > 0)
+      .filter(t => t.id !== 'round' || roundsInOrder.length > 1)
+
+    const roundLeaderboard = leaderboardTab === 'round' && activeRound
+      ? leaderboard.map(m => {
+          const points = allPredsCached
+            .filter(p => p.user_id === m.user_id && roundByFixtureId[p.fixture_id] === activeRound)
+            .reduce((sum, p) => sum + (p.points_earned || 0), 0)
+          return { ...m, points }
+        }).sort((a, b) => b.points - a.points)
+      : []
 
     function renderRow(member: any, i: number, opts?: { restricted?: boolean }) {
       return (
@@ -571,6 +602,18 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           {tabs.find(t => t.id === leaderboardTab)?.blurb ?? tabs[0].blurb}
         </div>
 
+        {leaderboardTab === 'round' && (
+          <div style={{marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8}}>
+            <span style={{fontSize: '11px', color: '#aaa', flexShrink: 0}}>round:</span>
+            <select value={activeRound || ''} onChange={e => setSelectedRound(e.target.value)}
+              style={{fontSize: '12px', border: '1px solid #ddd', padding: '4px 8px', fontFamily: 'inherit', flex: 1, color: '#333', background: 'white'}}>
+              {roundsInOrder.map(r => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {leaderboardTab === 'h2h' && (
           <div style={{marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8}}>
             <span style={{fontSize: '11px', color: '#aaa', flexShrink: 0}}>compare with:</span>
@@ -628,8 +671,8 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 {leaderboardTab === 'overall' && pool.deadline_type === 'before_tournament' && <span style={{width: 40, textAlign: 'center' as const, flexShrink: 0}}>max possible</span>}
               </div>
             </div>
-            {(leaderboardTab === 'overall' ? leaderboard : yourLeaderboard).map((member, i) =>
-              renderRow(member, i, { restricted: leaderboardTab === 'yours' })
+            {(leaderboardTab === 'overall' ? leaderboard : leaderboardTab === 'round' ? roundLeaderboard : yourLeaderboard).map((member, i) =>
+              renderRow(member, i, { restricted: leaderboardTab !== 'overall' })
             )}
           </>
         )}
