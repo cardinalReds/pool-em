@@ -602,10 +602,10 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
         {hasScopedData && (
           <>
-            <div style={{marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8}}>
-              <span style={{fontSize: '11px', color: '#aaa', flexShrink: 0}}>counting points from:</span>
+            <div style={{marginBottom: 8}}>
+              <label style={{display: 'block', fontSize: '10px', color: '#aaa', marginBottom: 3}}>counting points from:</label>
               <select value={leaderboardScope} onChange={e => setLeaderboardScope(e.target.value as any)}
-                style={{fontSize: '12px', border: '1px solid #ddd', padding: '4px 8px', fontFamily: 'inherit', flex: 1, color: '#333', background: 'white'}}>
+                style={{fontSize: '12px', border: '1px solid #ddd', padding: '5px 6px', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const, color: '#333', background: 'white'}}>
                 <option value='all'>all games</option>
                 <option value='yours'>only games I picked</option>
                 <option value='rival'>games me + a rival both picked</option>
@@ -613,12 +613,12 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             </div>
 
             {leaderboardScope === 'rival' && (
-              <div style={{marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8}}>
-                <span style={{fontSize: '11px', color: '#aaa', flexShrink: 0}}>compare with:</span>
+              <div style={{marginBottom: 8}}>
+                <label style={{display: 'block', fontSize: '10px', color: '#aaa', marginBottom: 3}}>compare with:</label>
                 <select value={rival?.user_id || ''} onChange={e => {
                   const opp = leaderboard.find(m => m.user_id === e.target.value)
                   setRival(opp || null)
-                }} style={{fontSize: '12px', border: '1px solid #ddd', padding: '4px 8px', fontFamily: 'inherit', flex: 1, color: '#333', background: 'white'}}>
+                }} style={{fontSize: '12px', border: '1px solid #ddd', padding: '5px 6px', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const, color: '#333', background: 'white'}}>
                   <option value=''>pick a player...</option>
                   {leaderboard.filter(m => m.user_id !== user?.id).map(m => (
                     <option key={m.user_id} value={m.user_id}>{m.display_name}</option>
@@ -628,10 +628,10 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             )}
 
             {roundsInOrder.length > 1 && (
-              <div style={{marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8}}>
-                <span style={{fontSize: '11px', color: '#aaa', flexShrink: 0}}>round:</span>
+              <div style={{marginBottom: 10}}>
+                <label style={{display: 'block', fontSize: '10px', color: '#aaa', marginBottom: 3}}>round:</label>
                 <select value={selectedRound} onChange={e => setSelectedRound(e.target.value)}
-                  style={{fontSize: '12px', border: '1px solid #ddd', padding: '4px 8px', fontFamily: 'inherit', flex: 1, color: '#333', background: 'white'}}>
+                  style={{fontSize: '12px', border: '1px solid #ddd', padding: '5px 6px', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const, color: '#333', background: 'white'}}>
                   <option value='all'>all rounds</option>
                   {roundsInOrder.map(r => (
                     <option key={r} value={r}>{r}</option>
@@ -650,10 +650,10 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           <>
             <div style={{fontSize: '10px', color: '#aaa', marginBottom: '8px', display: 'flex', alignItems: 'center'}}>
               <span style={{flex: 1, minWidth: 0, textAlign: 'left' as const}}>player</span>
-              <div style={{display: 'flex', gap: 12, alignItems: 'center', flexShrink: 0}}>
+              <div style={{display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0}}>
                 {isUnrestrictedOverall && pool.buy_in_amount && <span style={{width: 68, textAlign: 'center' as const, flexShrink: 0}}>paid</span>}
-                <span style={{textAlign: 'right' as const, flexShrink: 0}}>pts</span>
-                {isUnrestrictedOverall && pool.deadline_type === 'before_tournament' && <span style={{width: 40, textAlign: 'center' as const, flexShrink: 0}}>max possible</span>}
+                <span style={{width: 64, textAlign: 'right' as const, flexShrink: 0}}>pts</span>
+                {isUnrestrictedOverall && pool.deadline_type === 'before_tournament' && <span style={{width: 40, textAlign: 'center' as const, flexShrink: 0}}>max</span>}
               </div>
             </div>
             {rows.map((member, i) => renderRow(member, i))}
