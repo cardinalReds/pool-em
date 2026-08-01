@@ -48,6 +48,24 @@ function extractHandicap(bets: any[], betName: string): { home: number | null; a
   return { home: parseHandicap(homeVal), away: parseHandicap(awayVal) }
 }
 
+// Moneyline (who's favored to win) — shown blurred-by-default in the UI, separate from the
+// spread/total lines above. NFL has no draw, and no live in-play odds endpoint exists on
+// this API (verified directly — v1.american-football.api-sports.io/odds/live 404s), so
+// unlike soccer this only ever gets the pre-game value, frozen once kickoff happens.
+function extractMoneyline(bets: any[]): { home: number | null; away: number | null } {
+  const bet = bets.find((b: any) => b.name === 'Home/Away' && b.bookmaker === 'Bet365')
+    ?? bets.find((b: any) => b.name === 'Home/Away')
+  if (!bet) return { home: null, away: null }
+
+  const findOdd = (label: string) => {
+    const v = bet.values?.find((v: any) => v.value?.toString().toLowerCase() === label)
+    const odd = v?.odd != null ? parseFloat(v.odd) : null
+    return odd != null && !isNaN(odd) ? odd : null
+  }
+
+  return { home: findOdd('home'), away: findOdd('away') }
+}
+
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   const { searchParams } = new URL(request.url)
@@ -95,6 +113,7 @@ export async function GET(request: NextRequest) {
       const htTotalLine = extractTotalLine(bets, 'Over/Under 1st Half')
       const { home: spreadHome, away: spreadAway } = extractHandicap(bets, 'Asian Handicap')
       const { home: htSpreadHome, away: htSpreadAway } = extractHandicap(bets, 'Asian Handicap First Half')
+      const { home: mlHome, away: mlAway } = extractMoneyline(bets)
 
       await supabase.from('fixtures').update({
         line_total_goals: totalLine,
@@ -103,6 +122,8 @@ export async function GET(request: NextRequest) {
         line_asian_handicap_away: spreadAway,
         line_ht_asian_handicap_home: htSpreadHome,
         line_ht_asian_handicap_away: htSpreadAway,
+        odds_home: mlHome,
+        odds_away: mlAway,
         odds_updated_at: new Date().toISOString(),
       }).eq('id', fixture.id)
 

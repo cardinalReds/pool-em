@@ -814,6 +814,7 @@ export default function FixturesList({
   const [roundSpecialPicks, setRoundSpecialPicks] = useState<Record<string, Record<string, string>>>({})
   const [roundFacts, setRoundFacts] = useState<Record<string, any>>({}) // matchday → facts
   const [showMemberPicksMap, setShowMemberPicksMap] = useState<Record<number, boolean>>({})
+  const [revealedOddsIds, setRevealedOddsIds] = useState<Set<number>>(new Set())
   const [roundSpecialSaving, setRoundSpecialSaving] = useState<string | null>(null)
   const [roundSpecialError, setRoundSpecialError] = useState<string | null>(null)
   const [roundSpecialSaved, setRoundSpecialSaved] = useState<Record<string, boolean>>({})
@@ -1529,6 +1530,32 @@ export default function FixturesList({
       setShowMemberPicksMap(prev => ({ ...prev, [fixture.id]: typeof v === 'function' ? v(prev[fixture.id] ?? false) : v }))
     }
 
+    const hasOdds = fixture.odds_home != null || fixture.odds_draw != null || fixture.odds_away != null
+    const oddsRevealed = revealedOddsIds.has(fixture.id)
+    const toggleOdds = (e: React.MouseEvent) => {
+      e.stopPropagation()
+      setRevealedOddsIds(prev => {
+        const next = new Set(prev)
+        if (next.has(fixture.id)) next.delete(fixture.id); else next.add(fixture.id)
+        return next
+      })
+    }
+    const oddsBadge = (light: boolean) => hasOdds && (
+      <span
+        onClick={toggleOdds}
+        title={oddsRevealed ? 'tap to hide odds' : 'tap to reveal odds'}
+        style={{
+          cursor: 'pointer', userSelect: 'none' as const,
+          color: light ? 'rgba(255,255,255,0.9)' : '#888',
+          filter: oddsRevealed ? 'none' : 'blur(4px)',
+          transition: 'filter 0.15s',
+        }}>
+        {fixture.odds_home != null ? fixture.odds_home.toFixed(2) : '—'}
+        {fixture.odds_draw != null ? ` / ${fixture.odds_draw.toFixed(2)}` : ''}
+        {' / '}{fixture.odds_away != null ? fixture.odds_away.toFixed(2) : '—'}
+      </span>
+    )
+
     return (
       <div style={{
         background: 'white',
@@ -1545,7 +1572,10 @@ export default function FixturesList({
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'white', display: 'inline-block' }} />
               LIVE
             </span>
-            <span style={{ color: 'rgba(255,255,255,0.8)', fontSize: '10px' }}>{fixture.city}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '10px' }}>
+              {oddsBadge(true)}
+              <span style={{ color: 'rgba(255,255,255,0.8)' }}>{fixture.city}</span>
+            </span>
           </div>
         )}
 
@@ -1559,6 +1589,7 @@ export default function FixturesList({
           }}>
             <span>{formatPT(fixture.date)}</span>
             <span>{fixture.city}</span>
+            {oddsBadge(false)}
             {totalPts !== null && (
               <span style={{ color: totalPts > 0 ? '#C8102E' : '#aaa', fontWeight: 600 }}>
                 {totalPts > 0 ? `+${totalPts} pts` : '0 pts'}

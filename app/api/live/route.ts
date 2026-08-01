@@ -288,6 +288,57 @@ async function handleMMATournament() {
   return { live: liveFights.length, updated }
 }
 
+// Moneyline odds for currently-live soccer fixtures — shown blurred-by-default in the UI.
+// api-football's live-odds endpoint has no NFL/american-football equivalent (verified: the
+// endpoint doesn't exist for that API), so this only ever matches soccer fixtures — no
+// per-fixture sport check needed, non-soccer fixtures simply never appear in the response.
+async function refreshLiveOdds() {
+  const { data: liveFixtures } = await supabase
+    .from('fixtures')
+    .select('id, api_fixture_id')
+    .eq('status', 'live')
+    .not('api_fixture_id', 'is', null)
+
+  if (!liveFixtures?.length) return { checked: 0, updated: 0 }
+
+  const res = await fetch(`${API_FOOTBALL_BASE}/odds/live`, {
+    headers: { 'x-apisports-key': process.env.API_FOOTBALL_KEY! },
+  })
+  if (!res.ok) return { checked: liveFixtures.length, updated: 0, error: `status ${res.status}` }
+  const data = await res.json()
+  const liveOddsFixtures: any[] = data.response || []
+
+  let updated = 0
+  for (const fixture of liveFixtures) {
+    const match = liveOddsFixtures.find((f: any) => f.fixture?.id === fixture.api_fixture_id)
+    if (!match) continue
+
+    const markets: any[] = match.odds || []
+    const bet = markets.find((m: any) => m.name === 'Fulltime Result')
+    if (!bet) continue
+
+    const findOdd = (label: string) => {
+      const v = bet.values?.find((v: any) => v.value?.toString().toLowerCase() === label)
+      const odd = v?.odd != null ? parseFloat(v.odd) : null
+      return odd != null && !isNaN(odd) ? odd : null
+    }
+    const home = findOdd('home')
+    const draw = findOdd('draw')
+    const away = findOdd('away')
+    if (home == null && draw == null && away == null) continue
+
+    await supabase.from('fixtures').update({
+      odds_home: home,
+      odds_draw: draw,
+      odds_away: away,
+      odds_updated_at: new Date().toISOString(),
+    }).eq('id', fixture.id)
+    updated++
+  }
+
+  return { checked: liveFixtures.length, updated }
+}
+
 async function triggerScoring(fixtureId: string) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL
   await fetch(`${appUrl}/api/mma/score`, {
@@ -308,6 +359,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // Isolated from the scoring logic below — a failure here (e.g. odds API hiccup)
+  // shouldn't ever block score updates.
+  let liveOddsResult: any = null
+  try {
+    liveOddsResult = await refreshLiveOdds()
+  } catch (err) {
+    liveOddsResult = { error: String(err) }
+  }
+
   try {
     // Get all active tournaments that have live or upcoming fixtures today
     const { data: activeTournaments } = await supabase
@@ -316,7 +376,7 @@ export async function GET(request: Request) {
       .eq('status', 'active')
 
     if (!activeTournaments?.length) {
-      return NextResponse.json({ message: 'No active tournaments' })
+      return NextResponse.json({ message: 'No active tournaments', liveOdds: liveOddsResult })
     }
 
     const results: Record<string, any> = {}
@@ -463,7 +523,7 @@ export async function GET(request: Request) {
       results[tournament.id] = { live: liveApiFixtures.length, updated }
     }
 
-    return NextResponse.json({ ok: true, results })
+    return NextResponse.json({ ok: true, results, liveOdds: liveOddsResult })
   } catch (err) {
     console.error('Live route error:', err)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })

@@ -15,6 +15,8 @@ interface NFLFixture {
   city: string | null
   home_score: number | null
   away_score: number | null
+  odds_home: number | null
+  odds_away: number | null
   line_asian_handicap_home: number | null
   line_total_goals: number | null
   line_ht_asian_handicap_home: number | null
@@ -70,6 +72,7 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
   const [activeEntryId, setActiveEntryId] = useState<string>(userId)
   const [newGhostName, setNewGhostName] = useState('')
   const [addingGhost, setAddingGhost] = useState(false)
+  const [revealedOddsIds, setRevealedOddsIds] = useState<Set<number>>(new Set())
 
   async function load() {
     const supabase = createClient()
@@ -252,6 +255,16 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
           background: active ? '#C8102E' : locked ? '#fafafa' : 'white',
           color: active ? 'white' : '#555',
         })
+        const hasOdds = game.odds_home != null || game.odds_away != null
+        const oddsRevealed = revealedOddsIds.has(game.id)
+        const toggleOdds = (e: React.MouseEvent) => {
+          e.stopPropagation()
+          setRevealedOddsIds(prev => {
+            const next = new Set(prev)
+            if (next.has(game.id)) next.delete(game.id); else next.add(game.id)
+            return next
+          })
+        }
 
         return (
           <div key={game.id} style={{
@@ -264,6 +277,17 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 10px', borderBottom: '1px solid #f0f0f0', fontSize: '10px', color: '#aaa' }}>
               <span>{fmt(game.date)}</span>
               {game.city && <span>{game.city}</span>}
+              {hasOdds && (
+                <span
+                  onClick={toggleOdds}
+                  title={oddsRevealed ? 'tap to hide odds' : 'tap to reveal odds'}
+                  style={{
+                    cursor: 'pointer', userSelect: 'none' as const, color: '#888',
+                    filter: oddsRevealed ? 'none' : 'blur(4px)', transition: 'filter 0.15s',
+                  }}>
+                  {game.odds_away != null ? game.odds_away.toFixed(2) : '—'} / {game.odds_home != null ? game.odds_home.toFixed(2) : '—'}
+                </span>
+              )}
               {isLive
                 ? <span style={{ color: '#2d7a2d', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2d7a2d', display: 'inline-block' }} /> LIVE

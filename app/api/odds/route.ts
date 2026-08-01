@@ -41,18 +41,36 @@ function extractHandicap(bets: any[]): { home: number | null; away: number | nul
   const bet = bets.find((b: any) => b.name === 'Asian Handicap' && b.bookmaker === 'Bet365')
     ?? bets.find((b: any) => b.name === 'Asian Handicap')
   if (!bet) return { home: null, away: null }
-  
+
   const homeVal = bet.values?.find((v: any) => v.value?.toString().toLowerCase().includes('home'))
   const awayVal = bet.values?.find((v: any) => v.value?.toString().toLowerCase().includes('away'))
-  
+
   const parseHandicap = (v: any): number | null => {
     if (!v) return null
     // e.g. "Home -1.25" → -1.25
     const match = v.value.toString().match(/[-+]?\d+\.?\d*/)
     return match ? parseFloat(match[0]) : null
   }
-  
+
   return { home: parseHandicap(homeVal), away: parseHandicap(awayVal) }
+}
+
+// Moneyline (who's favored to win) — shown blurred-by-default in the UI, separate from
+// the lines above (which are shown openly since they're the reference point for specific
+// prediction categories). Bet market is named "Match Winner" pre-match; the live-odds
+// endpoint (see refreshLiveOdds below) calls the equivalent market "Fulltime Result".
+function extractMatchWinner(bets: any[], betName = 'Match Winner'): { home: number | null; draw: number | null; away: number | null } {
+  const bet = bets.find((b: any) => b.name === betName && b.bookmaker === 'Bet365')
+    ?? bets.find((b: any) => b.name === betName)
+  if (!bet) return { home: null, draw: null, away: null }
+
+  const findOdd = (label: string) => {
+    const v = bet.values?.find((v: any) => v.value?.toString().toLowerCase() === label)
+    const odd = v?.odd != null ? parseFloat(v.odd) : null
+    return odd != null && !isNaN(odd) ? odd : null
+  }
+
+  return { home: findOdd('home'), draw: findOdd('draw'), away: findOdd('away') }
 }
 
 export async function GET(request: NextRequest) {
@@ -105,6 +123,7 @@ export async function GET(request: NextRequest) {
       const lineCorners = extractLine(bets, 'Corners Over Under')
       const lineCards = extractLine(bets, 'Cards Over/Under')
       const { home: handicapHome, away: handicapAway } = extractHandicap(bets)
+      const { home: mlHome, draw: mlDraw, away: mlAway } = extractMatchWinner(bets)
 
       await supabase.from('fixtures').update({
         line_total_goals: lineGoals,
@@ -112,6 +131,9 @@ export async function GET(request: NextRequest) {
         line_card_points: lineCards,
         line_asian_handicap_home: handicapHome,
         line_asian_handicap_away: handicapAway,
+        odds_home: mlHome,
+        odds_draw: mlDraw,
+        odds_away: mlAway,
         odds_updated_at: new Date().toISOString(),
       }).eq('id', fixture.id)
 
