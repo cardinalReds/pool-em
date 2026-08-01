@@ -4,11 +4,19 @@ import type { RecapData } from '@/lib/recap'
 // scale=1) and by satori (the next/og ImageResponse route, scale=2 for a sharp download),
 // so it stays flexbox-only with explicit dimensions throughout and every pixel value scales
 // uniformly. No CSS grid, no shorthand satori doesn't support.
-export default function RecapPoster({ data, scale = 1 }: { data: RecapData; scale?: number }) {
+export default function RecapPoster({ data, scale = 1, interactive = false }: { data: RecapData; scale?: number; interactive?: boolean }) {
   const s = (n: number) => Math.round(n * scale)
   const red = '#C8102E'
   const dim = '#888'
   const faint = '#aaa'
+
+  // Never spell out the raw URL as text — a PNG can't be clickable anyway, and in the
+  // interactive preview the link itself carries the URL. Short call-to-action copy only.
+  const ctaText = data.cta.kind === 'join'
+    ? 'think you can do better? join the pool →'
+    : data.cta.kind === 'nextRound'
+    ? `${data.cta.roundLabel.toLowerCase()} picks lock ${data.cta.deadlineLabel} — lock in your picks →`
+    : 'see the full standings →'
 
   return (
     <div style={{
@@ -31,10 +39,10 @@ export default function RecapPoster({ data, scale = 1 }: { data: RecapData; scal
         </div>
       ) : (
         <>
-          {/* Leaderboard */}
+          {/* Leaderboard — overall/season standings, not scoped to just this round */}
           <div style={{ display: 'flex', flexDirection: 'column', marginTop: s(22) }}>
             <div style={{ display: 'flex', fontSize: s(10), fontWeight: 600, color: faint, textTransform: 'uppercase', letterSpacing: 1 }}>
-              leaderboard
+              overall standings
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', marginTop: s(8) }}>
               {data.leaderboard.map((row, i) => (
@@ -62,7 +70,7 @@ export default function RecapPoster({ data, scale = 1 }: { data: RecapData; scal
           {data.items.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', marginTop: s(22) }}>
               <div style={{ display: 'flex', fontSize: s(10), fontWeight: 600, color: faint, textTransform: 'uppercase', letterSpacing: 1 }}>
-                recap
+                {data.roundLabel.toLowerCase()} recap
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', marginTop: s(8) }}>
                 {data.items.map((item, i) => (
@@ -84,13 +92,16 @@ export default function RecapPoster({ data, scale = 1 }: { data: RecapData; scal
         </>
       )}
 
-      {/* Footer CTA */}
+      {/* Footer CTA — interactive=true (preview) makes this a real clickable link; the
+          PNG can never be clickable, so it just shows the same short copy with no URL. */}
       <div style={{ display: 'flex', flexDirection: 'column', borderTop: '1px solid #eee', marginTop: s(22), paddingTop: s(16) }}>
-        <div style={{ display: 'flex', fontSize: s(13), fontWeight: 600, color: red }}>
-          {data.cta.kind === 'join' && `think you can do better? join the pool → ${data.cta.link}`}
-          {data.cta.kind === 'nextRound' && `${data.cta.roundLabel.toLowerCase()} picks lock ${data.cta.deadlineLabel} — lock in your picks → ${data.cta.link}`}
-          {data.cta.kind === 'standings' && `see the full standings → ${data.cta.link}`}
-        </div>
+        {interactive ? (
+          <a href={data.cta.link} style={{ display: 'flex', fontSize: s(13), fontWeight: 600, color: red, textDecoration: 'none' }}>
+            {ctaText}
+          </a>
+        ) : (
+          <div style={{ display: 'flex', fontSize: s(13), fontWeight: 600, color: red }}>{ctaText}</div>
+        )}
         <div style={{ display: 'flex', fontSize: s(10), color: faint, marginTop: s(6) }}>made with pool'em</div>
       </div>
     </div>

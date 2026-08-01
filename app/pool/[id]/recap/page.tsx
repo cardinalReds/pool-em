@@ -67,7 +67,7 @@ export default function RecapPreviewPage({ params }: { params: { id: string } })
       </div>
 
       <div style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: '1px solid #eee' }}>
-        <RecapPoster data={data} />
+        <RecapPoster data={data} interactive />
       </div>
 
       <div className="no-print" style={{ width: 560, maxWidth: '100%', display: 'flex', gap: 8, marginTop: 16 }}>

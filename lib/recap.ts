@@ -133,6 +133,12 @@ function buildItems(games: RawGame[], preds: RawPred[], isMma: boolean): RecapIt
     const majorityKey = Object.keys(tally).sort((a, b) => tally[b].length - tally[a].length)[0]
     const majorityRows = tally[majorityKey]
 
+    // Not insightful, skip it: a "1 of 4 picked X" plurality isn't a story — a real
+    // majority (>50%, with enough people weighing in to mean something) is. Better to
+    // show nothing for a game than a stat nobody would find interesting.
+    const majorityShare = majorityRows.length / predsForCategory.length
+    if (predsForCategory.length < 3 || majorityShare <= 0.5) continue
+
     const hit = majorityRows[0].is_correct != null
       ? majorityRows[0].is_correct
       : (majorityRows[0].points_earned || 0) > 0
@@ -174,6 +180,8 @@ export function buildRecap(input: {
   isMma: boolean
   members: { user_id: string; display_name: string; is_ghost?: boolean }[]
   roundGames: RawGame[]
+  allFinishedGames: RawGame[] // whole tournament, not just this round — for the global leaderboard
+  roundByFixtureId: Record<number, string>
   preds: RawPred[]
   isPublic: boolean
   joinLink: string
@@ -195,10 +203,21 @@ export function buildRecap(input: {
 
   const empty = gameIds.size === 0
 
+  // Global (season/tournament-wide) standings, not scoped to this one round — the same
+  // total shown by ScopedLeaderboard's default "all games" view, so a recap doubles as
+  // an "and here's where everyone stands overall" artifact, not just this round's tally.
+  const allFinishedIds = new Set(input.allFinishedGames.map(g => g.id))
   const leaderboardFull = input.members.map(m => {
-    const rows = input.preds.filter(p => p.user_id === m.user_id && p.fixture_id != null && gameIds.has(p.fixture_id) && pickKey(p) !== null)
-    const points = rows.reduce((sum, p) => sum + (p.points_earned || 0), 0)
-    const games = new Set(rows.map(p => p.fixture_id)).size
+    const points = input.preds
+      .filter(p => p.user_id === m.user_id)
+      .reduce((sum, p) => sum + (p.points_earned || 0), 0)
+    const pickedIds = new Set(
+      input.preds.filter(p => p.user_id === m.user_id && p.fixture_id != null && allFinishedIds.has(p.fixture_id) && pickKey(p) !== null)
+        .map(p => p.fixture_id as number)
+    )
+    const games = input.isF1
+      ? new Set([...pickedIds].map(id => input.roundByFixtureId[id]).filter(Boolean)).size
+      : pickedIds.size
     return { display_name: m.display_name, points, games, is_ghost: m.is_ghost }
   }).sort((a, b) => b.points - a.points)
 
@@ -221,7 +240,7 @@ export function buildRecap(input: {
     poolName: input.poolName,
     roundLabel: input.roundLabel,
     dateLabel: input.roundDate ? shortDate(input.roundDate) : '',
-    gameUnit: input.isMma ? null : input.isF1 ? 'session' : 'game',
+    gameUnit: input.isMma ? null : input.isF1 ? 'round' : 'game',
     leaderboard,
     items,
     itemsOverflow,
@@ -313,6 +332,9 @@ export async function loadRecap(
   }
 
   const roundGames = isMma ? rawGames : rawGames.filter(g => roundOf(g) === roundLabel)
+  const allFinishedGames = rawGames.filter(g => g.finished)
+  const roundByFixtureId: Record<number, string> = {}
+  rawGames.forEach(g => { roundByFixtureId[g.id] = g.round })
 
   // Next upcoming lock deadline: earliest not-yet-started game across the whole
   // tournament. Simplification — doesn't replicate each sport list's exact per-round
@@ -336,6 +358,8 @@ export async function loadRecap(
     isMma,
     members: allMembers,
     roundGames,
+    allFinishedGames,
+    roundByFixtureId,
     preds,
     isPublic: pool.is_public,
     joinLink: `${opts.baseUrl}/pool/join/${pool.invite_code}`,
