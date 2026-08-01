@@ -644,6 +644,12 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           </>
         )}
 
+        {!hasScopedData && (
+          <div style={{fontSize: '11px', color: '#aaa', marginBottom: 10}}>
+            once picks are in, you'll be able to filter this by round or scope it to just your games.
+          </div>
+        )}
+
         {emptyState ? (
           <div style={{fontSize: '12px', color: '#aaa', padding: '16px 0', textAlign: 'center' as const}}>{emptyState}</div>
         ) : (
