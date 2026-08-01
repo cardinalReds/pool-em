@@ -494,17 +494,29 @@ export default function PoolPage({ params }: { params: { id: string } }) {
     const myId = user?.id
     const hasValue = (p: any) => p.value_wld || p.value_text || p.value_ou || p.value_yesno !== null || p.value_number !== null
 
+    // The countable unit differs by sport: F1 predictions are made per session
+    // (practice/qualifying/sprint/race), but fans think in race weekends, so the
+    // figure shown needs to dedupe sessions down to their round (competition_name)
+    // rather than counting raw session rows. MMA predictions are per fight, not "games".
+    const isF1 = pool.sport === 'f1'
+    const isMma = pool.sport === 'mma'
+    const unit = isF1 ? 'round' : isMma ? 'fight' : 'game'
+    const unitPlural = isF1 ? 'rounds' : isMma ? 'fights' : 'games'
+    const countUnits = (fixtureIds: Iterable<number>) => isF1
+      ? new Set([...fixtureIds].map(id => roundByFixtureId[id]).filter(Boolean)).size
+      : new Set(fixtureIds).size
+
     const roundFilteredIds = selectedRound === 'all'
       ? finishedFixtureIds
       : new Set([...finishedFixtureIds].filter(id => roundByFixtureId[id] === selectedRound))
 
-    // Distinct-fixture count from a member's own predictions, intersected with a given
-    // fixture set — this is the "games counted" figure on each row.
+    // Distinct-unit count from a member's own predictions, intersected with a given
+    // fixture set — this is the "games/rounds/fights counted" figure on each row.
     function gamesAndPoints(userId: string, fixtureIds: Set<number>) {
       const rows = allPredsCached.filter(p => p.user_id === userId && hasValue(p) && fixtureIds.has(p.fixture_id))
       const distinctFixtures = new Set(rows.map(p => p.fixture_id))
       const points = rows.reduce((sum, p) => sum + (p.points_earned || 0), 0)
-      return { points, games: distinctFixtures.size }
+      return { points, games: countUnits(distinctFixtures) }
     }
 
     let countedFixtureIds = roundFilteredIds
@@ -533,13 +545,14 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       return { ...m, points, games }
     }).sort((a, b) => b.points - a.points)
 
-    const n = countedFixtureIds.size
+    const n = countUnits(countedFixtureIds)
+    const nUnit = n === 1 ? unit : unitPlural
     const explainer = leaderboardScope === 'all'
-      ? 'everyone’s total points across every game in the pool.'
+      ? `everyone’s total points across every ${unit} in the pool.`
       : leaderboardScope === 'yours'
-      ? `fair fight — everyone re-scored using only the ${n} game${n === 1 ? '' : 's'} you picked. good if you joined late.`
+      ? `fair fight — everyone re-scored using only the ${n} ${nUnit} you picked. good if you joined late.`
       : rival
-      ? `just you vs. ${rival.display_name}, counting only the ${n} game${n === 1 ? '' : 's'} you both picked.`
+      ? `just you vs. ${rival.display_name}, counting only the ${n} ${nUnit} you both picked.`
       : 'pick a rival below to compare.'
 
     const emptyState = leaderboardScope === 'yours' && n === 0
@@ -547,7 +560,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       : leaderboardScope === 'rival' && !rival
       ? 'pick a rival above to see the comparison.'
       : leaderboardScope === 'rival' && rival && n === 0
-      ? `you and ${rival.display_name} haven’t picked any of the same games yet.`
+      ? `you and ${rival.display_name} haven’t picked any of the same ${unitPlural} yet.`
       : null
 
     function renderRow(member: any, i: number) {
@@ -579,7 +592,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               </div>
             )}
             <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', textAlign: 'right' as const, flexShrink: 0, whiteSpace: 'nowrap' as const}}>
-              {member.points}{member.games != null && <span style={{fontSize: '10px', fontWeight: 400, color: '#bbb'}}> · {member.games} game{member.games === 1 ? '' : 's'}</span>}
+              {member.points}{member.games != null && <span style={{fontSize: '10px', fontWeight: 400, color: '#bbb'}}> · {member.games} {member.games === 1 ? unit : unitPlural}</span>}
             </span>
             {isUnrestrictedOverall && pool.deadline_type === 'before_tournament' && (
               <span style={{fontSize: '11px', color: '#bbb', width: 40, textAlign: 'center' as const, flexShrink: 0}}>
@@ -606,9 +619,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               <label style={{display: 'block', fontSize: '10px', color: '#aaa', marginBottom: 3}}>counting points from:</label>
               <select value={leaderboardScope} onChange={e => setLeaderboardScope(e.target.value as any)}
                 style={{fontSize: '12px', border: '1px solid #ddd', padding: '5px 6px', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' as const, color: '#333', background: 'white'}}>
-                <option value='all'>all games</option>
-                <option value='yours'>only games I picked</option>
-                <option value='rival'>games me + a rival both picked</option>
+                <option value='all'>all {unitPlural}</option>
+                <option value='yours'>only {unitPlural} I picked</option>
+                <option value='rival'>{unitPlural} me + a rival both picked</option>
               </select>
             </div>
 
@@ -646,7 +659,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
         {!hasScopedData && (
           <div style={{fontSize: '11px', color: '#aaa', marginBottom: 10}}>
-            once picks are in, you'll be able to filter this by round or scope it to just your games.
+            once picks are in, you'll be able to filter this by round or scope it to just your {unitPlural}.
           </div>
         )}
 
