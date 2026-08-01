@@ -470,8 +470,8 @@ export default function CreatePoolPage() {
 
   return (
     <div style={{minHeight: '100vh', background: '#f7f7f5', fontFamily: "'Inter', system-ui, sans-serif", fontSize: '13px'}}>
-      <div style={{background: '#111', color: 'white', padding: '0.75rem 1.25rem'}}>
-        <a href="/dashboard" style={{fontWeight: 700, fontSize: '1.4rem', color: 'white', textDecoration: 'none'}}>pool'em</a>
+      <div style={{background: 'white', borderBottom: '1px solid var(--border)', padding: '0.5rem 1.25rem'}}>
+        <a href="/dashboard" style={{fontWeight: 700, fontSize: '1.4rem', color: 'var(--red)', textDecoration: 'none'}}>pool'em</a>
       </div>
 
       <div style={{maxWidth: createdPool ? 520 : (step === 3 && (!isBracket || sport === 'mma' || sport === 'f1')) || (isPL && step === 4) ? 1100 : 520, margin: '0 auto', padding: '24px 16px'}}>

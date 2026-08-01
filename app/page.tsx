@@ -86,7 +86,7 @@ export default async function Home() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', fontSize: '14px' }}>
       {/* Nav */}
-      <div style={{ borderBottom: '1px solid var(--border)', background: 'white', padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ borderBottom: '1px solid var(--border)', background: 'white', padding: '0.5rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span style={{ fontWeight: 700, fontSize: '1.4rem', color: 'var(--red)' }}>pool'em</span>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <Link href="/auth/login"><button className="btn-ghost" style={{ minHeight: 36, padding: '0 12px', fontSize: '0.8rem' }}>log in</button></Link>

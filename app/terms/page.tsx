@@ -1,7 +1,7 @@
 export default function TermsPage() {
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif" }}>
-      <div style={{ borderBottom: '1px solid var(--border)', background: 'white', padding: '0.75rem 1.25rem' }}>
+      <div style={{ borderBottom: '1px solid var(--border)', background: 'white', padding: '0.5rem 1.25rem' }}>
         <a href="/" style={{ fontWeight: 700, fontSize: '1.4rem', color: 'var(--red)', textDecoration: 'none' }}>pool'em</a>
       </div>
       <div style={{ maxWidth: 680, margin: '0 auto', padding: '60px 24px', fontSize: '14px', lineHeight: 1.8, color: '#333' }}>
