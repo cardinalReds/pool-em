@@ -340,24 +340,28 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         setTotalFixtureCount(fixtureCount || 0)
 
         // Only count finished games for the predicted count display
+        // f1_sessions has no `round` column — the natural "round" for F1 is the Grand Prix
+        // weekend itself (competition_name), since a weekend groups several sessions
+        // (practice/qualifying/sprint/race) the way a matchday groups several fixtures.
         const { data: finishedFixtures } = isF1
-          ? await supabase.from(gameTable).select('id, round, date').eq('tournament_id', pool.tournament_id).eq('scored', true)
+          ? await supabase.from(gameTable).select('id, competition_name, date').eq('tournament_id', pool.tournament_id).eq('scored', true)
           : await supabase.from(gameTable).select('id, round, date').eq('tournament_id', pool.tournament_id).eq('status', 'FT')
         const finishedIds = new Set((finishedFixtures || []).map((f: any) => f.id))
         setFinishedFixtureIds(finishedIds)
         setFinishedFixtureCount(finishedFixtures?.length || 0)
 
         // Round/week breakdown — only meaningful for pools with a repeating per-game
-        // cadence (PL/NFL matchdays), not bracket tournaments (one long progression) or
-        // MMA (single card). Self-determines relevance below via roundsInOrder.length > 1
-        // rather than checking sport/deadline_type directly.
+        // cadence (PL/NFL matchdays, F1 GP weekends), not bracket tournaments (one long
+        // progression) or MMA (single card). Self-determines relevance below via
+        // roundsInOrder.length > 1 rather than checking sport/deadline_type directly.
         const roundMap: Record<number, string> = {}
         const earliestByRound: Record<string, number> = {}
         ;(finishedFixtures || []).forEach((f: any) => {
-          if (!f.round) return
-          roundMap[f.id] = f.round
+          const roundLabel = isF1 ? f.competition_name : f.round
+          if (!roundLabel) return
+          roundMap[f.id] = roundLabel
           const t = new Date(f.date).getTime()
-          if (!(f.round in earliestByRound) || t < earliestByRound[f.round]) earliestByRound[f.round] = t
+          if (!(roundLabel in earliestByRound) || t < earliestByRound[roundLabel]) earliestByRound[roundLabel] = t
         })
         setRoundByFixtureId(roundMap)
         setRoundsInOrder(Object.keys(earliestByRound).sort((a, b) => earliestByRound[b] - earliestByRound[a]))
