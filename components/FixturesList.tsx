@@ -1998,13 +1998,13 @@ export default function FixturesList({
         const roundFixtures = fixtures.filter(f => f.round === round)
         const selectedFixtures = roundFixtures.filter(f => selectedIds.includes(f.id))
         // The 5 selected games need to be announced with enough notice for people to
-        // plan around them — swaps close 48h before the earliest of the FIVE selected
-        // kickoffs, not the round's overall first game (a swap can move the earliest
-        // selected kickoff later or earlier than the round's unfiltered first game).
+        // plan around them — swaps close one week before the earliest of the FIVE
+        // selected kickoffs, not the round's overall first game (a swap can move the
+        // earliest selected kickoff later or earlier than the round's unfiltered first game).
         const earliestSelectedKickoff = selectedFixtures.length > 0
           ? Math.min(...selectedFixtures.map(f => new Date(f.date).getTime()))
           : null
-        const overrideLockTime = earliestSelectedKickoff !== null ? earliestSelectedKickoff - 48 * 60 * 60 * 1000 : null
+        const overrideLockTime = earliestSelectedKickoff !== null ? earliestSelectedKickoff - 7 * 24 * 60 * 60 * 1000 : null
         const locked = overrideLockTime !== null && Date.now() >= overrideLockTime
         return (
           <>

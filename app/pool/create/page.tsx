@@ -678,7 +678,7 @@ export default function CreatePoolPage() {
                   <input type="checkbox" checked={plBest5Override} onChange={e => setPlBest5Override(e.target.checked)} style={{marginTop: 2}} />
                   <span>
                     <div style={{fontWeight: 600, fontSize: '13px'}}>allow admin override</div>
-                    <div style={{fontSize: '11px', color: '#aaa', marginTop: 3}}>let yourself swap out any auto-picked game for a different one from that matchday, before it locks</div>
+                    <div style={{fontSize: '11px', color: '#aaa', marginTop: 3}}>let yourself swap out any auto-picked game for a different one from that matchday, until one week before it kicks off</div>
                   </span>
                 </label>
               )}
