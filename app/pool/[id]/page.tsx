@@ -217,7 +217,12 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       if (!currentUser) { window.location.href = '/auth/login'; return }
       setUser(currentUser)
 
-      const { data: pool } = await supabase.from('pools').select('*').eq('id', params.id).single()
+      // Explicit column list, not select('*') — this page is visible to every pool member
+      // (not just the admin), so bank_account_number/bank_sort_code must never be fetched
+      // here; RLS allows the read (its policy is intentionally open for invite-code
+      // browsing), but RLS is row-level, not column-level, so over-fetching would still
+      // leak those fields to the browser.
+      const { data: pool } = await supabase.from('pools').select('admin_fee_percent, admin_id, allow_member_invites, archived, buy_in_amount, created_at, deadline_type, id, invite_code, is_active, is_public, name, package_id, payout_structure, pick_mode, pl_best_weeks, pl_best5_admin_override, pl_game_mode, prize_season, prize_weekly, season_buy_in, season_props_enabled, sport, tournament_id, tournament_scope, updated_at, venmo_handle, weekly_buy_in, weekly_payout_structure, zelle_handle').eq('id', params.id).single()
       if (!pool) { setNotFound(true); setLoading(false); return }
       // Effect already cleaned up (e.g. React Strict Mode's mount-unmount-remount in dev,
       // or a fast params.id change) — bail before subscribing so we never leak a channel

@@ -37,9 +37,13 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
         poolId = invite.pool_id
       }
 
+      // Explicit column list, not select('*') — visitors here aren't even members yet,
+      // so bank_account_number/bank_sort_code must never be fetched (see the same note
+      // in app/pool/[id]/page.tsx — RLS's open read policy doesn't restrict columns).
+      const poolColumns = 'admin_fee_percent, admin_id, allow_member_invites, archived, buy_in_amount, created_at, deadline_type, id, invite_code, is_active, is_public, name, package_id, payout_structure, pick_mode, pl_best_weeks, pl_best5_admin_override, pl_game_mode, prize_season, prize_weekly, season_buy_in, season_props_enabled, sport, tournament_id, tournament_scope, updated_at, venmo_handle, weekly_buy_in, weekly_payout_structure, zelle_handle'
       const { data: pool, error } = poolId
-        ? await supabase.from('pools').select('*').eq('id', poolId).maybeSingle()
-        : await supabase.from('pools').select('*').eq('invite_code', params.code).maybeSingle()
+        ? await supabase.from('pools').select(poolColumns).eq('id', poolId).maybeSingle()
+        : await supabase.from('pools').select(poolColumns).eq('invite_code', params.code).maybeSingle()
 
       if (error) { console.error('pool lookup error:', error); setNotFound(true); setLoading(false); return }
       if (!pool) { setNotFound(true); setLoading(false); return }

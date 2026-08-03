@@ -34,7 +34,12 @@ export default function EditPoolPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/auth/login'); return }
 
-      const { data: poolData } = await supabase.from('pools').select('*').eq('id', poolId).single()
+      // Explicit column list, not select('*') — the admin check right below happens
+      // client-side after this fetch resolves, so a non-admin who navigates here would
+      // briefly receive the full row over the network before the redirect; bank fields
+      // (unused on this page — bank details are set once at creation, not edited here)
+      // must never be part of that response.
+      const { data: poolData } = await supabase.from('pools').select('admin_fee_percent, admin_id, allow_member_invites, archived, buy_in_amount, created_at, deadline_type, id, invite_code, is_active, is_public, name, package_id, payout_structure, pick_mode, pl_best_weeks, pl_best5_admin_override, pl_game_mode, prize_season, prize_weekly, season_buy_in, season_props_enabled, sport, tournament_id, tournament_scope, updated_at, venmo_handle, weekly_buy_in, weekly_payout_structure, zelle_handle').eq('id', poolId).single()
       if (!poolData || poolData.admin_id !== user.id) { router.push('/dashboard'); return }
 
       // Block editing once the tournament has ended (per-pool, not a fixed global date)
