@@ -69,19 +69,19 @@ export default function ForgotPasswordPage() {
         <form onSubmit={handleReset} style={{display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
           <div>
             <label style={{display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.3rem', color: 'var(--text-dim)'}}>code</label>
-            <input className="input" type="text" inputMode="numeric" placeholder="123456" value={code}
+            <input className="input" name="otp" type="text" inputMode="numeric" autoComplete="one-time-code" placeholder="123456" value={code}
               onChange={e => setCode(e.target.value)} required
               style={{fontSize: '16px', padding: '0.65rem 0.75rem', letterSpacing: '0.2em'}} />
           </div>
           <div>
             <label style={{display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.3rem', color: 'var(--text-dim)'}}>new password</label>
-            <input className="input" type="password" placeholder="min 6 characters" value={password}
+            <input className="input" name="new-password" type="password" autoComplete="new-password" placeholder="min 6 characters" value={password}
               onChange={e => setPassword(e.target.value)} required
               style={{fontSize: '16px', padding: '0.65rem 0.75rem'}} />
           </div>
           <div>
             <label style={{display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.3rem', color: 'var(--text-dim)'}}>confirm password</label>
-            <input className="input" type="password" placeholder="min 6 characters" value={confirmPassword}
+            <input className="input" name="confirm-password" type="password" autoComplete="new-password" placeholder="min 6 characters" value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)} required
               style={{fontSize: '16px', padding: '0.65rem 0.75rem'}} />
           </div>
@@ -112,7 +112,7 @@ export default function ForgotPasswordPage() {
       <form onSubmit={handleRequest} style={{display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
         <div>
           <label style={{display: 'block', fontSize: '0.75rem', fontWeight: 500, marginBottom: '0.3rem', color: 'var(--text-dim)'}}>email</label>
-          <input className="input" type="email" placeholder="you@example.com" value={email}
+          <input className="input" name="email" type="email" autoComplete="email" placeholder="you@example.com" value={email}
             onChange={e => setEmail(e.target.value)} required
             style={{fontSize: '16px', padding: '0.65rem 0.75rem'}} />
         </div>
