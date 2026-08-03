@@ -8,8 +8,18 @@ const supabase = createClient(
 
 export async function POST(request: NextRequest) {
   try {
-    const { poolId, userId, archived } = await request.json()
-    if (!poolId || !userId) return NextResponse.json({ error: 'Missing params' }, { status: 400 })
+    // Was trusting a client-supplied userId with no session check at all — anyone could
+    // archive/unarchive any pool by passing its real admin_id (readable via the open
+    // pools SELECT policy) as userId. Verify the actual caller instead, same pattern as
+    // account/delete: this app's browser client keeps its session in localStorage, not
+    // cookies, so the caller sends their own access token to verify against Supabase auth.
+    const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
+    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { data: { user } } = await supabase.auth.getUser(token)
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { poolId, archived } = await request.json()
+    if (!poolId) return NextResponse.json({ error: 'Missing params' }, { status: 400 })
 
     const { data: pool } = await supabase
       .from('pools')
@@ -17,7 +27,7 @@ export async function POST(request: NextRequest) {
       .eq('id', poolId)
       .single()
 
-    if (!pool || pool.admin_id !== userId) {
+    if (!pool || pool.admin_id !== user.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 

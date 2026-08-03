@@ -29,16 +29,18 @@ function getSessionFromCookie() {
   } catch { return null }
 }
 
-function ArchivePool({ poolId, userId, archived }: { poolId: string; userId: string; archived: boolean }) {
+function ArchivePool({ poolId, archived }: { poolId: string; archived: boolean }) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
 
   async function handle() {
     setStatus('loading')
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
     const res = await fetch('/api/pool/archive', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ poolId, userId, archived: !archived }),
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+      body: JSON.stringify({ poolId, archived: !archived }),
     })
     const data = await res.json()
     if (!res.ok) {
@@ -895,7 +897,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       {isAdmin && (
         <Section title="danger zone" defaultOpen={false}>
           {pool.tournament_end_date && new Date(pool.tournament_end_date) <= new Date() && (
-            <ArchivePool poolId={pool.id} userId={user.id} archived={!!pool.archived} />
+            <ArchivePool poolId={pool.id} archived={!!pool.archived} />
           )}
           <div style={{marginTop: 12}}>
             <DeletePool poolId={pool.id} />
@@ -1121,7 +1123,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                     <div style={{fontSize: '10px', fontWeight: 700, color: '#C8102E', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8}}>danger zone</div>
                     {pool.tournament_end_date && new Date(pool.tournament_end_date) <= new Date() && (
                       <div style={{marginBottom: 8}}>
-                        <ArchivePool poolId={pool.id} userId={user.id} archived={!!pool.archived} />
+                        <ArchivePool poolId={pool.id} archived={!!pool.archived} />
                       </div>
                     )}
                     <DeletePool poolId={pool.id} />
