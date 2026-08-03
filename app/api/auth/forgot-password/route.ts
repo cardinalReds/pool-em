@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { checkRateLimit, clientIp } from '@/lib/rateLimit'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,6 +20,13 @@ export async function POST(request: NextRequest) {
   if (!email || typeof email !== 'string') {
     return NextResponse.json({ error: 'email is required' }, { status: 400 })
   }
+
+  // Two limits: per-email (stop one target's inbox from being spammed with codes) and
+  // per-IP (stop one source from working through a list of targets). Both silently
+  // return ok — same no-enumeration reason as the rest of this route.
+  const emailOk = await checkRateLimit(supabase, `forgot-password:email:${email.toLowerCase()}`, { max: 3, windowSeconds: 15 * 60 })
+  const ipOk = await checkRateLimit(supabase, `forgot-password:ip:${clientIp(request)}`, { max: 10, windowSeconds: 60 * 60 })
+  if (!emailOk || !ipOk) return NextResponse.json({ ok: true })
 
   try {
     const { data, error } = await supabase.auth.admin.generateLink({ type: 'recovery', email })

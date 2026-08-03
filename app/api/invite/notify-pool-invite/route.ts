@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { checkRateLimit, clientIp } from '@/lib/rateLimit'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -7,6 +8,12 @@ const supabase = createClient(
 )
 
 export async function POST(req: NextRequest) {
+  // No session on this one (bulk-email calls it server-to-server) — content is always
+  // pulled from a real, pre-existing invitation row, never attacker-supplied, so the
+  // risk is spam volume rather than arbitrary content. IP-limited for that reason.
+  const ok = await checkRateLimit(supabase, `notify-pool-invite:ip:${clientIp(req)}`, { max: 30, windowSeconds: 60 * 60 })
+  if (!ok) return NextResponse.json({ ok: true, skipped: true, reason: 'rate limited' })
+
   const { invitationId } = await req.json()
   if (!invitationId) return NextResponse.json({ error: 'Missing invitationId' }, { status: 400 })
 

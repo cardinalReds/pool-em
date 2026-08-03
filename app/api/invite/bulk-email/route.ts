@@ -1,10 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { checkRateLimit } from '@/lib/rateLimit'
 
 const supabase = createSupabaseClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_KEY!
 )
+
+// Used to be a fetch to /api/invite/email, a separate route with no auth of its own
+// (reachable directly, arbitrary destination + content — an open relay). Inlined here
+// since this is its only real caller, so there's no public endpoint left to abuse.
+async function sendInviteEmail(opts: {
+  email: string; poolName: string; inviteUrl: string
+  buyInAmount: number | null; payoutStructure: string | null
+  inviterName: string; competitionName: string | null
+}) {
+  const resendKey = process.env.RESEND_API_KEY
+  if (!resendKey) return
+
+  const buyInSection = opts.buyInAmount ? `
+    <div style="background: #fffbf0; border: 1px solid #f0e0a0; padding: 14px; margin-bottom: 16px;">
+      <p style="font-weight: 600; margin: 0 0 6px;">💰 $${opts.buyInAmount} buy-in</p>
+      ${opts.payoutStructure ? `<p style="font-size: 12px; color: #666; margin: 0;">payout: ${opts.payoutStructure}</p>` : ''}
+    </div>
+  ` : ''
+
+  const subject = opts.inviterName ? `${opts.inviterName} invited you to join ${opts.poolName}` : `You've been invited to join ${opts.poolName}`
+
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: "pool'em <invites@pool-em.com>",
+      to: opts.email,
+      subject,
+      html: `
+        <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+          <div style="font-weight: 700; font-size: 16px; margin-bottom: 4px;">pool'em</div>
+          <div style="background: #111; color: white; padding: 16px; margin-bottom: 16px;">
+            <p style="font-size: 11px; color: #888; margin: 0 0 6px;">
+              ${opts.inviterName ? `${opts.inviterName} invited you` : "you've been invited"}${opts.competitionName ? ` · ${opts.competitionName}` : ''}
+            </p>
+            <h2 style="font-size: 18px; font-weight: 700; margin: 0;">${opts.poolName}</h2>
+          </div>
+          ${buyInSection}
+          <p style="color: #555; margin-bottom: 20px; font-size: 13px;">Make your picks, track the leaderboard, and compete with your group through the whole tournament.</p>
+          <a href="${opts.inviteUrl}" style="display: inline-block; background: #111; color: white; padding: 10px 24px; text-decoration: none; font-weight: 600; font-size: 13px;">
+            join pool →
+          </a>
+          <p style="color: #aaa; font-size: 11px; margin-top: 20px;">or copy this link: ${opts.inviteUrl}</p>
+        </div>
+      `,
+      headers: {
+        'List-Unsubscribe': '<mailto:support@pool-em.com?subject=unsubscribe>',
+      },
+    }),
+  }).catch(err => console.error('bulk-email: Resend error', err))
+}
 
 export async function POST(request: NextRequest) {
   // This app's browser client keeps its session in localStorage, not cookies, so
@@ -15,8 +67,12 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser(token)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const ok = await checkRateLimit(supabase, `bulk-email:user:${user.id}`, { max: 20, windowSeconds: 60 * 60 })
+  if (!ok) return NextResponse.json({ error: 'Too many invite requests — try again later' }, { status: 429 })
+
   const { poolId, emails } = await request.json()
   if (!poolId || !Array.isArray(emails)) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+  if (emails.length > 100) return NextResponse.json({ error: 'Too many emails at once (max 100)' }, { status: 400 })
 
   const { data: pool } = await supabase
     .from('pools')
@@ -127,18 +183,14 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      await fetch(`${appUrl}/api/invite/email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          poolName: pool.name,
-          inviteUrl: `${appUrl}/pool/join/${token}`,
-          buyInAmount: pool.buy_in_amount,
-          payoutStructure: pool.payout_structure,
-          inviterName,
-          competitionName,
-        }),
+      sendInviteEmail({
+        email,
+        poolName: pool.name,
+        inviteUrl: `${appUrl}/pool/join/${token}`,
+        buyInAmount: pool.buy_in_amount,
+        payoutStructure: pool.payout_structure,
+        inviterName,
+        competitionName,
       }).catch(() => {})
       unmatched.push(email)
     }
