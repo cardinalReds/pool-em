@@ -67,11 +67,14 @@ export default function LoginPage() {
         </div>
 
         {/* Remember me */}
-        <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-dim)'}}>
-          <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)}
-            style={{width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--red)'}} />
-          remember me
-        </label>
+        <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+          <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-dim)'}}>
+            <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)}
+              style={{width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--red)'}} />
+            remember me
+          </label>
+          <Link href="/auth/forgot-password" style={{fontSize: '0.8rem', color: 'var(--text-dim)'}}>forgot password?</Link>
+        </div>
 
         {error && <p style={{fontSize: '0.8rem', color: 'var(--red)', background: 'var(--red-light)', padding: '0.5rem 0.75rem'}}>{error}</p>}
         <button className="btn-primary" type="submit" disabled={loading}
