@@ -7,6 +7,7 @@
     { "path": "/api/mma/live", "schedule": "* * * * *" },
     { "path": "/api/mma/score", "schedule": "* * * * *" },
     { "path": "/api/reminders", "schedule": "*/30 * * * *" },
+    { "path": "/api/admin/notify", "schedule": "*/5 * * * *" },
     { "path": "/api/odds", "schedule": "0 */6 * * *" },
     { "path": "/api/pl/squads", "schedule": "0 6 * * *" },
     { "path": "/api/pl/fixtures", "schedule": "0 7 * * *" },

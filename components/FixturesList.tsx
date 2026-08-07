@@ -809,6 +809,7 @@ export default function FixturesList({
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<number | null>(null)
   const [saved, setSaved] = useState<Record<number, boolean>>({})
+  const [saveErrors, setSaveErrors] = useState<Record<number, string | null>>({})
   const autoSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
   const roundSpecialTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const [roundSpecialPicks, setRoundSpecialPicks] = useState<Record<string, Record<string, string>>>({})
@@ -1184,9 +1185,11 @@ export default function FixturesList({
     )
 
     if (rows.length > 0) {
-      await supabase.from('predictions_v2').upsert(rows, {
+      const { error } = await supabase.from('predictions_v2').upsert(rows, {
         onConflict: 'pool_id,user_id,fixture_id,category_id',
       })
+      setSaveErrors(prev => ({ ...prev, [fixtureId]: error ? 'failed to save — try again' : null }))
+      if (error) { setSaving(null); return }
     }
 
     setSaving(null)
@@ -1686,8 +1689,10 @@ export default function FixturesList({
             ))}
             {!locked && !finished && (
               <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 6 }}>
-                {saving === fixture.id 
+                {saving === fixture.id
                   ? <span style={{ fontSize: '11px', color: '#aaa' }}>saving...</span>
+                  : saveErrors[fixture.id]
+                  ? <span style={{ fontSize: '11px', color: '#C8102E' }}>✗ {saveErrors[fixture.id]}</span>
                   : <span style={{ fontSize: '11px', color: '#2d7a2d' }}>✓ predictions are automatically saved</span>
                 }
               </div>
