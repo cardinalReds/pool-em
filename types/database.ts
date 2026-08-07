@@ -526,6 +526,7 @@ export type Database = {
           is_paid: boolean
           name: string
           pool_id: string | null
+          source_ghost_entry_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -534,6 +535,7 @@ export type Database = {
           is_paid?: boolean
           name: string
           pool_id?: string | null
+          source_ghost_entry_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -542,6 +544,7 @@ export type Database = {
           is_paid?: boolean
           name?: string
           pool_id?: string | null
+          source_ghost_entry_id?: string | null
         }
         Relationships: [
           {
@@ -551,7 +554,68 @@ export type Database = {
             referencedRelation: "pools"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "ghost_entries_source_ghost_entry_id_fkey"
+            columns: ["source_ghost_entry_id"]
+            isOneToOne: false
+            referencedRelation: "ghost_entries"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      pool_pick_copy_prefs: {
+        Row: {
+          user_id: string
+          from_pool_id: string
+          to_pool_id: string
+          enabled: boolean
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          from_pool_id: string
+          to_pool_id: string
+          enabled: boolean
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          from_pool_id?: string
+          to_pool_id?: string
+          enabled?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pool_pick_copy_prefs_from_pool_id_fkey"
+            columns: ["from_pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pool_pick_copy_prefs_to_pool_id_fkey"
+            columns: ["to_pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_notify_checkpoints: {
+        Row: {
+          key: string
+          last_seen_at: string
+        }
+        Insert: {
+          key: string
+          last_seen_at?: string
+        }
+        Update: {
+          key?: string
+          last_seen_at?: string
+        }
+        Relationships: []
       }
       matchday_entries: {
         Row: {

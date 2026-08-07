@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import RulesetBuilder from '@/components/RulesetBuilder'
 import InviteFromContacts from '@/components/InviteFromContacts'
+import { syncMemberToPublicPools } from '@/lib/publicPoolSync'
 
 interface SelectedRule {
   category_id: string
@@ -27,7 +28,7 @@ export default function CreatePoolPage() {
 
   // Step 1 — name
   const [name, setName] = useState('')
-  const [visibility, setVisibility] = useState<'admin_only' | 'member_invites' | 'public'>('admin_only')
+  const [visibility, setVisibility] = useState<'admin_only' | 'member_invites'>('admin_only')
 
   // Step 2 — tournament + deadline
   const [sport, setSport] = useState('soccer')
@@ -242,7 +243,7 @@ export default function CreatePoolPage() {
       // Buy-in pools stay invite-only — a stranger showing up to a pool that's already
       // collecting money is a different risk than a stranger joining a free one.
       allow_member_invites: hasAnyBuyIn ? false : visibility === 'member_invites',
-      is_public: hasAnyBuyIn ? false : visibility === 'public',
+      is_public: false,
       payout_structure: isPL
         ? (plPrizeSeason && plSeasonBuyIn
           ? `${payoutTemplate === 'custom' ? customPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === payoutTemplate)?.description || ''} · best ${plBestWeeks} of 38 matchdays counted`
@@ -332,6 +333,8 @@ export default function CreatePoolPage() {
       display_name: user.user_metadata?.display_name || 'Admin',
     })
     if (memberError) { setError(memberError.message); setLoading(false); return }
+
+    await syncMemberToPublicPools(supabase, pool.id, user.id, user.user_metadata?.display_name || 'Admin')
 
     setLoading(false)
     setCreatedPool({ id: pool.id, name })
@@ -435,10 +438,9 @@ export default function CreatePoolPage() {
     )
   }
 
-  const VISIBILITY_OPTIONS: { id: 'admin_only' | 'member_invites' | 'public'; title: string; desc: string }[] = [
+  const VISIBILITY_OPTIONS: { id: 'admin_only' | 'member_invites'; title: string; desc: string }[] = [
     { id: 'admin_only', title: 'only I can invite', desc: 'you share the invite link — that\'s the only way in' },
     { id: 'member_invites', title: 'anyone in the pool can invite', desc: 'members can share the invite link with others too' },
-    { id: 'public', title: 'public', desc: 'anyone can find and join it from the browse page — no invite link needed' },
   ]
 
   function InviteControlSection({ hasBuyIn }: { hasBuyIn: boolean }) {

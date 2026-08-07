@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { syncMemberToPublicPools } from '@/lib/publicPoolSync'
 
 export default function JoinPoolPage({ params }: { params: { code: string } }) {
   const [pool, setPool] = useState<any>(null)
@@ -80,10 +81,11 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
       }
     }
 
+    const displayName = user.user_metadata?.display_name || user.email?.split('@')[0] || 'Player'
     await supabase.from('pool_members').insert({
-      pool_id: pool.id, user_id: user.id,
-      display_name: user.user_metadata?.display_name || user.email?.split('@')[0] || 'Player',
+      pool_id: pool.id, user_id: user.id, display_name: displayName,
     })
+    await syncMemberToPublicPools(supabase, pool.id, user.id, displayName)
     localStorage.removeItem('pending_invite')
     window.location.href = `/pool/${pool.id}`
   }

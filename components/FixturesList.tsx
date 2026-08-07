@@ -5,6 +5,11 @@ import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { WC_SQUADS } from '@/lib/wc_squads'
 import Best5Selector from '@/components/Best5Selector'
+import {
+  syncGhostToPublicPools, copyGhostPredictionsToMirrors,
+  findUnresolvedCopyCandidates, resolveCopyPreference, copyUserPredictionsToLinkedPools,
+  type CopyCandidate,
+} from '@/lib/publicPoolSync'
 
 interface Fixture {
   id: number
@@ -810,6 +815,17 @@ export default function FixturesList({
   const [saving, setSaving] = useState<number | null>(null)
   const [saved, setSaved] = useState<Record<number, boolean>>({})
   const [saveErrors, setSaveErrors] = useState<Record<number, string | null>>({})
+  const [copyCandidates, setCopyCandidates] = useState<CopyCandidate[]>([])
+  const [resolvingCopyId, setResolvingCopyId] = useState<string | null>(null)
+  // Pools this user has already opted into copying with (task #7) that score at least
+  // one category this pool doesn't — rendered as extra inline inputs per fixture so
+  // those picks can be made without leaving this pool's view.
+  const [linkedPools, setLinkedPools] = useState<{ poolId: string; poolName: string; rules: PoolRule[] }[]>([])
+  const [linkedPreds, setLinkedPreds] = useState<Record<string, PredMap>>({})
+  const [linkedSaving, setLinkedSaving] = useState<Record<string, boolean>>({})
+  const [linkedSaveErrors, setLinkedSaveErrors] = useState<Record<string, string | null>>({})
+  const linkedPredsRef = useRef<Record<string, PredMap>>({})
+  const linkedSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const autoSaveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({})
   const roundSpecialTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
   const [roundSpecialPicks, setRoundSpecialPicks] = useState<Record<string, Record<string, string>>>({})
@@ -929,6 +945,53 @@ export default function FixturesList({
           prediction_type: r.ruleset_categories?.prediction_type ?? 'per_game',
         }))
         setPoolRules(mapped)
+
+        const perGameCats = mapped.filter(r => r.prediction_type === 'per_game').map(r => r.category_id)
+        findUnresolvedCopyCandidates(supabase, userId, poolId, tournamentId, perGameCats)
+          .then(setCopyCandidates)
+          .catch(() => {})
+
+        // Pools already linked (opted into copying with) that score categories this
+        // pool doesn't — load their extra rules + this user's existing picks there so
+        // those categories can be filled in inline, right on this fixture card.
+        ;(async () => {
+          const currentCatSet = new Set(mapped.map(r => r.category_id))
+          const { data: linkPrefs } = await supabase
+            .from('pool_pick_copy_prefs').select('to_pool_id').eq('user_id', userId).eq('from_pool_id', poolId).eq('enabled', true)
+          const linkedPoolIds = (linkPrefs || []).map((p: any) => p.to_pool_id)
+          if (linkedPoolIds.length === 0) { setLinkedPools([]); setLinkedPreds({}); return }
+
+          const results: { poolId: string; poolName: string; rules: PoolRule[] }[] = []
+          const predsByPool: Record<string, PredMap> = {}
+          for (const linkedPoolId of linkedPoolIds) {
+            const { data: linkedPool } = await supabase.from('pools').select('id, name').eq('id', linkedPoolId).maybeSingle()
+            if (!linkedPool) continue
+            const { data: linkedRules } = await supabase
+              .from('pool_rules')
+              .select('category_id, points, bonus_points, ruleset_categories(name, input_type, requires_line, prediction_type)')
+              .eq('pool_id', linkedPoolId)
+            const extraRules: PoolRule[] = (linkedRules || [])
+              .filter((r: any) => !currentCatSet.has(r.category_id))
+              .map((r: any) => ({
+                category_id: r.category_id,
+                points: r.points,
+                bonus_points: r.bonus_points ?? 0,
+                name: r.ruleset_categories?.name ?? r.category_id,
+                input_type: r.ruleset_categories?.input_type ?? 'wld',
+                requires_line: r.ruleset_categories?.requires_line ?? false,
+                prediction_type: r.ruleset_categories?.prediction_type ?? 'per_game',
+              }))
+            if (extraRules.length === 0) continue
+            results.push({ poolId: linkedPoolId, poolName: linkedPool.name, rules: extraRules })
+
+            const { data: linkedPreds2 } = await supabase.from('predictions_v2').select('*').eq('pool_id', linkedPoolId).eq('user_id', userId)
+            const predMap: PredMap = {}
+            for (const p of linkedPreds2 || []) predMap[`${p.fixture_id}:${p.category_id}`] = p
+            predsByPool[linkedPoolId] = predMap
+          }
+          setLinkedPools(results)
+          setLinkedPreds(predsByPool)
+        })()
 
         // Load predictions_v2
         const { data: v2preds } = await supabase
@@ -1072,10 +1135,12 @@ export default function FixturesList({
   // Use a ref to always have fresh preds in saveFixture
   const predsRef = useRef(preds)
   useEffect(() => { predsRef.current = preds }, [preds])
+  useEffect(() => { linkedPredsRef.current = linkedPreds }, [linkedPreds])
 
   // Use a ref for saveFixture so updateLocal always calls the latest version
   const saveFixtureRef = useRef<(fixtureId: number) => Promise<void>>(async () => {})
   const saveRoundSpecialsRef = useRef<(matchday: string) => Promise<void>>(async () => {})
+  const saveLinkedFixtureRef = useRef<(linkedPoolId: string, fixtureId: number) => Promise<void>>(async () => {})
 
   async function switchEntry(entryId: string) {
     // Flush any pending debounced saves for the outgoing entry first, so a pick
@@ -1108,6 +1173,14 @@ export default function FixturesList({
     setBraceTeamByMatchday(braceTeams)
   }
 
+  async function answerCopyPrompt(candidate: CopyCandidate, enabled: boolean) {
+    setResolvingCopyId(candidate.poolId)
+    const supabase = createClient()
+    await resolveCopyPreference(supabase, userId, poolId, candidate.poolId, enabled)
+    setCopyCandidates(prev => prev.filter(c => c.poolId !== candidate.poolId))
+    setResolvingCopyId(null)
+  }
+
   async function addGhostEntry() {
     if (!newGhostName.trim()) return
     const supabase = createClient()
@@ -1117,6 +1190,7 @@ export default function FixturesList({
     if (data) {
       setGhostEntries(prev => [...prev, data])
       setMembers(prev => ({ ...prev, [data.id]: data.name }))
+      await syncGhostToPublicPools(supabase, poolId, data)
       await switchEntry(data.id)
       setNewGhostName('')
       setAddingGhost(false)
@@ -1190,15 +1264,77 @@ export default function FixturesList({
       })
       setSaveErrors(prev => ({ ...prev, [fixtureId]: error ? 'failed to save — try again' : null }))
       if (error) { setSaving(null); return }
+
+      const isGhost = ghostEntries.some(g => g.id === activeEntryId)
+      if (isGhost) await copyGhostPredictionsToMirrors(supabase, activeEntryId, rows)
+      else if (activeEntryId === userId) await copyUserPredictionsToLinkedPools(supabase, userId, poolId, rows)
     }
 
     setSaving(null)
     setSaved(prev => ({ ...prev, [fixtureId]: true }))
     setTimeout(() => setSaved(prev => ({ ...prev, [fixtureId]: false })), 3000)
-  }, [poolId, userId, activeEntryId, poolRules])
+  }, [poolId, userId, activeEntryId, poolRules, ghostEntries])
 
   // Keep saveFixtureRef in sync
   useEffect(() => { saveFixtureRef.current = saveFixture }, [saveFixture])
+
+  // ── Inline picks for a linked pool's extra categories (task #8) — mirrors
+  // updateLocal/saveFixture but targets a different pool_id than the one this
+  // component is otherwise showing, so it's kept as its own small parallel path
+  // rather than generalizing the main preds/saveFixture machinery. ──
+  const updateLinkedLocal = useCallback((linkedPoolId: string, fixtureId: number, categoryId: string, fields: Partial<PredV2>) => {
+    const key = `${fixtureId}:${categoryId}`
+    setLinkedPreds(prev => {
+      const poolMap = prev[linkedPoolId] || {}
+      return {
+        ...prev,
+        [linkedPoolId]: {
+          ...poolMap,
+          [key]: {
+            ...(poolMap[key] || { pool_id: linkedPoolId, user_id: userId, fixture_id: fixtureId, category_id: categoryId, points_earned: null, is_correct: null }),
+            ...fields,
+          } as PredV2,
+        },
+      }
+    })
+    const timerKey = `${linkedPoolId}:${fixtureId}`
+    if (linkedSaveTimers.current[timerKey]) clearTimeout(linkedSaveTimers.current[timerKey])
+    linkedSaveTimers.current[timerKey] = setTimeout(() => {
+      saveLinkedFixtureRef.current(linkedPoolId, fixtureId)
+    }, 800)
+  }, [userId])
+
+  const saveLinkedFixture = useCallback(async (linkedPoolId: string, fixtureId: number) => {
+    const timerKey = `${linkedPoolId}:${fixtureId}`
+    setLinkedSaving(prev => ({ ...prev, [timerKey]: true }))
+    const supabase = createClient()
+    const currentPreds = linkedPredsRef.current[linkedPoolId] || {}
+    const rules = (linkedPools.find(l => l.poolId === linkedPoolId)?.rules || []).filter(r => r.prediction_type === 'per_game')
+    const rows = rules.map(rule => {
+      const key = `${fixtureId}:${rule.category_id}`
+      const pred = currentPreds[key]
+      return {
+        pool_id: linkedPoolId,
+        user_id: userId,
+        fixture_id: fixtureId,
+        category_id: rule.category_id,
+        value_wld: pred?.value_wld ?? null,
+        value_number: pred?.value_number ?? null,
+        value_text: pred?.value_text ?? null,
+        value_ou: pred?.value_ou ?? null,
+        value_yesno: pred?.value_yesno ?? null,
+        submitted_at: new Date().toISOString(),
+      }
+    }).filter(r => r.value_wld || r.value_text || r.value_ou || r.value_yesno !== null || r.value_number !== null)
+
+    if (rows.length > 0) {
+      const { error } = await supabase.from('predictions_v2').upsert(rows, { onConflict: 'pool_id,user_id,fixture_id,category_id' })
+      setLinkedSaveErrors(prev => ({ ...prev, [timerKey]: error ? 'failed to save — try again' : null }))
+    }
+    setLinkedSaving(prev => ({ ...prev, [timerKey]: false }))
+  }, [userId, linkedPools])
+
+  useEffect(() => { saveLinkedFixtureRef.current = saveLinkedFixture }, [saveLinkedFixture])
 
   // Force-sync predictions to DB at kickoff time for each upcoming fixture.
   // Ensures picks in local state are flushed to DB even if the user hasn't
@@ -1698,6 +1834,47 @@ export default function FixturesList({
               </div>
             )}
 
+            {/* Linked pool's extra categories (task #8) — only while viewing your own
+                picks, not a ghost's, since linking is a real-user-only concept */}
+            {activeEntryId === userId && linkedPools.map(lp => {
+              const relevantRules = lp.rules.filter(r => r.prediction_type === 'per_game')
+              if (relevantRules.length === 0) return null
+              const timerKey = `${lp.poolId}:${fixture.id}`
+              return (
+                <div key={lp.poolId} style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #e0e0db' }}>
+                  <div style={{ fontSize: '10px', fontWeight: 600, color: '#888', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6 }}>
+                    also for {lp.poolName}
+                  </div>
+                  {relevantRules.map(rule => (
+                    <CategoryInput
+                      key={rule.category_id}
+                      fixture={fixture}
+                      rule={rule}
+                      pred={linkedPreds[lp.poolId]?.[`${fixture.id}:${rule.category_id}`]}
+                      locked={isLocked(fixture)}
+                      finished={fixture.status === 'FT'}
+                      updateLocal={(fixtureId, categoryId, fields) => updateLinkedLocal(lp.poolId, fixtureId, categoryId, fields)}
+                      scoreInputs={scoreInputs}
+                      setScoreInputs={setScoreInputs}
+                      predsRef={{ get current() { return linkedPredsRef.current[lp.poolId] || {} } }}
+                      poolRules={lp.rules}
+                      isPL={isPL}
+                    />
+                  ))}
+                  {!locked && !finished && (
+                    <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {linkedSaving[timerKey]
+                        ? <span style={{ fontSize: '11px', color: '#aaa' }}>saving...</span>
+                        : linkedSaveErrors[timerKey]
+                        ? <span style={{ fontSize: '11px', color: '#C8102E' }}>✗ {linkedSaveErrors[timerKey]}</span>
+                        : <span style={{ fontSize: '11px', color: '#2d7a2d' }}>✓ saved to {lp.poolName}</span>
+                      }
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
             {/* Member picks comparison — visible once locked or live */}
             {(locked || finished || isLive) && Object.keys(members).length > 0 && (
               <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #f0f0f0' }}>
@@ -1904,6 +2081,31 @@ export default function FixturesList({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Cross-pool pick-copy prompt — one-time per pool pair, only shown while viewing
+          your own picks (not a ghost's) */}
+      {activeEntryId === userId && copyCandidates.map(candidate => (
+        <div key={candidate.poolId} style={{ padding: '10px 12px', background: '#f5f8ff', border: '1px solid #cdd9f5' }}>
+          <div style={{ fontSize: '12px', marginBottom: 6 }}>
+            you're also in <strong>{candidate.poolName}</strong> for this competition — copy your picks between the two automatically from now on?
+          </div>
+          {candidate.onlyInOtherCategories.length > 0 && (
+            <div style={{ fontSize: '11px', color: '#888', marginBottom: 8 }}>
+              {candidate.poolName} also scores: {candidate.onlyInOtherCategories.join(', ')} — those won't be copied since this pool doesn't track them.
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button type="button" disabled={resolvingCopyId === candidate.poolId} onClick={() => answerCopyPrompt(candidate, true)}
+              style={{ padding: '5px 12px', background: '#111', color: 'white', border: 'none', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer' }}>
+              yes, always copy
+            </button>
+            <button type="button" disabled={resolvingCopyId === candidate.poolId} onClick={() => answerCopyPrompt(candidate, false)}
+              style={{ padding: '5px 12px', background: 'white', color: '#888', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer' }}>
+              no thanks
+            </button>
+          </div>
+        </div>
+      ))}
+
       {/* Ghost entry switcher — admin only */}
       {isAdmin && (
         <div style={{ padding: '10px 12px', background: '#f9f9f9', border: '1px solid #e0e0db' }}>

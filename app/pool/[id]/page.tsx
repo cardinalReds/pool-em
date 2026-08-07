@@ -13,6 +13,7 @@ import InvitePanel from '@/components/InvitePanel'
 import BuyInInvitePanel from '@/components/BuyInInvitePanel'
 import InviteFromContacts from '@/components/InviteFromContacts'
 import { DEFAULT_BRACKET_SCORING } from '@/lib/bracketEngine'
+import { syncMemberToPublicPools } from '@/lib/publicPoolSync'
 import BracketPicker from '@/components/BracketPicker'
 import BracketViewer from '@/components/BracketViewer'
 import ShitChat from '@/components/ShitChat'
@@ -276,6 +277,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           display_name: currentUser.user_metadata?.display_name || currentUser.email?.split('@')[0] || 'Admin',
         }).select('id, last_seen_changes_at').single()
         membership = healedMembership
+        if (healedMembership) {
+          await syncMemberToPublicPools(supabase, pool.id, currentUser.id, currentUser.user_metadata?.display_name || currentUser.email?.split('@')[0] || 'Admin')
+        }
       }
       if (!membership) { window.location.href = `/pool/join/${pool.invite_code}`; return }
 

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
+import { syncMemberToPublicPools } from '@/lib/publicPoolSync'
 
 export default function JoinPoolButton({
   poolId,
@@ -30,6 +31,7 @@ export default function JoinPoolButton({
       setError(error.message)
       setLoading(false)
     } else {
+      await syncMemberToPublicPools(supabase, poolId, userId, displayName)
       router.push(`/pool/${poolId}`)
     }
   }

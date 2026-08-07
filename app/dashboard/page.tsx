@@ -7,6 +7,7 @@ import { RULE_PACKAGES } from '@/types'
 import { getContacts, getMutualContacts } from '@/lib/contacts'
 import { resolveCategoryDescription } from '@/lib/categoryGroups'
 import InviteCard, { InviteRule } from '@/components/InviteCard'
+import { syncMemberToPublicPools } from '@/lib/publicPoolSync'
 
 interface PendingInvite {
   id: string
@@ -32,6 +33,8 @@ export default function DashboardPage() {
   const [publicPoolMemberCounts, setPublicPoolMemberCounts] = useState<Record<string, number>>({})
   const [publicPoolAdminNames, setPublicPoolAdminNames] = useState<Record<string, string>>({})
   const [joiningPublicId, setJoiningPublicId] = useState<string | null>(null)
+  const [dueSoonPoolIds, setDueSoonPoolIds] = useState<Set<string>>(new Set())
+  const [ghostDueSoonCounts, setGhostDueSoonCounts] = useState<Record<string, number>>({})
 
   async function load() {
     const supabase = createClient()
@@ -123,6 +126,95 @@ export default function DashboardPage() {
 
     await loadPendingInvites(supabase, user, admin || [], member || [])
 
+    // ── 48h deadline flag ── scoped to CUSTOM package_id, per-game pools (soccer/NFL —
+    // the fixtures table). F1/MMA/bracket pools use different deadline shapes entirely
+    // and are left out of this flag rather than half-supported.
+    const eligiblePools = allPools.filter(p =>
+      p && p.package_id === 'CUSTOM' && p.tournament_id && !p.archived
+      && (p.deadline_type === 'before_each_game' || p.deadline_type === 'before_weekend')
+      && p.sport !== 'mma' && p.sport !== 'f1'
+    )
+
+    if (eligiblePools.length > 0) {
+      const tIds = [...new Set(eligiblePools.map(p => p.tournament_id))]
+      const now48 = new Date()
+      const in48h = new Date(now48.getTime() + 48 * 60 * 60 * 1000)
+      const { data: upcoming } = await supabase
+        .from('fixtures')
+        .select('id, tournament_id')
+        .in('tournament_id', tIds)
+        .eq('status', 'NS')
+        .gte('date', now48.toISOString())
+        .lte('date', in48h.toISOString())
+
+      const fixturesByTournament: Record<string, Set<number>> = {}
+      const allUpcomingIds: number[] = []
+      for (const f of upcoming || []) {
+        (fixturesByTournament[f.tournament_id] ||= new Set()).add(f.id)
+        allUpcomingIds.push(f.id)
+      }
+
+      const poolsWithUpcoming = eligiblePools.filter(p => fixturesByTournament[p.tournament_id]?.size)
+
+      if (poolsWithUpcoming.length > 0) {
+        const poolIds = poolsWithUpcoming.map(p => p.id)
+
+        const { data: myPicks } = await supabase
+          .from('predictions_v2')
+          .select('pool_id, fixture_id')
+          .eq('user_id', user.id)
+          .in('pool_id', poolIds)
+          .in('fixture_id', allUpcomingIds)
+        const myPickedByPool: Record<string, Set<number>> = {}
+        for (const p of myPicks || []) { if (p.fixture_id != null) (myPickedByPool[p.pool_id] ||= new Set()).add(p.fixture_id) }
+
+        const dueSoon = new Set<string>()
+        for (const pool of poolsWithUpcoming) {
+          const need = fixturesByTournament[pool.tournament_id!]
+          const have = myPickedByPool[pool.id] || new Set()
+          if ([...need].some(id => !have.has(id))) dueSoon.add(pool.id)
+        }
+        setDueSoonPoolIds(dueSoon)
+
+        const adminEligiblePoolIds = poolsWithUpcoming.filter(p => p.admin_id === user.id).map(p => p.id)
+        if (adminEligiblePoolIds.length > 0) {
+          const { data: ghosts } = await supabase.from('ghost_entries').select('id, pool_id').in('pool_id', adminEligiblePoolIds)
+          if (ghosts && ghosts.length > 0) {
+            const ghostIds = ghosts.map(g => g.id)
+            const { data: ghostPicks } = await supabase
+              .from('predictions_v2')
+              .select('pool_id, user_id, fixture_id')
+              .in('pool_id', adminEligiblePoolIds)
+              .in('user_id', ghostIds)
+              .in('fixture_id', allUpcomingIds)
+            const pickedByGhost: Record<string, Set<number>> = {}
+            for (const p of ghostPicks || []) { if (p.fixture_id != null) (pickedByGhost[p.user_id] ||= new Set()).add(p.fixture_id) }
+
+            const ghostDueCounts: Record<string, number> = {}
+            for (const g of ghosts) {
+              if (!g.pool_id) continue
+              const pool = poolsWithUpcoming.find(p => p.id === g.pool_id)
+              if (!pool) continue
+              const need = fixturesByTournament[pool.tournament_id!]
+              const have = pickedByGhost[g.id] || new Set()
+              if ([...need].some(id => !have.has(id))) ghostDueCounts[g.pool_id] = (ghostDueCounts[g.pool_id] || 0) + 1
+            }
+            setGhostDueSoonCounts(ghostDueCounts)
+          } else {
+            setGhostDueSoonCounts({})
+          }
+        } else {
+          setGhostDueSoonCounts({})
+        }
+      } else {
+        setDueSoonPoolIds(new Set())
+        setGhostDueSoonCounts({})
+      }
+    } else {
+      setDueSoonPoolIds(new Set())
+      setGhostDueSoonCounts({})
+    }
+
     setLoading(false)
   }
 
@@ -194,6 +286,7 @@ export default function DashboardPage() {
     // 23505 = already a member somehow (e.g. joined by link in the meantime) — fine, continue
     if (memberError && memberError.code !== '23505') return
 
+    await syncMemberToPublicPools(supabase, invite.pool_id, user.id, displayName)
     await supabase.from('pool_invitations').update({ status: 'accepted', responded_at: new Date().toISOString() }).eq('id', invite.id)
     window.location.href = `/pool/${invite.pool_id}`
   }
@@ -300,7 +393,7 @@ export default function DashboardPage() {
             <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
           </div>
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))', gap: '0.75rem'}}>
-            {activeAdmin.map(pool => <PoolCard key={pool.id} pool={pool} role="admin" isLive={livePoolIds.has(pool.id)} isOver={overPoolIds.has(pool.id)} onArchive={() => archivePool(pool.id, true)} tournamentName={tournamentNames[pool.tournament_id]} />)}
+            {activeAdmin.map(pool => <PoolCard key={pool.id} pool={pool} role="admin" isLive={livePoolIds.has(pool.id)} isOver={overPoolIds.has(pool.id)} onArchive={() => archivePool(pool.id, true)} tournamentName={tournamentNames[pool.tournament_id]} dueSoon={dueSoonPoolIds.has(pool.id)} ghostDueSoonCount={ghostDueSoonCounts[pool.id] || 0} />)}
           </div>
         </section>
       )}
@@ -312,7 +405,7 @@ export default function DashboardPage() {
             <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
           </div>
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 220px), 1fr))', gap: '0.75rem'}}>
-            {activeMember.map(m => <PoolCard key={m.id} pool={(m.pools as any)} role="member" isLive={livePoolIds.has((m.pools as any)?.id)} tournamentName={tournamentNames[(m.pools as any)?.tournament_id]} />)}
+            {activeMember.map(m => <PoolCard key={m.id} pool={(m.pools as any)} role="member" isLive={livePoolIds.has((m.pools as any)?.id)} tournamentName={tournamentNames[(m.pools as any)?.tournament_id]} dueSoon={dueSoonPoolIds.has((m.pools as any)?.id)} />)}
           </div>
         </section>
       )}
@@ -386,7 +479,7 @@ export default function DashboardPage() {
   )
 }
 
-function PoolCard({ pool, role, isLive, isOver, onArchive, onUnarchive, tournamentName }: {
+function PoolCard({ pool, role, isLive, isOver, onArchive, onUnarchive, tournamentName, dueSoon, ghostDueSoonCount }: {
   pool: any
   role: 'admin' | 'member'
   isLive?: boolean
@@ -394,6 +487,8 @@ function PoolCard({ pool, role, isLive, isOver, onArchive, onUnarchive, tourname
   onArchive?: () => void
   onUnarchive?: () => void
   tournamentName?: string
+  dueSoon?: boolean
+  ghostDueSoonCount?: number
 }) {
   const pkg = RULE_PACKAGES[pool.package_id as keyof typeof RULE_PACKAGES]
   return (
@@ -415,6 +510,16 @@ function PoolCard({ pool, role, isLive, isOver, onArchive, onUnarchive, tourname
                 </span>
               )}
               {pool.archived && <span style={{fontSize: '0.65rem', color: 'var(--text-faint)', background: 'var(--border-light)', padding: '1px 6px'}}>archived</span>}
+              {dueSoon && (
+                <span style={{fontSize: '0.65rem', fontWeight: 700, color: '#a15c00', background: '#fff6e5', border: '1px solid #f0d28a', padding: '1px 6px'}}>
+                  ⏱ pick due soon
+                </span>
+              )}
+              {!!ghostDueSoonCount && (
+                <span style={{fontSize: '0.65rem', fontWeight: 700, color: '#a15c00', background: '#fff6e5', border: '1px solid #f0d28a', padding: '1px 6px'}}>
+                  ⏱ {ghostDueSoonCount} ghost{ghostDueSoonCount !== 1 ? 's' : ''} due soon
+                </span>
+              )}
             </div>
           </div>
           <div style={{fontWeight: 600, fontSize: '1rem', marginBottom: '0.25rem'}}>{pool.name}</div>
