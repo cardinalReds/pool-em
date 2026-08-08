@@ -13,20 +13,23 @@ const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL!
 // the site) — this is "tell me what's happening in my pools", not a global chat firehose.
 const ADMIN_USER_ID = process.env.ADMIN_USER_ID!
 
-async function getCheckpoint(key: string): Promise<{ lastSeenAt: string; isNew: boolean }> {
+async function getCheckpoint(key: string): Promise<{ lastSeenAt: string }> {
   const { data } = await supabase
     .from('admin_notify_checkpoints')
     .select('last_seen_at')
     .eq('key', key)
     .maybeSingle()
 
-  if (data) return { lastSeenAt: data.last_seen_at, isNew: false }
+  if (data) return { lastSeenAt: data.last_seen_at }
 
-  // First run for this feed — baseline to now instead of emailing everything that
-  // predates the feature, then upsert so the next run has something to diff against.
-  const now = new Date().toISOString()
-  await supabase.from('admin_notify_checkpoints').upsert({ key, last_seen_at: now })
-  return { lastSeenAt: now, isNew: true }
+  // First run for this feed ever — baseline to 24h ago rather than "now" (which would
+  // silently swallow anything that happened between whenever this was deployed and
+  // whenever the cron actually first fires) or the dawn of time (which would dump every
+  // historical signup in one email). Runs through the normal send path below, not a
+  // special skip case — a real first-run event should still notify.
+  const lastSeenAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  await supabase.from('admin_notify_checkpoints').upsert({ key, last_seen_at: lastSeenAt })
+  return { lastSeenAt }
 }
 
 async function setCheckpoint(key: string, lastSeenAt: string) {
@@ -51,7 +54,7 @@ export async function POST(request: NextRequest) {
 
   // ── New accounts, site-wide ──
   const accountsCheckpoint = await getCheckpoint('new_accounts')
-  if (!accountsCheckpoint.isNew) {
+  {
     const { data: newProfiles } = await supabase
       .from('profiles')
       .select('id, display_name, created_at')
@@ -82,7 +85,7 @@ export async function POST(request: NextRequest) {
 
   // ── New chat messages, scoped to pools this admin runs ──
   const messagesCheckpoint = await getCheckpoint('pool_messages')
-  if (!messagesCheckpoint.isNew) {
+  {
     const { data: myPools } = await supabase
       .from('pools')
       .select('id, name')
