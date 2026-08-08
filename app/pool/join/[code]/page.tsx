@@ -12,6 +12,9 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
   const [notFound, setNotFound] = useState(false)
   const [alreadyUsed, setAlreadyUsed] = useState(false)
   const [inviteId, setInviteId] = useState<string | null>(null)
+  const [previewRules, setPreviewRules] = useState<{ category_id: string; points: number; name: string }[]>([])
+  const [previewMembers, setPreviewMembers] = useState<{ id: string; display_name: string }[]>([])
+  const [previewFixtures, setPreviewFixtures] = useState<{ id: number; home_team: string; away_team: string; date: string }[]>([])
 
   useEffect(() => {
     async function load() {
@@ -53,6 +56,18 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
         setUser(session.user)
         const { data: existing } = await supabase.from('pool_members').select('id').eq('pool_id', pool.id).eq('user_id', session.user.id).maybeSingle()
         if (existing) { localStorage.removeItem('pending_invite'); window.location.href = `/pool/${pool.id}`; return }
+      } else {
+        // Not signed in — let them look around before committing to an account.
+        const [{ data: rules }, { data: members }, { data: fixtures }] = await Promise.all([
+          supabase.from('pool_rules').select('category_id, points, ruleset_categories(name)').eq('pool_id', pool.id),
+          supabase.from('pool_members').select('id, display_name').eq('pool_id', pool.id),
+          pool.tournament_id
+            ? supabase.from('fixtures').select('id, home_team, away_team, date').eq('tournament_id', pool.tournament_id).eq('status', 'NS').order('date', { ascending: true }).limit(5)
+            : Promise.resolve({ data: [] as any[] }),
+        ])
+        setPreviewRules((rules || []).map((r: any) => ({ category_id: r.category_id, points: r.points, name: r.ruleset_categories?.name ?? r.category_id })))
+        setPreviewMembers(members || [])
+        setPreviewFixtures(fixtures || [])
       }
       setLoading(false)
     }
@@ -154,6 +169,45 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
             </div>
           )}
 
+          {!user && (
+            <div style={{background:'white',border:'1px solid #e0e0db',padding:'20px',marginBottom:'12px'}}>
+              <p style={{fontSize:'10px',fontWeight:600,color:'#888',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'12px'}}>take a look around</p>
+
+              {previewRules.length > 0 && (
+                <div style={{marginBottom:'16px'}}>
+                  <p style={{fontSize:'11px',fontWeight:600,color:'#555',marginBottom:'6px'}}>how it's scored</p>
+                  {previewRules.map(r => (
+                    <div key={r.category_id} style={{display:'flex',justifyContent:'space-between',fontSize:'12px',padding:'4px 0',borderBottom:'1px solid #f5f5f5'}}>
+                      <span>{r.name}</span>
+                      <span style={{color:'#C8102E',fontWeight:600}}>{r.points} pt{r.points !== 1 ? 's' : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {previewFixtures.length > 0 && (
+                <div style={{marginBottom:'16px'}}>
+                  <p style={{fontSize:'11px',fontWeight:600,color:'#555',marginBottom:'6px'}}>upcoming</p>
+                  {previewFixtures.map(f => (
+                    <div key={f.id} style={{display:'flex',justifyContent:'space-between',fontSize:'12px',padding:'4px 0',borderBottom:'1px solid #f5f5f5'}}>
+                      <span>{f.home_team} vs {f.away_team}</span>
+                      <span style={{color:'#aaa'}}>{new Date(f.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {previewMembers.length > 0 && (
+                <div>
+                  <p style={{fontSize:'11px',fontWeight:600,color:'#555',marginBottom:'6px'}}>
+                    already in the pool ({previewMembers.length})
+                  </p>
+                  <p style={{fontSize:'12px',color:'#555'}}>{previewMembers.map(m => m.display_name).join(', ')}</p>
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{background:'white',border:'1px solid #e0e0db',padding:'20px'}}>
             {user ? (
               <div>
@@ -165,10 +219,10 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
               </div>
             ) : (
               <div>
-                <p style={{marginBottom:'12px',color:'#555'}}>create an account or log in to join.</p>
+                <p style={{marginBottom:'12px',color:'#555'}}>ready to make your picks?</p>
                 <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
                   <a href={`/auth/signup?invite=${params.code}`}>
-                    <button style={{width:'100%',padding:'12px',fontSize:'14px',fontWeight:600,background:'#111',minHeight:'48px',color:'white',border:'none',cursor:'pointer',fontFamily:'inherit'}}>create account</button>
+                    <button style={{width:'100%',padding:'12px',fontSize:'14px',fontWeight:600,background:'#111',minHeight:'48px',color:'white',border:'none',cursor:'pointer',fontFamily:'inherit'}}>create an account to predict →</button>
                   </a>
                   <a href={`/auth/login?invite=${params.code}`}>
                     <button style={{width:'100%',padding:'12px',fontSize:'14px',background:'white',minHeight:'48px',color:'#111',border:'1px solid #ddd',cursor:'pointer',fontFamily:'inherit'}}>log in</button>
