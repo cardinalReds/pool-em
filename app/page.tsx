@@ -78,9 +78,8 @@ export default async function Home() {
   ]
 
   const paths = [
-    { title: 'got invited to a pool?', desc: "log in and it'll be waiting on your dashboard.", cta: 'log in', href: '/auth/login' },
+    { title: 'got invited to a pool?', desc: "click your invite link, or enter the code from it — take a look around before you sign up.", cta: 'find your pool', href: '/pool/join' },
     { title: 'looking for a pool to join?', desc: 'browse open pools anyone can join, no invite needed.', cta: 'browse pools', href: '/auth/signup' },
-    { title: 'have a join code?', desc: "type it in and take a look at the pool before you sign up — no account needed to browse.", cta: 'enter code', href: '/pool/join' },
     { title: 'want to run one and invite people?', desc: 'set your own rules, then decide who gets in — invite-only or open to everyone.', cta: 'create a pool', href: '/auth/signup' },
   ]
 
