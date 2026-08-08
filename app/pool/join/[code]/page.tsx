@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { syncMemberToPublicPools } from '@/lib/publicPoolSync'
+import FixturesList from '@/components/FixturesList'
 
 export default function JoinPoolPage({ params }: { params: { code: string } }) {
   const [pool, setPool] = useState<any>(null)
@@ -12,9 +13,8 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
   const [notFound, setNotFound] = useState(false)
   const [alreadyUsed, setAlreadyUsed] = useState(false)
   const [inviteId, setInviteId] = useState<string | null>(null)
-  const [previewRules, setPreviewRules] = useState<{ category_id: string; points: number; name: string }[]>([])
   const [previewMembers, setPreviewMembers] = useState<{ id: string; display_name: string }[]>([])
-  const [previewFixtures, setPreviewFixtures] = useState<{ id: number; home_team: string; away_team: string; date: string }[]>([])
+  const [showSignupPrompt, setShowSignupPrompt] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -58,16 +58,8 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
         if (existing) { localStorage.removeItem('pending_invite'); window.location.href = `/pool/${pool.id}`; return }
       } else {
         // Not signed in — let them look around before committing to an account.
-        const [{ data: rules }, { data: members }, { data: fixtures }] = await Promise.all([
-          supabase.from('pool_rules').select('category_id, points, ruleset_categories(name)').eq('pool_id', pool.id),
-          supabase.from('pool_members').select('id, display_name').eq('pool_id', pool.id),
-          pool.tournament_id
-            ? supabase.from('fixtures').select('id, home_team, away_team, date').eq('tournament_id', pool.tournament_id).eq('status', 'NS').order('date', { ascending: true }).limit(5)
-            : Promise.resolve({ data: [] as any[] }),
-        ])
-        setPreviewRules((rules || []).map((r: any) => ({ category_id: r.category_id, points: r.points, name: r.ruleset_categories?.name ?? r.category_id })))
+        const { data: members } = await supabase.from('pool_members').select('id, display_name').eq('pool_id', pool.id)
         setPreviewMembers(members || [])
-        setPreviewFixtures(fixtures || [])
       }
       setLoading(false)
     }
@@ -134,17 +126,28 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
     ? `https://venmo.com/${venmoHandle}?txn=pay&amount=${buyInAmount}&note=${encodeURIComponent(pool.name + ' buy-in')}`
     : null
 
+  // The interactive preview reuses the real fixtures UI, so it's only offered for the
+  // pool types FixturesList actually renders (CUSTOM, non-bracket) — brackets/F1/MMA
+  // use separate components not wired up for preview mode yet.
+  const canPreviewFixtures = !user && pool.package_id === 'CUSTOM' && pool.deadline_type !== 'before_tournament'
+    && pool.sport !== 'f1' && pool.sport !== 'mma'
+
   return (
     <div style={{minHeight:'100vh',background:'#f7f7f5',fontFamily:"'Inter', system-ui, sans-serif",fontSize:'13px'}}>
       <div style={{background:'white',borderBottom:'1px solid var(--border)',padding:'0.5rem 1.25rem'}}>
         <span style={{fontWeight:700,fontSize:'1.4rem',color:'var(--red)'}}>pool'em</span>
       </div>
       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'center',padding:'24px 16px',minHeight:'calc(100vh - 41px)'}}>
-        <div style={{width:'100%',maxWidth:420}}>
+        <div style={{width:'100%',maxWidth:560}}>
           <div style={{background:'white',border:'1px solid #e0e0db',padding:'20px',marginBottom:'12px'}}>
             <p style={{fontSize:'10px',fontWeight:600,color:'#C8102E',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'6px'}}>you've been invited</p>
             <h2 style={{fontWeight:700,fontSize:'18px',marginBottom:'4px'}}>{pool.name}</h2>
             <p style={{color:'#888',fontSize:'11px'}}>{pool.tournament_scope?.replace('_',' ')} · {pool.package_id?.replace('_',' ')}</p>
+            {!user && previewMembers.length > 0 && (
+              <p style={{color:'#888',fontSize:'11px',marginTop:'8px',paddingTop:'8px',borderTop:'1px solid #f0f0f0'}}>
+                already in: {previewMembers.map(m => m.display_name).join(', ')}
+              </p>
+            )}
           </div>
 
           {hasBuyIn && (
@@ -169,42 +172,22 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
             </div>
           )}
 
-          {!user && (
-            <div style={{background:'white',border:'1px solid #e0e0db',padding:'20px',marginBottom:'12px'}}>
-              <p style={{fontSize:'10px',fontWeight:600,color:'#888',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'12px'}}>take a look around</p>
-
-              {previewRules.length > 0 && (
-                <div style={{marginBottom:'16px'}}>
-                  <p style={{fontSize:'11px',fontWeight:600,color:'#555',marginBottom:'6px'}}>how it's scored</p>
-                  {previewRules.map(r => (
-                    <div key={r.category_id} style={{display:'flex',justifyContent:'space-between',fontSize:'12px',padding:'4px 0',borderBottom:'1px solid #f5f5f5'}}>
-                      <span>{r.name}</span>
-                      <span style={{color:'#C8102E',fontWeight:600}}>{r.points} pt{r.points !== 1 ? 's' : ''}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {previewFixtures.length > 0 && (
-                <div style={{marginBottom:'16px'}}>
-                  <p style={{fontSize:'11px',fontWeight:600,color:'#555',marginBottom:'6px'}}>upcoming</p>
-                  {previewFixtures.map(f => (
-                    <div key={f.id} style={{display:'flex',justifyContent:'space-between',fontSize:'12px',padding:'4px 0',borderBottom:'1px solid #f5f5f5'}}>
-                      <span>{f.home_team} vs {f.away_team}</span>
-                      <span style={{color:'#aaa'}}>{new Date(f.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {previewMembers.length > 0 && (
-                <div>
-                  <p style={{fontSize:'11px',fontWeight:600,color:'#555',marginBottom:'6px'}}>
-                    already in the pool ({previewMembers.length})
-                  </p>
-                  <p style={{fontSize:'12px',color:'#555'}}>{previewMembers.map(m => m.display_name).join(', ')}</p>
-                </div>
-              )}
+          {canPreviewFixtures && (
+            <div style={{marginBottom:'12px'}}>
+              <FixturesList
+                poolId={pool.id}
+                userId=""
+                packageId={pool.package_id}
+                deadlineType={pool.deadline_type}
+                scope={pool.tournament_scope}
+                tournamentId={pool.tournament_id}
+                hideControls={true}
+                isAdmin={false}
+                plGameMode={pool.pl_game_mode}
+                plBest5AdminOverride={pool.pl_best5_admin_override}
+                previewMode={true}
+                onPreviewInteract={() => setShowSignupPrompt(true)}
+              />
             </div>
           )}
 
@@ -233,6 +216,29 @@ export default function JoinPoolPage({ params }: { params: { code: string } }) {
           </div>
         </div>
       </div>
+
+      {showSignupPrompt && (
+        <div
+          style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',zIndex:1000}}
+          onClick={() => setShowSignupPrompt(false)}
+        >
+          <div style={{background:'white',padding:'24px',maxWidth:360,width:'100%',textAlign:'center' as const}} onClick={e => e.stopPropagation()}>
+            <p style={{fontWeight:700,fontSize:'16px',marginBottom:'8px'}}>create an account to predict</p>
+            <p style={{color:'#888',fontSize:'12px',marginBottom:'16px'}}>
+              create an account to officially join the pool and make predictions — your pick will be saved once you're in.
+            </p>
+            <a href={`/auth/signup?invite=${params.code}`}>
+              <button style={{width:'100%',padding:'12px',fontSize:'14px',fontWeight:600,background:'#111',minHeight:'48px',color:'white',border:'none',cursor:'pointer',fontFamily:'inherit',marginBottom:'8px'}}>
+                create an account →
+              </button>
+            </a>
+            <button onClick={() => setShowSignupPrompt(false)}
+              style={{background:'none',border:'none',color:'#aaa',fontSize:'12px',cursor:'pointer',fontFamily:'inherit'}}>
+              keep looking around
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

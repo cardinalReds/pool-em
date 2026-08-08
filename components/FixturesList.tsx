@@ -789,7 +789,7 @@ function buildRoundSpecialState(preds: any[]) {
 export default function FixturesList({
   poolId, userId, packageId, deadlineType, tournamentId,
   hideControls, externalSortMode, externalViewMode, isAdmin,
-  plGameMode, plBest5AdminOverride,
+  plGameMode, plBest5AdminOverride, previewMode, onPreviewInteract,
 }: {
   poolId: string
   userId: string
@@ -803,6 +803,11 @@ export default function FixturesList({
   isAdmin?: boolean
   plGameMode?: string
   plBest5AdminOverride?: boolean
+  // Signed-out visitor browsing a pool before creating an account: renders the real
+  // fixtures UI (so it looks and feels identical to the real thing) but any attempt to
+  // actually make a pick calls onPreviewInteract instead of saving anything.
+  previewMode?: boolean
+  onPreviewInteract?: () => void
 }) {
   const [fixtures, setFixtures] = useState<Fixture[]>([])
   const [poolRules, setPoolRules] = useState<PoolRule[]>([])
@@ -1041,7 +1046,7 @@ export default function FixturesList({
                 })
               }
             })
-            if (rowsToUpsert.length > 0) {
+            if (!previewMode && rowsToUpsert.length > 0) {
               await supabase.from('predictions_v2').upsert(rowsToUpsert, {
                 onConflict: 'pool_id,user_id,fixture_id,category_id',
               })
@@ -1202,6 +1207,7 @@ export default function FixturesList({
     categoryId: string,
     fields: Partial<PredV2>,
   ) => {
+    if (previewMode) { onPreviewInteract?.(); return }
     const key = `${fixtureId}:${categoryId}`
     // Save scroll position before state update — mobile browsers can scroll to top on re-render
     const scrollY = window.scrollY
@@ -1232,7 +1238,7 @@ export default function FixturesList({
     autoSaveTimers.current[fixtureId] = setTimeout(() => {
       saveFixtureRef.current(fixtureId)
     }, 800)
-  }, [poolId, userId, activeEntryId, LS_KEY])
+  }, [poolId, userId, activeEntryId, LS_KEY, previewMode, onPreviewInteract])
 
   const saveFixture = useCallback(async (fixtureId: number) => {
     setSaving(fixtureId)
@@ -1495,6 +1501,7 @@ export default function FixturesList({
     const allTeams = Object.keys(WC_SQUADS).sort()
 
     function updatePick(categoryId: string, value: string) {
+      if (previewMode) { onPreviewInteract?.(); return }
       setRoundSpecialPicks(prev => ({ ...prev, [matchday]: { ...(prev[matchday] || {}), [categoryId]: value } }))
       // Auto-save after short delay — debounced + cancelable so switching entries can flush it first
       if (roundSpecialTimers.current[matchday]) clearTimeout(roundSpecialTimers.current[matchday])
