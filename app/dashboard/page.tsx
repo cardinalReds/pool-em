@@ -360,9 +360,14 @@ export default function DashboardPage() {
           <h1 style={{fontWeight: 700, fontSize: '1.25rem'}}>your pools</h1>
 
         </div>
-        <Link href="/pool/create">
-          <button className="btn-primary" style={{padding: '10px 18px', fontSize: '13px', minHeight: 44, whiteSpace: 'nowrap'}}>+ new pool</button>
-        </Link>
+        <div style={{display: 'flex', gap: '0.5rem'}}>
+          <Link href="/pool/join">
+            <button className="btn-ghost" style={{padding: '10px 18px', fontSize: '13px', minHeight: 44, whiteSpace: 'nowrap'}}>have a join code?</button>
+          </Link>
+          <Link href="/pool/create">
+            <button className="btn-primary" style={{padding: '10px 18px', fontSize: '13px', minHeight: 44, whiteSpace: 'nowrap'}}>+ new pool</button>
+          </Link>
+        </div>
       </div>
 
       {pendingInvites.length > 0 && (

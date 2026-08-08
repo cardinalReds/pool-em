@@ -114,6 +114,12 @@ export default async function Home() {
           ))}
         </div>
 
+        <div style={{ textAlign: 'center' as const, marginBottom: '2rem' }}>
+          <Link href="/pool/join" style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>
+            already have a join code? <span style={{ color: 'var(--red)', fontWeight: 600 }}>enter it here</span>
+          </Link>
+        </div>
+
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem', marginBottom: '3rem' }}>
           <div className="section-label" style={{ marginBottom: '1rem' }}>available now</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
