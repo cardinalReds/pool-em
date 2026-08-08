@@ -80,6 +80,7 @@ export default async function Home() {
   const paths = [
     { title: 'got invited to a pool?', desc: "log in and it'll be waiting on your dashboard.", cta: 'log in', href: '/auth/login' },
     { title: 'looking for a pool to join?', desc: 'browse open pools anyone can join, no invite needed.', cta: 'browse pools', href: '/auth/signup' },
+    { title: 'have a join code?', desc: "type it in and take a look at the pool before you sign up — no account needed to browse.", cta: 'enter code', href: '/pool/join' },
     { title: 'want to run one and invite people?', desc: 'set your own rules, then decide who gets in — invite-only or open to everyone.', cta: 'create a pool', href: '/auth/signup' },
   ]
 
@@ -112,12 +113,6 @@ export default async function Home() {
               </Link>
             </div>
           ))}
-        </div>
-
-        <div style={{ textAlign: 'center' as const, marginBottom: '2rem' }}>
-          <Link href="/pool/join" style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}>
-            already have a join code? <span style={{ color: 'var(--red)', fontWeight: 600 }}>enter it here</span>
-          </Link>
         </div>
 
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem', marginBottom: '3rem' }}>
