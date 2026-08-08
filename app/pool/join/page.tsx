@@ -22,14 +22,14 @@ export default function JoinByCodePage() {
           <div style={{background:'white',border:'1px solid #e0e0db',padding:'24px'}}>
             <h2 style={{fontWeight:700,fontSize:'18px',marginBottom:'6px'}}>join a pool</h2>
             <p style={{color:'#888',fontSize:'12px',marginBottom:'16px'}}>
-              enter the join code from your invite link — it's the letters and numbers right after the last slash.
+              insert the code from your invite link — it's the letters and numbers right after the last slash.
             </p>
             <form onSubmit={handleSubmit}>
               <input
                 autoFocus
                 value={code}
                 onChange={e => setCode(e.target.value)}
-                placeholder="e.g. GN9WAL"
+                placeholder="insert code, e.g. GN9WAL"
                 style={{width:'100%',padding:'12px',fontSize:'16px',border:'1px solid #ddd',fontFamily:'inherit',marginBottom:'12px',boxSizing:'border-box' as const}}
               />
               <button type="submit" disabled={!code.trim()}
@@ -37,6 +37,17 @@ export default function JoinByCodePage() {
                 find pool →
               </button>
             </form>
+
+            <div style={{display:'flex',alignItems:'center',gap:'10px',margin:'18px 0'}}>
+              <div style={{flex:1,borderTop:'1px solid #eee'}} />
+              <span style={{fontSize:'11px',color:'#aaa'}}>already have an account?</span>
+              <div style={{flex:1,borderTop:'1px solid #eee'}} />
+            </div>
+            <a href="/auth/login">
+              <button style={{width:'100%',padding:'12px',fontSize:'14px',background:'white',minHeight:'48px',color:'#111',border:'1px solid #ddd',cursor:'pointer',fontFamily:'inherit'}}>
+                log in
+              </button>
+            </a>
           </div>
         </div>
       </div>
