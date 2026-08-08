@@ -154,3 +154,10 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true, sent: true })
 }
+
+// Vercel Cron sends GET, not POST — every other cron route here handles both for the
+// same reason (see /api/odds, /api/reminders, /api/pl/score). Without this, the 149
+// scheduled runs before this fix all 405'd instantly, never executing any of the above.
+export async function GET(request: NextRequest) {
+  return POST(request)
+}
