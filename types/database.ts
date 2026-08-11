@@ -317,6 +317,7 @@ export type Database = {
       fixtures: {
         Row: {
           api_fixture_id: number | null
+          api_sports_fight_id: number | null
           away_logo: string | null
           away_score: number | null
           away_team: string
@@ -377,6 +378,7 @@ export type Database = {
         }
         Insert: {
           api_fixture_id?: number | null
+          api_sports_fight_id?: number | null
           away_logo?: string | null
           away_score?: number | null
           away_team: string
@@ -437,6 +439,7 @@ export type Database = {
         }
         Update: {
           api_fixture_id?: number | null
+          api_sports_fight_id?: number | null
           away_logo?: string | null
           away_score?: number | null
           away_team?: string

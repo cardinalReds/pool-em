@@ -29,6 +29,9 @@ interface MMAFixture {
   weight_class: string | null
   fighter1_nationality: string | null
   fighter2_nationality: string | null
+  odds_home: number | null
+  odds_draw: number | null
+  odds_away: number | null
 }
 
 interface PoolRule {
@@ -121,6 +124,7 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
   const [activeEntryId, setActiveEntryId] = useState<string>(userId) // who we're making picks for
   const [newGhostName, setNewGhostName] = useState('')
   const [addingGhost, setAddingGhost] = useState(false)
+  const [revealedOddsIds, setRevealedOddsIds] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     async function load() {
@@ -386,6 +390,30 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
               {(isMain || fight.is_title_fight) && (
                 <div style={{ textAlign: 'center' as const, fontSize: '10px', fontWeight: 700, color: '#C8102E', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8 }}>
                   {fight.is_title_fight ? '🏆 Title Fight' : 'Main Event'}
+                </div>
+              )}
+
+              {(fight.odds_home != null || fight.odds_draw != null || fight.odds_away != null) && (
+                <div style={{ textAlign: 'center' as const, marginBottom: 8 }}>
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setRevealedOddsIds(prev => {
+                        const next = new Set(prev)
+                        if (next.has(fight.id)) next.delete(fight.id); else next.add(fight.id)
+                        return next
+                      })
+                    }}
+                    title={revealedOddsIds.has(fight.id) ? 'tap to hide odds' : 'tap to reveal odds'}
+                    style={{
+                      cursor: 'pointer', userSelect: 'none' as const, fontSize: '11px', color: '#888',
+                      filter: revealedOddsIds.has(fight.id) ? 'none' : 'blur(4px)',
+                      transition: 'filter 0.15s',
+                    }}>
+                    {fight.odds_home != null ? fight.odds_home.toFixed(2) : '—'}
+                    {fight.odds_draw != null ? ` / ${fight.odds_draw.toFixed(2)}` : ''}
+                    {' / '}{fight.odds_away != null ? fight.odds_away.toFixed(2) : '—'}
+                  </span>
                 </div>
               )}
 
