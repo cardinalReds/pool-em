@@ -54,9 +54,22 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Fetch squads for each team (rate limit: 10 req/min on free tier — add delay)
+    // Squads barely change outside transfer windows, so re-fetching all 20 teams every
+    // day (this used to run unconditionally) was ~21 wasted API-Football calls/day.
+    // Skip any team whose squad was refreshed within the last 7 days.
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const { data: freshRows } = await supabase
+      .from('pl_players')
+      .select('team_id')
+      .eq('season', SEASON)
+      .in('team_id', TEAM_IDS)
+      .gte('updated_at', sevenDaysAgo)
+    const freshTeamIds = new Set((freshRows || []).map((r: any) => r.team_id))
+
     let playerCount = 0
+    let teamsSkipped = 0
     for (const teamId of TEAM_IDS) {
+      if (freshTeamIds.has(teamId)) { teamsSkipped++; continue }
       const players = await fetchSquad(teamId)
       for (const p of players) {
         await supabase.from('pl_players').upsert({
@@ -73,7 +86,7 @@ export async function GET(request: NextRequest) {
       await new Promise(r => setTimeout(r, 200))
     }
 
-    return NextResponse.json({ ok: true, teams: teams.length, players: playerCount })
+    return NextResponse.json({ ok: true, teams: teams.length, players: playerCount, teams_skipped_fresh: teamsSkipped })
   } catch (err) {
     console.error('PL squads sync error:', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })
