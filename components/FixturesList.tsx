@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { WC_SQUADS } from '@/lib/wc_squads'
 import Best5Selector from '@/components/Best5Selector'
+import { formatOdds, type OddsFormat } from '@/lib/oddsFormat'
 import {
   syncGhostToPublicPools, copyGhostPredictionsToMirrors,
   findUnresolvedCopyCandidates, resolveCopyPreference, copyUserPredictionsToLinkedPools,
@@ -837,6 +838,7 @@ export default function FixturesList({
   const [roundFacts, setRoundFacts] = useState<Record<string, any>>({}) // matchday → facts
   const [showMemberPicksMap, setShowMemberPicksMap] = useState<Record<number, boolean>>({})
   const [revealedOddsIds, setRevealedOddsIds] = useState<Set<number>>(new Set())
+  const [oddsFormat, setOddsFormat] = useState<OddsFormat>('decimal')
   const [roundSpecialSaving, setRoundSpecialSaving] = useState<string | null>(null)
   const [roundSpecialError, setRoundSpecialError] = useState<string | null>(null)
   const [roundSpecialSaved, setRoundSpecialSaved] = useState<Record<string, boolean>>({})
@@ -864,6 +866,13 @@ export default function FixturesList({
   useEffect(() => {
     if (onlyRoundSpecials) { setSortMode('round'); setCurrentPage(0) }
   }, [onlyRoundSpecials])
+
+  // Odds display preference — no-op for anonymous preview (userId is empty there)
+  useEffect(() => {
+    if (!userId) return
+    createClient().from('profiles').select('odds_format').eq('id', userId).maybeSingle()
+      .then(({ data }) => { if (data?.odds_format) setOddsFormat(data.odds_format as OddsFormat) })
+  }, [userId])
 
   useEffect(() => {
     async function load() {
@@ -1690,15 +1699,19 @@ export default function FixturesList({
       <span
         onClick={toggleOdds}
         title={oddsRevealed ? 'tap to hide odds' : 'tap to reveal odds'}
-        style={{
-          cursor: 'pointer', userSelect: 'none' as const,
+        style={{ cursor: 'pointer', userSelect: 'none' as const, display: 'inline-flex', alignItems: 'baseline', gap: 3 }}>
+        <span style={{ color: light ? 'rgba(255,255,255,0.7)' : '#aaa', fontSize: '9px', textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>
+          odds
+        </span>
+        <span style={{
           color: light ? 'rgba(255,255,255,0.9)' : '#888',
           filter: oddsRevealed ? 'none' : 'blur(4px)',
           transition: 'filter 0.15s',
         }}>
-        {fixture.odds_home != null ? fixture.odds_home.toFixed(2) : '—'}
-        {fixture.odds_draw != null ? ` / ${fixture.odds_draw.toFixed(2)}` : ''}
-        {' / '}{fixture.odds_away != null ? fixture.odds_away.toFixed(2) : '—'}
+          {fixture.odds_home != null ? formatOdds(fixture.odds_home, oddsFormat) : '—'}
+          {fixture.odds_draw != null ? ` / ${formatOdds(fixture.odds_draw, oddsFormat)}` : ''}
+          {' / '}{fixture.odds_away != null ? formatOdds(fixture.odds_away, oddsFormat) : '—'}
+        </span>
       </span>
     )
 

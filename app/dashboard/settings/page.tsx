@@ -11,6 +11,7 @@ export default function SettingsPage() {
   const [notifyPoolInvites, setNotifyPoolInvites] = useState(true)
   const [notifyNewCompetitions, setNotifyNewCompetitions] = useState(true)
   const [sportInterests, setSportInterests] = useState<Set<string>>(new Set())
+  const [oddsFormat, setOddsFormat] = useState<'decimal' | 'american' | 'fractional'>('decimal')
   const [loading, setLoading] = useState(true)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -24,7 +25,7 @@ export default function SettingsPage() {
       setUserId(user.id)
 
       const [{ data: profile }, { data: interests }] = await Promise.all([
-        supabase.from('profiles').select('display_name, notify_pool_invites, notify_new_competitions').eq('id', user.id).single(),
+        supabase.from('profiles').select('display_name, notify_pool_invites, notify_new_competitions, odds_format').eq('id', user.id).single(),
         supabase.from('user_sport_interests').select('sport').eq('user_id', user.id),
       ])
 
@@ -32,6 +33,7 @@ export default function SettingsPage() {
         setDisplayName(profile.display_name)
         setNotifyPoolInvites(profile.notify_pool_invites)
         setNotifyNewCompetitions(profile.notify_new_competitions)
+        setOddsFormat(profile.odds_format as 'decimal' | 'american' | 'fractional')
       }
       setSportInterests(new Set((interests || []).map(i => i.sport)))
       setLoading(false)
@@ -83,6 +85,12 @@ export default function SettingsPage() {
     if (!userId) return
     setNotifyNewCompetitions(checked)
     await createClient().from('profiles').update({ notify_new_competitions: checked }).eq('id', userId)
+  }
+
+  async function changeOddsFormat(format: 'decimal' | 'american' | 'fractional') {
+    if (!userId) return
+    setOddsFormat(format)
+    await createClient().from('profiles').update({ odds_format: format }).eq('id', userId)
   }
 
   async function handleDeleteAccount() {
@@ -168,6 +176,28 @@ export default function SettingsPage() {
           ))}
           <p style={{fontSize: '0.75rem', color: 'var(--text-faint)'}}>
             we check these off automatically when you join a pool for that sport — uncheck any you're not actually into. friends inviting you to a pool will see if it's a sport you don't follow.
+          </p>
+        </div>
+      </section>
+
+      <section style={{marginBottom: '2rem'}}>
+        <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem'}}>
+          <span className="section-label">odds format</span>
+          <div style={{flex: 1, borderTop: '1px solid var(--border-light)'}} />
+        </div>
+        <div className="card" style={{display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
+          {([
+            { id: 'decimal', label: 'decimal', example: '1.73' },
+            { id: 'american', label: 'american', example: '−137 or +137' },
+            { id: 'fractional', label: 'fractional', example: '73/100' },
+          ] as const).map(opt => (
+            <label key={opt.id} style={{display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.85rem', cursor: 'pointer'}}>
+              <input type="radio" name="odds_format" checked={oddsFormat === opt.id} onChange={() => changeOddsFormat(opt.id)} />
+              {opt.label} <span style={{color: 'var(--text-faint)'}}>({opt.example})</span>
+            </label>
+          ))}
+          <p style={{fontSize: '0.75rem', color: 'var(--text-faint)'}}>
+            how the blurred odds badge on fixtures is displayed, once revealed. doesn't change the underlying odds, just how they're shown.
           </p>
         </div>
       </section>

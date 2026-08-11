@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { formatOdds, type OddsFormat } from '@/lib/oddsFormat'
 
 const supabase = createClient()
 
@@ -125,6 +126,7 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
   const [newGhostName, setNewGhostName] = useState('')
   const [addingGhost, setAddingGhost] = useState(false)
   const [revealedOddsIds, setRevealedOddsIds] = useState<Set<number>>(new Set())
+  const [oddsFormat, setOddsFormat] = useState<OddsFormat>('decimal')
 
   useEffect(() => {
     async function load() {
@@ -191,6 +193,12 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [poolId, userId, tournamentId])
+
+  useEffect(() => {
+    if (!userId) return
+    supabase.from('profiles').select('odds_format').eq('id', userId).maybeSingle()
+      .then(({ data }) => { if (data?.odds_format) setOddsFormat(data.odds_format as OddsFormat) })
+  }, [userId])
 
   async function switchEntry(entryId: string) {
     setActiveEntryId(entryId)
@@ -405,14 +413,19 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                       })
                     }}
                     title={revealedOddsIds.has(fight.id) ? 'tap to hide odds' : 'tap to reveal odds'}
-                    style={{
-                      cursor: 'pointer', userSelect: 'none' as const, fontSize: '11px', color: '#888',
+                    style={{ cursor: 'pointer', userSelect: 'none' as const, display: 'inline-flex', alignItems: 'baseline', gap: 3 }}>
+                    <span style={{ color: '#aaa', fontSize: '9px', textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>
+                      odds
+                    </span>
+                    <span style={{
+                      fontSize: '11px', color: '#888',
                       filter: revealedOddsIds.has(fight.id) ? 'none' : 'blur(4px)',
                       transition: 'filter 0.15s',
                     }}>
-                    {fight.odds_home != null ? fight.odds_home.toFixed(2) : '—'}
-                    {fight.odds_draw != null ? ` / ${fight.odds_draw.toFixed(2)}` : ''}
-                    {' / '}{fight.odds_away != null ? fight.odds_away.toFixed(2) : '—'}
+                      {fight.odds_home != null ? formatOdds(fight.odds_home, oddsFormat) : '—'}
+                      {fight.odds_draw != null ? ` / ${formatOdds(fight.odds_draw, oddsFormat)}` : ''}
+                      {' / '}{fight.odds_away != null ? formatOdds(fight.odds_away, oddsFormat) : '—'}
+                    </span>
                   </span>
                 </div>
               )}
