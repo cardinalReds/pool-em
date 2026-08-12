@@ -127,6 +127,7 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
   const [addingGhost, setAddingGhost] = useState(false)
   const [revealedOddsIds, setRevealedOddsIds] = useState<Set<number>>(new Set())
   const [oddsFormat, setOddsFormat] = useState<OddsFormat>('decimal')
+  const [oddsAlwaysVisible, setOddsAlwaysVisible] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -196,9 +197,19 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
 
   useEffect(() => {
     if (!userId) return
-    supabase.from('profiles').select('odds_format').eq('id', userId).maybeSingle()
-      .then(({ data }) => { if (data?.odds_format) setOddsFormat(data.odds_format as OddsFormat) })
+    supabase.from('profiles').select('odds_format, odds_always_visible').eq('id', userId).maybeSingle()
+      .then(({ data }) => {
+        if (data?.odds_format) setOddsFormat(data.odds_format as OddsFormat)
+        if (data) setOddsAlwaysVisible(data.odds_always_visible)
+      })
   }, [userId])
+
+  async function toggleOddsAlwaysVisible() {
+    if (!userId) return
+    const next = !oddsAlwaysVisible
+    setOddsAlwaysVisible(next)
+    await supabase.from('profiles').update({ odds_always_visible: next }).eq('id', userId)
+  }
 
   async function switchEntry(entryId: string) {
     setActiveEntryId(entryId)
@@ -401,34 +412,6 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                 </div>
               )}
 
-              {(fight.odds_home != null || fight.odds_draw != null || fight.odds_away != null) && (
-                <div style={{ textAlign: 'center' as const, marginBottom: 8 }}>
-                  <span
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setRevealedOddsIds(prev => {
-                        const next = new Set(prev)
-                        if (next.has(fight.id)) next.delete(fight.id); else next.add(fight.id)
-                        return next
-                      })
-                    }}
-                    title={revealedOddsIds.has(fight.id) ? 'tap to hide odds' : 'tap to reveal odds'}
-                    style={{ cursor: 'pointer', userSelect: 'none' as const, display: 'inline-flex', alignItems: 'baseline', gap: 3 }}>
-                    <span style={{ color: '#aaa', fontSize: '9px', textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>
-                      odds
-                    </span>
-                    <span style={{
-                      fontSize: '11px', color: '#888',
-                      filter: revealedOddsIds.has(fight.id) ? 'none' : 'blur(4px)',
-                      transition: 'filter 0.15s',
-                    }}>
-                      {fight.odds_home != null ? formatOdds(fight.odds_home, oddsFormat) : '—'}
-                      {fight.odds_draw != null ? ` / ${formatOdds(fight.odds_draw, oddsFormat)}` : ''}
-                      {' / '}{fight.odds_away != null ? formatOdds(fight.odds_away, oddsFormat) : '—'}
-                    </span>
-                  </span>
-                </div>
-              )}
 
               {/* Fighters */}
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
@@ -540,20 +523,57 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                       <span style={{ color: '#C8102E' }}>{rule.points} pts</span>
                     </div>
 
-                    {rule.category_id === 'mma_result' && (
-                      <div style={{ display: 'flex', gap: 0 }}>
-                        <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
-                          disabled={locked || isFinished}
-                          onClick={() => !locked && !isFinished && savePred(fight.id, rule.category_id, { value_wld: 'home' })}>
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>{fight.fighter1_last_name || lastName(fight.home_team)}</span>
-                        </button>
-                        <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
-                          disabled={locked || isFinished}
-                          onClick={() => !locked && !isFinished && savePred(fight.id, rule.category_id, { value_wld: 'away' })}>
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>{fight.fighter2_last_name || lastName(fight.away_team)}</span>
-                        </button>
-                      </div>
-                    )}
+                    {rule.category_id === 'mma_result' && (() => {
+                      const showOdds = fight.odds_home != null || fight.odds_draw != null || fight.odds_away != null
+                      const revealed = oddsAlwaysVisible || revealedOddsIds.has(fight.id)
+                      const oddsLine = (value: number | null) => showOdds && (
+                        <span style={{
+                          display: 'block', fontSize: '10px', marginTop: 2,
+                          filter: revealed ? 'none' : 'blur(3px)', transition: 'filter 0.15s',
+                        }}>
+                          {value != null ? formatOdds(value, oddsFormat) : '—'}
+                        </span>
+                      )
+                      return (
+                        <div>
+                          <div style={{ display: 'flex', gap: 0 }}>
+                            <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
+                              disabled={locked || isFinished}
+                              onClick={() => !locked && !isFinished && savePred(fight.id, rule.category_id, { value_wld: 'home' })}>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>{fight.fighter1_last_name || lastName(fight.home_team)}</span>
+                              {oddsLine(fight.odds_home)}
+                            </button>
+                            <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
+                              disabled={locked || isFinished}
+                              onClick={() => !locked && !isFinished && savePred(fight.id, rule.category_id, { value_wld: 'away' })}>
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>{fight.fighter2_last_name || lastName(fight.away_team)}</span>
+                              {oddsLine(fight.odds_away)}
+                            </button>
+                          </div>
+                          {showOdds && (
+                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setRevealedOddsIds(prev => {
+                                    const next = new Set(prev)
+                                    if (next.has(fight.id)) next.delete(fight.id); else next.add(fight.id)
+                                    return next
+                                  })
+                                }}
+                                style={{ fontSize: '10px', color: '#888', cursor: 'pointer', textDecoration: 'underline' }}>
+                                {revealed ? 'tap to hide odds' : 'tap to reveal odds'}
+                              </span>
+                              <span style={{ color: '#ddd', fontSize: '10px' }}>·</span>
+                              <span onClick={(e) => { e.stopPropagation(); toggleOddsAlwaysVisible() }}
+                                style={{ fontSize: '10px', color: '#888', cursor: 'pointer', textDecoration: 'underline' }}>
+                                {oddsAlwaysVisible ? 'stop always showing odds' : 'keep odds visible'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
 
                     {rule.category_id === 'mma_method' && (
                       <div style={{ display: 'flex', gap: 0 }}>

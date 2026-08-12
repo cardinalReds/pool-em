@@ -289,7 +289,7 @@ function PlayerDropdown({ value, onChange, disabled, homeTeam, awayTeam }: {
 
 // CategoryInput is defined outside FixturesList to prevent remounting on parent re-renders
 // (which would close PlayerDropdown's open state). All closure vars are passed as props.
-function CategoryInput({ fixture, rule, pred, locked, finished, updateLocal, scoreInputs, setScoreInputs, predsRef, poolRules, isPL }: {
+function CategoryInput({ fixture, rule, pred, locked, finished, updateLocal, scoreInputs, setScoreInputs, predsRef, poolRules, isPL, oddsRevealed, oddsFormat, oddsAlwaysVisible, onToggleOdds, onToggleAlwaysVisible }: {
 fixture: Fixture
 rule: PoolRule
 pred: PredV2 | undefined
@@ -301,6 +301,11 @@ setScoreInputs: React.Dispatch<React.SetStateAction<Record<string, string>>>
 predsRef: React.MutableRefObject<Record<string, PredV2>>
 poolRules: PoolRule[]
 isPL?: boolean
+oddsRevealed?: boolean
+oddsFormat?: OddsFormat
+oddsAlwaysVisible?: boolean
+onToggleOdds?: (e: React.MouseEvent) => void
+onToggleAlwaysVisible?: (e: React.MouseEvent) => void
 }) {
   const key = `${fixture.id}:${rule.category_id}`
   // pred passed as prop
@@ -464,35 +469,65 @@ isPL?: boolean
           // No draw for team_to_advance
           const noDrawCategories = ['soccer_team_to_advance']
           const showDraw = !noDrawCategories.includes(rule.category_id)
+          // Moneyline data is match-result odds specifically — doesn't apply to any other wld category
+          const showOdds = rule.category_id === 'soccer_result' &&
+            (fixture.odds_home != null || fixture.odds_draw != null || fixture.odds_away != null)
+          const revealed = !!oddsAlwaysVisible || !!oddsRevealed
+
+          const oddsLine = (value: number | null) => showOdds && (
+            <span style={{
+              display: 'block', fontSize: '10px', marginTop: 2,
+              filter: revealed ? 'none' : 'blur(3px)', transition: 'filter 0.15s',
+            }}>
+              {value != null ? formatOdds(value, oddsFormat || 'decimal') : '—'}
+            </span>
+          )
+
           return (
-            <div style={{ display: 'flex', gap: 0 }}>
-              <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
-                disabled={locked || finished}
-                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                  {isPL && fixture.home_logo
-                    ? <img src={fixture.home_logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain', flexShrink: 0 }} />
-                    : <Flag team={fixture.home_team} />
-                  } {fixture.home_team}
-                </span>
-              </button>
-              {showDraw && (
-                <button type="button" style={{ ...btnStyle('draw'), borderRight: 'none', flexShrink: 0, flex: '0 0 60px' }}
+            <div>
+              <div style={{ display: 'flex', gap: 0 }}>
+                <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
                   disabled={locked || finished}
-                  onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'draw' })}>
-                  draw
+                  onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                    {isPL && fixture.home_logo
+                      ? <img src={fixture.home_logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain', flexShrink: 0 }} />
+                      : <Flag team={fixture.home_team} />
+                    } {fixture.home_team}
+                  </span>
+                  {oddsLine(fixture.odds_home)}
                 </button>
+                {showDraw && (
+                  <button type="button" style={{ ...btnStyle('draw'), borderRight: 'none', flexShrink: 0, flex: '0 0 60px' }}
+                    disabled={locked || finished}
+                    onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'draw' })}>
+                    draw
+                    {oddsLine(fixture.odds_draw)}
+                  </button>
+                )}
+                <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
+                  disabled={locked || finished}
+                  onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                    {isPL && fixture.away_logo
+                      ? <img src={fixture.away_logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain', flexShrink: 0 }} />
+                      : <Flag team={fixture.away_team} />
+                    } {fixture.away_team}
+                  </span>
+                  {oddsLine(fixture.odds_away)}
+                </button>
+              </div>
+              {showOdds && (
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                  <span onClick={onToggleOdds} style={{ fontSize: '10px', color: '#888', cursor: 'pointer', textDecoration: 'underline' }}>
+                    {revealed ? 'tap to hide odds' : 'tap to reveal odds'}
+                  </span>
+                  <span style={{ color: '#ddd', fontSize: '10px' }}>·</span>
+                  <span onClick={onToggleAlwaysVisible} style={{ fontSize: '10px', color: '#888', cursor: 'pointer', textDecoration: 'underline' }}>
+                    {oddsAlwaysVisible ? 'stop always showing odds' : 'keep odds visible'}
+                  </span>
+                </div>
               )}
-              <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
-                disabled={locked || finished}
-                onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                  {isPL && fixture.away_logo
-                    ? <img src={fixture.away_logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain', flexShrink: 0 }} />
-                    : <Flag team={fixture.away_team} />
-                  } {fixture.away_team}
-                </span>
-              </button>
             </div>
           )
         })()
@@ -839,6 +874,7 @@ export default function FixturesList({
   const [showMemberPicksMap, setShowMemberPicksMap] = useState<Record<number, boolean>>({})
   const [revealedOddsIds, setRevealedOddsIds] = useState<Set<number>>(new Set())
   const [oddsFormat, setOddsFormat] = useState<OddsFormat>('decimal')
+  const [oddsAlwaysVisible, setOddsAlwaysVisible] = useState(false)
   const [roundSpecialSaving, setRoundSpecialSaving] = useState<string | null>(null)
   const [roundSpecialError, setRoundSpecialError] = useState<string | null>(null)
   const [roundSpecialSaved, setRoundSpecialSaved] = useState<Record<string, boolean>>({})
@@ -870,9 +906,19 @@ export default function FixturesList({
   // Odds display preference — no-op for anonymous preview (userId is empty there)
   useEffect(() => {
     if (!userId) return
-    createClient().from('profiles').select('odds_format').eq('id', userId).maybeSingle()
-      .then(({ data }) => { if (data?.odds_format) setOddsFormat(data.odds_format as OddsFormat) })
+    createClient().from('profiles').select('odds_format, odds_always_visible').eq('id', userId).maybeSingle()
+      .then(({ data }) => {
+        if (data?.odds_format) setOddsFormat(data.odds_format as OddsFormat)
+        if (data) setOddsAlwaysVisible(data.odds_always_visible)
+      })
   }, [userId])
+
+  async function toggleOddsAlwaysVisible() {
+    if (!userId) return
+    const next = !oddsAlwaysVisible
+    setOddsAlwaysVisible(next)
+    await createClient().from('profiles').update({ odds_always_visible: next }).eq('id', userId)
+  }
 
   useEffect(() => {
     async function load() {
@@ -1685,7 +1731,6 @@ export default function FixturesList({
       setShowMemberPicksMap(prev => ({ ...prev, [fixture.id]: typeof v === 'function' ? v(prev[fixture.id] ?? false) : v }))
     }
 
-    const hasOdds = fixture.odds_home != null || fixture.odds_draw != null || fixture.odds_away != null
     const oddsRevealed = revealedOddsIds.has(fixture.id)
     const toggleOdds = (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -1695,26 +1740,6 @@ export default function FixturesList({
         return next
       })
     }
-    const oddsBadge = (light: boolean) => hasOdds && (
-      <span
-        onClick={toggleOdds}
-        title={oddsRevealed ? 'tap to hide odds' : 'tap to reveal odds'}
-        style={{ cursor: 'pointer', userSelect: 'none' as const, display: 'inline-flex', alignItems: 'baseline', gap: 3 }}>
-        <span style={{ color: light ? 'rgba(255,255,255,0.7)' : '#aaa', fontSize: '9px', textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>
-          odds
-        </span>
-        <span style={{
-          color: light ? 'rgba(255,255,255,0.9)' : '#888',
-          filter: oddsRevealed ? 'none' : 'blur(4px)',
-          transition: 'filter 0.15s',
-        }}>
-          {fixture.odds_home != null ? formatOdds(fixture.odds_home, oddsFormat) : '—'}
-          {fixture.odds_draw != null ? ` / ${formatOdds(fixture.odds_draw, oddsFormat)}` : ''}
-          {' / '}{fixture.odds_away != null ? formatOdds(fixture.odds_away, oddsFormat) : '—'}
-        </span>
-      </span>
-    )
-
     return (
       <div style={{
         background: 'white',
@@ -1732,7 +1757,6 @@ export default function FixturesList({
               LIVE
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '10px' }}>
-              {oddsBadge(true)}
               <span style={{ color: 'rgba(255,255,255,0.8)' }}>{fixture.city}</span>
             </span>
           </div>
@@ -1748,7 +1772,6 @@ export default function FixturesList({
           }}>
             <span>{formatPT(fixture.date)}</span>
             <span>{fixture.city}</span>
-            {oddsBadge(false)}
             {totalPts !== null && (
               <span style={{ color: totalPts > 0 ? '#C8102E' : '#aaa', fontWeight: 600 }}>
                 {totalPts > 0 ? `+${totalPts} pts` : '0 pts'}
@@ -1841,6 +1864,11 @@ export default function FixturesList({
                 predsRef={predsRef}
                 poolRules={poolRules}
                 isPL={isPL}
+                oddsRevealed={oddsRevealed}
+                oddsFormat={oddsFormat}
+                oddsAlwaysVisible={oddsAlwaysVisible}
+                onToggleOdds={toggleOdds}
+                onToggleAlwaysVisible={toggleOddsAlwaysVisible}
               />
             ))}
             {!locked && !finished && (
@@ -1879,6 +1907,11 @@ export default function FixturesList({
                       predsRef={{ get current() { return linkedPredsRef.current[lp.poolId] || {} } }}
                       poolRules={lp.rules}
                       isPL={isPL}
+                      oddsRevealed={oddsRevealed}
+                      oddsFormat={oddsFormat}
+                      oddsAlwaysVisible={oddsAlwaysVisible}
+                      onToggleOdds={toggleOdds}
+                      onToggleAlwaysVisible={toggleOddsAlwaysVisible}
                     />
                   ))}
                   {!locked && !finished && (

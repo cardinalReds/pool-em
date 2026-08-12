@@ -1338,6 +1338,7 @@ export type Database = {
           notify_new_competitions: boolean
           notify_pool_invites: boolean
           odds_format: string
+          odds_always_visible: boolean
         }
         Insert: {
           created_at?: string | null
@@ -1346,6 +1347,7 @@ export type Database = {
           notify_new_competitions?: boolean
           notify_pool_invites?: boolean
           odds_format?: string
+          odds_always_visible?: boolean
         }
         Update: {
           created_at?: string | null
@@ -1354,6 +1356,7 @@ export type Database = {
           notify_new_competitions?: boolean
           notify_pool_invites?: boolean
           odds_format?: string
+          odds_always_visible?: boolean
         }
         Relationships: []
       }

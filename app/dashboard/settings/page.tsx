@@ -12,6 +12,7 @@ export default function SettingsPage() {
   const [notifyNewCompetitions, setNotifyNewCompetitions] = useState(true)
   const [sportInterests, setSportInterests] = useState<Set<string>>(new Set())
   const [oddsFormat, setOddsFormat] = useState<'decimal' | 'american' | 'fractional'>('decimal')
+  const [oddsAlwaysVisible, setOddsAlwaysVisible] = useState(false)
   const [loading, setLoading] = useState(true)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -25,7 +26,7 @@ export default function SettingsPage() {
       setUserId(user.id)
 
       const [{ data: profile }, { data: interests }] = await Promise.all([
-        supabase.from('profiles').select('display_name, notify_pool_invites, notify_new_competitions, odds_format').eq('id', user.id).single(),
+        supabase.from('profiles').select('display_name, notify_pool_invites, notify_new_competitions, odds_format, odds_always_visible').eq('id', user.id).single(),
         supabase.from('user_sport_interests').select('sport').eq('user_id', user.id),
       ])
 
@@ -34,6 +35,7 @@ export default function SettingsPage() {
         setNotifyPoolInvites(profile.notify_pool_invites)
         setNotifyNewCompetitions(profile.notify_new_competitions)
         setOddsFormat(profile.odds_format as 'decimal' | 'american' | 'fractional')
+        setOddsAlwaysVisible(profile.odds_always_visible)
       }
       setSportInterests(new Set((interests || []).map(i => i.sport)))
       setLoading(false)
@@ -91,6 +93,12 @@ export default function SettingsPage() {
     if (!userId) return
     setOddsFormat(format)
     await createClient().from('profiles').update({ odds_format: format }).eq('id', userId)
+  }
+
+  async function toggleOddsAlwaysVisible(checked: boolean) {
+    if (!userId) return
+    setOddsAlwaysVisible(checked)
+    await createClient().from('profiles').update({ odds_always_visible: checked }).eq('id', userId)
   }
 
   async function handleDeleteAccount() {
@@ -196,8 +204,15 @@ export default function SettingsPage() {
               {opt.label} <span style={{color: 'var(--text-faint)'}}>({opt.example})</span>
             </label>
           ))}
+          <p style={{fontSize: '0.75rem', color: 'var(--text-faint)', marginBottom: '0.5rem'}}>
+            how the odds shown under each pick are displayed, once revealed. doesn't change the underlying odds, just how they're shown.
+          </p>
+          <label style={{display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.85rem', cursor: 'pointer', paddingTop: '0.75rem', borderTop: '1px solid var(--border-light)'}}>
+            <input type="checkbox" checked={oddsAlwaysVisible} onChange={e => toggleOddsAlwaysVisible(e.target.checked)} />
+            always show odds, don't blur them
+          </label>
           <p style={{fontSize: '0.75rem', color: 'var(--text-faint)'}}>
-            how the blurred odds badge on fixtures is displayed, once revealed. doesn't change the underlying odds, just how they're shown.
+            you can also toggle this from the button next to any pick's odds.
           </p>
         </div>
       </section>
