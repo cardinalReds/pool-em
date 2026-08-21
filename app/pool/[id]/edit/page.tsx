@@ -25,8 +25,20 @@ export default function EditPoolPage() {
   const [name, setName] = useState('')
   const [visibility, setVisibility] = useState<'admin_only' | 'member_invites' | 'public'>('admin_only')
   const [rulePoints, setRulePoints] = useState<Record<string, { points: number; bonus_points: number }>>({})
+  const [deadlineType, setDeadlineType] = useState<'before_weekend' | 'before_each_game'>('before_each_game')
 
   const hasBuyIn = !!pool && pool.buy_in_amount != null && parseFloat(pool.buy_in_amount) > 0
+  const isPL = !!pool && pool.tournament_id?.startsWith('pl_')
+  // Only PL and NFL pools choose between a matchday-wide lock and a per-game lock — F1
+  // pairs before_weekend with before_session (a different axis: one ticket vs. one per
+  // session), MMA is fixed to before_tournament, and other soccer pools pair
+  // before_each_game with before_tournament (bracket) — none of those are this toggle.
+  const showDeadlineTypeOption = !!pool && (isPL || pool.sport === 'nfl') &&
+    (pool.deadline_type === 'before_weekend' || pool.deadline_type === 'before_each_game')
+  const DEADLINE_TYPE_OPTIONS: { id: 'before_weekend' | 'before_each_game'; label: string; desc: string }[] = [
+    { id: 'before_weekend', label: isPL ? 'before each match week' : 'before each gameweek', desc: 'all picks for the matchday lock before the first game kicks off' },
+    { id: 'before_each_game', label: 'before each game', desc: 'picks lock individually at each kickoff' },
+  ]
 
   useEffect(() => {
     async function load() {
@@ -51,6 +63,9 @@ export default function EditPoolPage() {
       setPool(poolData)
       setName(poolData.name || '')
       setVisibility(poolData.is_public ? 'public' : poolData.allow_member_invites ? 'member_invites' : 'admin_only')
+      if (poolData.deadline_type === 'before_weekend' || poolData.deadline_type === 'before_each_game') {
+        setDeadlineType(poolData.deadline_type)
+      }
 
       // Load scoring rules
       const { data: rulesData } = await supabase
@@ -85,6 +100,7 @@ export default function EditPoolPage() {
     const newAllowMemberInvites = hasBuyIn ? false : visibility === 'member_invites'
     if (newIsPublic !== !!pool.is_public) changes.is_public = { from: !!pool.is_public, to: newIsPublic }
     if (newAllowMemberInvites !== !!pool.allow_member_invites) changes.allow_member_invites = { from: !!pool.allow_member_invites, to: newAllowMemberInvites }
+    if (showDeadlineTypeOption && deadlineType !== pool.deadline_type) changes.deadline_type = { from: pool.deadline_type, to: deadlineType }
 
     // Check rule changes
     rules.forEach(r => {
@@ -99,6 +115,7 @@ export default function EditPoolPage() {
       name,
       is_public: newIsPublic,
       allow_member_invites: newAllowMemberInvites,
+      ...(showDeadlineTypeOption ? { deadline_type: deadlineType } : {}),
       updated_at: new Date().toISOString(),
     }).eq('id', poolId)
 
@@ -146,6 +163,24 @@ export default function EditPoolPage() {
         <input value={name} onChange={e => setName(e.target.value)}
           style={{ width: '100%', border: '1px solid #ddd', padding: '10px 12px', fontSize: 15, fontFamily: 'inherit', boxSizing: 'border-box' as const, minHeight: 44 }} />
       </section>
+
+      {/* Prediction deadline style */}
+      {showDeadlineTypeOption && (
+        <section style={{ marginBottom: 28 }}>
+          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>prediction deadline</div>
+          <p style={{ fontSize: 11, color: '#aaa', marginBottom: 10 }}>changes take effect immediately — games that haven't kicked off yet follow the new rule right away.</p>
+          {DEADLINE_TYPE_OPTIONS.map(opt => (
+            <label key={opt.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', marginBottom: 12 }}>
+              <input type="radio" name="deadlineType" checked={deadlineType === opt.id} onChange={() => setDeadlineType(opt.id)}
+                style={{ width: 18, height: 18, cursor: 'pointer', marginTop: 2 }} />
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{opt.label}</div>
+                <div style={{ fontSize: 11, color: '#aaa' }}>{opt.desc}</div>
+              </div>
+            </label>
+          ))}
+        </section>
+      )}
 
       {/* Who can join */}
       <section style={{ marginBottom: 28 }}>
