@@ -885,6 +885,17 @@ export default function FixturesList({
   const [activeEntryId, setActiveEntryId] = useState<string>(userId)
   const [newGhostName, setNewGhostName] = useState('')
   const [addingGhost, setAddingGhost] = useState(false)
+  const [ghostBoxCollapsed, setGhostBoxCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try { return localStorage.getItem(`ghost_box_collapsed_${poolId}`) === '1' } catch { return false }
+  })
+  function toggleGhostBox() {
+    setGhostBoxCollapsed(prev => {
+      const next = !prev
+      try { localStorage.setItem(`ghost_box_collapsed_${poolId}`, next ? '1' : '0') } catch {}
+      return next
+    })
+  }
   const [_sortMode, setSortMode] = useState<'date' | 'group' | 'round'>('group')
   const [_viewMode, setViewMode] = useState<'pages' | 'list'>('pages')
   const sortMode = externalSortMode ?? _sortMode
@@ -1886,7 +1897,10 @@ export default function FixturesList({
                 rule={rule}
                 pred={preds[`${fixture.id}:${rule.category_id}`]}
                 locked={isLocked(fixture)}
-                finished={fixture.status === 'FT'}
+                // Ghost picks stay editable even after the match ends — a ghost can't log
+                // in to fix its own pick, so the admin/manager needs to correct it anytime.
+                // (isLocked(fixture) already carries this same bypass for the lock half.)
+                finished={activeEntryId === userId && fixture.status === 'FT'}
                 updateLocal={updateLocal}
                 scoreInputs={scoreInputs}
                 setScoreInputs={setScoreInputs}

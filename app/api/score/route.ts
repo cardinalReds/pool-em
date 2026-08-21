@@ -256,7 +256,7 @@ export async function POST(request: NextRequest) {
       // Find our internal fixture by api_fixture_id
       const { data: ourFixture } = await supabase
         .from('fixtures')
-        .select('id, scored, round, line_total_goals, line_total_corners, line_card_points, line_asian_handicap_home, line_asian_handicap_away, penalty_winner')
+        .select('id, scored, status, round, line_total_goals, line_total_corners, line_card_points, line_asian_handicap_home, line_asian_handicap_away, penalty_winner, odds_home, odds_draw, odds_away, closing_odds_home')
         .eq('api_fixture_id', apiFixtureId)
         .maybeSingle()
 

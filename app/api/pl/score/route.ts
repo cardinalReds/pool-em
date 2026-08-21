@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
 
       const { data: ourFixture } = await supabase
         .from('fixtures')
-        .select('id, scored, round, line_total_goals, line_total_corners, line_card_points, line_asian_handicap_home, line_asian_handicap_away, penalty_winner')
+        .select('id, scored, status, round, line_total_goals, line_total_corners, line_card_points, line_asian_handicap_home, line_asian_handicap_away, penalty_winner, odds_home, odds_draw, odds_away, closing_odds_home')
         .eq('api_fixture_id', apiFixtureId)
         .maybeSingle()
 
@@ -224,6 +224,14 @@ export async function POST(request: NextRequest) {
         cardPtsLine: fixtureRow?.line_card_points ?? null,
       }
 
+      // Freeze whatever odds are on the fixture right now as the closing line, the
+      // instant it first goes live — see app/api/live/route.ts for the fuller comment.
+      // This route can also be the one that first flips a fixture to 'live' (both crons
+      // hit the API independently), so it needs the same guard.
+      const closingOddsUpdate = isLiveMatch && ourFixture.status !== 'live' && ourFixture.closing_odds_home == null
+        ? { closing_odds_home: ourFixture.odds_home, closing_odds_draw: ourFixture.odds_draw, closing_odds_away: ourFixture.odds_away }
+        : {}
+
       await supabase.from('fixtures').update({
         status: isLiveMatch ? 'live' : 'FT',
         home_score: homeScore,
@@ -241,6 +249,7 @@ export async function POST(request: NextRequest) {
         ht_away_card_pts: htAwayCardPts,
         first_yellow_team: firstYellow === 'none' ? null : firstYellow,
         first_team_score: firstTeamScore === 'none' ? null : firstTeamScore,
+        ...closingOddsUpdate,
       }).eq('id', internalFixtureId)
 
       // PL pools are always CUSTOM package_id — no legacy `predictions` table branch needed

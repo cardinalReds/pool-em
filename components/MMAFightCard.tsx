@@ -127,6 +127,17 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
   const [activeEntryId, setActiveEntryId] = useState<string>(userId) // who we're making picks for
   const [newGhostName, setNewGhostName] = useState('')
   const [addingGhost, setAddingGhost] = useState(false)
+  const [ghostBoxCollapsed, setGhostBoxCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try { return localStorage.getItem(`ghost_box_collapsed_${poolId}`) === '1' } catch { return false }
+  })
+  function toggleGhostBox() {
+    setGhostBoxCollapsed(prev => {
+      const next = !prev
+      try { localStorage.setItem(`ghost_box_collapsed_${poolId}`, next ? '1' : '0') } catch {}
+      return next
+    })
+  }
   const [revealedOddsIds, setRevealedOddsIds] = useState<Set<number>>(new Set())
   const [oddsFormat, setOddsFormat] = useState<OddsFormat>('decimal')
   const [oddsAlwaysVisible, setOddsAlwaysVisible] = useState(false)
@@ -320,51 +331,59 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
       {/* Entry switcher — admin or a member granted ghost-management access */}
       {(isAdmin || canManageGhosts) && (
         <div style={{ marginBottom: 16, padding: '10px 12px', background: '#f9f9f9', border: '1px solid #e0e0db' }}>
-          <div style={{ fontSize: '10px', fontWeight: 600, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>making picks for</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginBottom: 8 }}>
-            {/* Self */}
-            <button type="button" onClick={() => switchEntry(userId)}
-              style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
-                borderColor: activeEntryId === userId ? '#C8102E' : '#ddd',
-                background: activeEntryId === userId ? '#C8102E' : 'white',
-                color: activeEntryId === userId ? 'white' : '#555', fontWeight: activeEntryId === userId ? 700 : 400 }}>
-              you
-            </button>
-            {/* Ghost entries */}
-            {ghostEntries.map(g => (
-              <button key={g.id} type="button" onClick={() => switchEntry(g.id)}
-                style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
-                  borderColor: activeEntryId === g.id ? '#C8102E' : '#ddd',
-                  background: activeEntryId === g.id ? '#C8102E' : 'white',
-                  color: activeEntryId === g.id ? 'white' : '#555', fontWeight: activeEntryId === g.id ? 700 : 400 }}>
-                {g.name}
-              </button>
-            ))}
-            {/* Add new — admin only; ghost managers can pick for existing entries but not create/remove them */}
-            {isAdmin && !addingGhost && (
-              <button type="button" onClick={() => setAddingGhost(true)}
-                style={{ padding: '5px 10px', fontSize: '12px', border: '1px dashed #ddd', background: 'white', color: '#aaa', cursor: 'pointer', fontFamily: 'inherit' }}>
-                + add entry
-              </button>
-            )}
+          <div onClick={toggleGhostBox}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: ghostBoxCollapsed ? 0 : 8 }}>
+            <span style={{ fontSize: '10px', fontWeight: 600, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>making picks for</span>
+            <span style={{ fontSize: '11px', color: '#888' }}>{ghostBoxCollapsed ? 'show ▾' : 'hide ▴'}</span>
           </div>
-          {isAdmin && addingGhost && (
-            <div style={{ display: 'flex', gap: 6 }}>
-              <input autoFocus value={newGhostName} onChange={e => setNewGhostName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addGhostEntry()}
-                placeholder="entry name..."
-                style={{ flex: 1, padding: '6px 8px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit' }} />
-              <button type="button" onClick={addGhostEntry}
-                style={{ padding: '6px 12px', background: '#111', color: 'white', border: 'none', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer' }}>
-                add
-              </button>
-              <button type="button" onClick={() => { setAddingGhost(false); setNewGhostName('') }}
-                style={{ padding: '6px 10px', background: 'none', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer', color: '#aaa' }}>
-                cancel
-              </button>
-            </div>
+          {!ghostBoxCollapsed && (
+            <>
+              <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginBottom: 8 }}>
+                {/* Self */}
+                <button type="button" onClick={() => switchEntry(userId)}
+                  style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
+                    borderColor: activeEntryId === userId ? '#C8102E' : '#ddd',
+                    background: activeEntryId === userId ? '#C8102E' : 'white',
+                    color: activeEntryId === userId ? 'white' : '#555', fontWeight: activeEntryId === userId ? 700 : 400 }}>
+                  you
+                </button>
+                {/* Ghost entries */}
+                {ghostEntries.map(g => (
+                  <button key={g.id} type="button" onClick={() => switchEntry(g.id)}
+                    style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
+                      borderColor: activeEntryId === g.id ? '#C8102E' : '#ddd',
+                      background: activeEntryId === g.id ? '#C8102E' : 'white',
+                      color: activeEntryId === g.id ? 'white' : '#555', fontWeight: activeEntryId === g.id ? 700 : 400 }}>
+                    {g.name}
+                  </button>
+                ))}
+                {/* Add new — admin only; ghost managers can pick for existing entries but not create/remove them */}
+                {isAdmin && !addingGhost && (
+                  <button type="button" onClick={() => setAddingGhost(true)}
+                    style={{ padding: '5px 10px', fontSize: '12px', border: '1px dashed #ddd', background: 'white', color: '#aaa', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    + add entry
+                  </button>
+                )}
+              </div>
+              {isAdmin && addingGhost && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input autoFocus value={newGhostName} onChange={e => setNewGhostName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addGhostEntry()}
+                    placeholder="entry name..."
+                    style={{ flex: 1, padding: '6px 8px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit' }} />
+                  <button type="button" onClick={addGhostEntry}
+                    style={{ padding: '6px 12px', background: '#111', color: 'white', border: 'none', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer' }}>
+                    add
+                  </button>
+                  <button type="button" onClick={() => { setAddingGhost(false); setNewGhostName('') }}
+                    style={{ padding: '6px 10px', background: 'none', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer', color: '#aaa' }}>
+                    cancel
+                  </button>
+                </div>
+              )}
+              {isAdmin && <GhostAccessManager poolId={poolId} currentUserId={userId} />}
+            </>
           )}
-          {isAdmin && <GhostAccessManager poolId={poolId} currentUserId={userId} />}
         </div>
       )}
 
@@ -405,6 +424,9 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
         const isNextUp = cardStarted && fight.status === 'NS' && 
           !bySegment[activeTab]?.some(f => f.status === 'NS' && (f.fight_order || 0) > (fight.fight_order || 0))
         const isFinished = fight.home_score !== null && fight.away_score !== null
+        // Ghost picks stay editable even after the fight's decided — a ghost can't log in
+        // to fix its own pick, so the admin/manager needs to be able to correct it anytime.
+        const inputsLocked = (locked || isFinished) && activeEntryId === userId
         const winner = fight.home_score === 1 ? fight.home_team : fight.away_score === 1 ? fight.away_team : null
         const isMain = fight.fight_order === 1 && activeTab === 'main_card'
 
@@ -518,7 +540,7 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                 const btnBase = {
                   padding: '9px 4px', border: '1px solid #ddd',
                   background: 'white', color: '#555',
-                  cursor: locked || isFinished ? 'default' : 'pointer',
+                  cursor: inputsLocked ? 'default' : 'pointer',
                   fontFamily: 'inherit', fontSize: '12px',
                   flex: 1, minWidth: 0,
                 }
@@ -558,14 +580,14 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                         <div>
                           <div style={{ display: 'flex', gap: 0 }}>
                             <button type="button" style={{ ...btnStyle('home'), borderRight: 'none', overflow: 'hidden' }}
-                              disabled={locked || isFinished}
-                              onClick={() => !locked && !isFinished && savePred(fight.id, rule.category_id, { value_wld: 'home' })}>
+                              disabled={inputsLocked}
+                              onClick={() => !inputsLocked && savePred(fight.id, rule.category_id, { value_wld: 'home' })}>
                               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>{fight.fighter1_last_name || lastName(fight.home_team)}</span>
                               {oddsLine(fight.odds_home)}
                             </button>
                             <button type="button" style={{ ...btnStyle('away'), overflow: 'hidden' }}
-                              disabled={locked || isFinished}
-                              onClick={() => !locked && !isFinished && savePred(fight.id, rule.category_id, { value_wld: 'away' })}>
+                              disabled={inputsLocked}
+                              onClick={() => !inputsLocked && savePred(fight.id, rule.category_id, { value_wld: 'away' })}>
                               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'block' }}>{fight.fighter2_last_name || lastName(fight.away_team)}</span>
                               {oddsLine(fight.odds_away)}
                             </button>
@@ -600,10 +622,10 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                         {['KO/TKO', 'Sub', 'Dec', 'DQ'].map((method, i, arr) => (
                           <button type="button" key={method}
                             style={{ ...btnStyle(method === 'Sub' ? 'Submission' : method === 'Dec' ? 'Decision' : method), ...(i < arr.length - 1 ? { borderRight: 'none' } : {}) }}
-                            disabled={locked || isFinished}
+                            disabled={inputsLocked}
                             onClick={() => {
                               const val = method === 'Sub' ? 'Submission' : method === 'Dec' ? 'Decision' : method
-                              !locked && !isFinished && savePred(fight.id, rule.category_id, { value_text: val })
+                              !inputsLocked && savePred(fight.id, rule.category_id, { value_text: val })
                             }}>
                             {method}
                           </button>
@@ -616,15 +638,15 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                         {Array.from({ length: fight.scheduled_rounds || 3 }, (_, i) => i + 1).map((round, i, arr) => (
                           <button type="button" key={round}
                             style={{ ...btnStyle(round), borderRight: 'none' }}
-                            disabled={locked || isFinished}
-                            onClick={() => !locked && !isFinished && savePred(fight.id, rule.category_id, { value_number: round, value_text: null })}>
+                            disabled={inputsLocked}
+                            onClick={() => !inputsLocked && savePred(fight.id, rule.category_id, { value_number: round, value_text: null })}>
                             R{round}
                           </button>
                         ))}
                         <button type="button"
                           style={{ ...btnStyle('Decision') }}
-                          disabled={locked || isFinished}
-                          onClick={() => !locked && !isFinished && savePred(fight.id, rule.category_id, { value_text: 'Decision', value_number: null })}>
+                          disabled={inputsLocked}
+                          onClick={() => !inputsLocked && savePred(fight.id, rule.category_id, { value_text: 'Decision', value_number: null })}>
                           Dec
                         </button>
                       </div>

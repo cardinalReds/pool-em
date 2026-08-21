@@ -75,6 +75,17 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
   const [activeEntryId, setActiveEntryId] = useState<string>(userId)
   const [newGhostName, setNewGhostName] = useState('')
   const [addingGhost, setAddingGhost] = useState(false)
+  const [ghostBoxCollapsed, setGhostBoxCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    try { return localStorage.getItem(`ghost_box_collapsed_${poolId}`) === '1' } catch { return false }
+  })
+  function toggleGhostBox() {
+    setGhostBoxCollapsed(prev => {
+      const next = !prev
+      try { localStorage.setItem(`ghost_box_collapsed_${poolId}`, next ? '1' : '0') } catch {}
+      return next
+    })
+  }
   const [revealedOddsIds, setRevealedOddsIds] = useState<Set<number>>(new Set())
   const [best10Selections, setBest10Selections] = useState<Record<string, number[]>>({})
   const activeEntryIdRef = useRef(activeEntryId)
@@ -237,48 +248,56 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
       {/* Entry switcher — admin or a member granted ghost-management access */}
       {(isAdmin || canManageGhosts) && (
         <div style={{ marginBottom: 16, padding: '10px 12px', background: '#f9f9f9', border: '1px solid #e0e0db' }}>
-          <div style={{ fontSize: '10px', fontWeight: 600, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>making picks for</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginBottom: 8 }}>
-            <button type="button" onClick={() => switchEntry(userId)}
-              style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
-                borderColor: activeEntryId === userId ? '#C8102E' : '#ddd',
-                background: activeEntryId === userId ? '#C8102E' : 'white',
-                color: activeEntryId === userId ? 'white' : '#555', fontWeight: activeEntryId === userId ? 700 : 400 }}>
-              you
-            </button>
-            {ghostEntries.map(g => (
-              <button key={g.id} type="button" onClick={() => switchEntry(g.id)}
-                style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
-                  borderColor: activeEntryId === g.id ? '#C8102E' : '#ddd',
-                  background: activeEntryId === g.id ? '#C8102E' : 'white',
-                  color: activeEntryId === g.id ? 'white' : '#555', fontWeight: activeEntryId === g.id ? 700 : 400 }}>
-                {g.name}
-              </button>
-            ))}
-            {isAdmin && !addingGhost && (
-              <button type="button" onClick={() => setAddingGhost(true)}
-                style={{ padding: '5px 10px', fontSize: '12px', border: '1px dashed #ddd', background: 'white', color: '#aaa', cursor: 'pointer', fontFamily: 'inherit' }}>
-                + add entry
-              </button>
-            )}
+          <div onClick={toggleGhostBox}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: ghostBoxCollapsed ? 0 : 8 }}>
+            <span style={{ fontSize: '10px', fontWeight: 600, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>making picks for</span>
+            <span style={{ fontSize: '11px', color: '#888' }}>{ghostBoxCollapsed ? 'show ▾' : 'hide ▴'}</span>
           </div>
-          {isAdmin && addingGhost && (
-            <div style={{ display: 'flex', gap: 6 }}>
-              <input autoFocus value={newGhostName} onChange={e => setNewGhostName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addGhostEntry()}
-                placeholder="entry name..."
-                style={{ flex: 1, padding: '6px 8px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit' }} />
-              <button type="button" onClick={addGhostEntry}
-                style={{ padding: '6px 12px', background: '#111', color: 'white', border: 'none', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer' }}>
-                add
-              </button>
-              <button type="button" onClick={() => { setAddingGhost(false); setNewGhostName('') }}
-                style={{ padding: '6px 10px', background: 'none', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer', color: '#aaa' }}>
-                cancel
-              </button>
-            </div>
+          {!ghostBoxCollapsed && (
+            <>
+              <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginBottom: 8 }}>
+                <button type="button" onClick={() => switchEntry(userId)}
+                  style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
+                    borderColor: activeEntryId === userId ? '#C8102E' : '#ddd',
+                    background: activeEntryId === userId ? '#C8102E' : 'white',
+                    color: activeEntryId === userId ? 'white' : '#555', fontWeight: activeEntryId === userId ? 700 : 400 }}>
+                  you
+                </button>
+                {ghostEntries.map(g => (
+                  <button key={g.id} type="button" onClick={() => switchEntry(g.id)}
+                    style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
+                      borderColor: activeEntryId === g.id ? '#C8102E' : '#ddd',
+                      background: activeEntryId === g.id ? '#C8102E' : 'white',
+                      color: activeEntryId === g.id ? 'white' : '#555', fontWeight: activeEntryId === g.id ? 700 : 400 }}>
+                    {g.name}
+                  </button>
+                ))}
+                {isAdmin && !addingGhost && (
+                  <button type="button" onClick={() => setAddingGhost(true)}
+                    style={{ padding: '5px 10px', fontSize: '12px', border: '1px dashed #ddd', background: 'white', color: '#aaa', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    + add entry
+                  </button>
+                )}
+              </div>
+              {isAdmin && addingGhost && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input autoFocus value={newGhostName} onChange={e => setNewGhostName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addGhostEntry()}
+                    placeholder="entry name..."
+                    style={{ flex: 1, padding: '6px 8px', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit' }} />
+                  <button type="button" onClick={addGhostEntry}
+                    style={{ padding: '6px 12px', background: '#111', color: 'white', border: 'none', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer' }}>
+                    add
+                  </button>
+                  <button type="button" onClick={() => { setAddingGhost(false); setNewGhostName('') }}
+                    style={{ padding: '6px 10px', background: 'none', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer', color: '#aaa' }}>
+                    cancel
+                  </button>
+                </div>
+              )}
+              {isAdmin && <GhostAccessManager poolId={poolId} currentUserId={userId} />}
+            </>
           )}
-          {isAdmin && <GhostAccessManager poolId={poolId} currentUserId={userId} />}
         </div>
       )}
 

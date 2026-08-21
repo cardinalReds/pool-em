@@ -451,7 +451,7 @@ export async function GET(request: Request) {
         // Find our fixture by api_fixture_id
         const { data: ourFixture } = await supabase
           .from('fixtures')
-          .select('id, home_team, away_team, home_score, away_score, first_scorer_name, status, round')
+          .select('id, home_team, away_team, home_score, away_score, first_scorer_name, status, round, odds_home, odds_draw, odds_away, closing_odds_home')
           .eq('api_fixture_id', apiId)
           .single()
 
@@ -489,6 +489,14 @@ export async function GET(request: Request) {
           }
         }
 
+        // Freeze whatever odds are on the fixture right now as the closing line, the
+        // instant it first goes live — refreshLiveOdds() above only touches fixtures
+        // already status='live', so on this exact transition odds_home/draw/away are
+        // still whatever was last fetched pre-match, not yet overwritten by in-play odds.
+        const closingOddsUpdate = status === 'live' && ourFixture.status !== 'live' && ourFixture.closing_odds_home == null
+          ? { closing_odds_home: ourFixture.odds_home, closing_odds_draw: ourFixture.odds_draw, closing_odds_away: ourFixture.odds_away }
+          : {}
+
         // Update fixture
         const { error } = await supabase
           .from('fixtures')
@@ -499,6 +507,7 @@ export async function GET(request: Request) {
             status,
             ...(penaltyWinner ? { penalty_winner: penaltyWinner } : {}),
             ...statsUpdate,
+            ...closingOddsUpdate,
           })
           .eq('id', ourFixture.id)
 
