@@ -143,11 +143,14 @@ type PickSelection =
 // scanned for patterns (which teams/outcomes you're best or worst at calling) rather
 // than looked up one filter at a time. Click any row, column, or cell to drill into the
 // exact picks behind it, including a $1-per-pick P&L using closing odds.
-function PicksExplorer({ picks, defaultColumns, competitions }: {
+function PicksExplorer({ picks, defaultColumns, competitions, subjectLabel }: {
   picks: WldPick[]
   defaultColumns: OutcomeColumn[] // this sport's normal breakdown, e.g. home/draw/away
   competitions: { id: string; name: string; status: string }[] // only the ones this user actually has picks in
+  subjectLabel: string // "you" or the member's name being viewed, for copy like "if you'd bet..."
 }) {
+  const possessive = subjectLabel === 'you' ? 'your' : `${subjectLabel}'s`
+  const hadBet = subjectLabel === 'you' ? "you'd" : `${subjectLabel} had`
   const [selection, setSelection] = useState<PickSelection>({ kind: 'all' })
   const [competitionId, setCompetitionId] = useState<string>(() => {
     // Default to a currently-active competition over a finished one (a completed World
@@ -198,7 +201,7 @@ function PicksExplorer({ picks, defaultColumns, competitions }: {
 
   return (
     <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border-light)' }}>
-      <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bbb', marginBottom: '0.15rem' }}>explore your picks</div>
+      <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bbb', marginBottom: '0.15rem' }}>explore {possessive} picks</div>
       <div style={{ fontSize: '0.72rem', color: '#bbb', marginBottom: '0.55rem' }}>click a team, a result, or a cell to drill in</div>
 
       {competitions.length > 1 && (
@@ -312,7 +315,7 @@ function PicksExplorer({ picks, defaultColumns, competitions }: {
             {staked > 0 ? (
               <div style={{ fontSize: '0.85rem', marginBottom: '0.6rem' }}>
                 <span style={{ fontWeight: 600, color: netPnl >= 0 ? '#2d7a2d' : '#C8102E' }}>{netPnl >= 0 ? '+' : ''}${netPnl.toFixed(2)}</span>
-                <span style={{ color: 'var(--text-dim)' }}> if you'd bet $1 on each of these {staked} picks at closing odds{oddsMissing > 0 ? ` (${oddsMissing} excluded — no odds recorded)` : ''}</span>
+                <span style={{ color: 'var(--text-dim)' }}> if {hadBet} bet $1 on each of these {staked} picks at closing odds{oddsMissing > 0 ? ` (${oddsMissing} excluded — no odds recorded)` : ''}</span>
               </div>
             ) : (
               <p style={{ fontSize: '0.75rem', color: '#bbb', marginBottom: '0.6rem' }}>no closing-odds data recorded yet for these picks.</p>
@@ -343,14 +346,15 @@ function PicksExplorer({ picks, defaultColumns, competitions }: {
 // "If your picks were always right" — a simulated Premier League table built entirely
 // from the user's own predicted results (not actual ones) for games that have already
 // been decided, standard 3/1/0 points. Grows one game at a time as the season plays out.
-function PLHypotheticalTable({ rows }: { rows: PLTableRow[] }) {
+function PLHypotheticalTable({ rows, subjectLabel }: { rows: PLTableRow[]; subjectLabel: string }) {
+  const possessive = subjectLabel === 'you' ? 'your' : `${subjectLabel}'s`
   const [open, setOpen] = useState(false)
   return (
     <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border-light)' }}>
       <div onClick={() => setOpen(o => !o)}
         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
         <span style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bbb' }}>
-          🏆 the PL table if your picks were always right
+          🏆 the PL table if {possessive} picks were always right
         </span>
         <span style={{ fontSize: '0.75rem', color: '#888' }}>{open ? '▲' : '▼'}</span>
       </div>
@@ -383,7 +387,7 @@ function PLHypotheticalTable({ rows }: { rows: PLTableRow[] }) {
             </tbody>
           </table>
           <p style={{ fontSize: '0.7rem', color: '#bbb', marginTop: '0.5rem' }}>
-            built from your own predicted results for games decided so far — not the real table.
+            built from {possessive} predicted results for games decided so far — not the real table.
           </p>
         </div>
       )}
@@ -399,8 +403,20 @@ export default function ProfilePage() {
   const [nflPicks, setNflPicks] = useState<WldPick[]>([])
   const [plHypoTable, setPlHypoTable] = useState<PLTableRow[]>([])
 
+  // "Viewing" — defaults to your own record, but anyone sharing a pool with you can be
+  // selected instead. This intentionally exposes nothing new: any pool member can
+  // already see every other member's picks per-fixture in that pool's "everyone's
+  // picks" tables (F1SessionsList, FixturesList, etc.) — this just aggregates the same
+  // already-visible data into the same views as your own record, for a shared pool.
+  // Ghost entries aren't selectable — they don't have a profile of their own to view.
+  const [viewerId, setViewerId] = useState<string | null>(null)
+  const [poolIds, setPoolIds] = useState<string[]>([])
+  const [otherMembers, setOtherMembers] = useState<{ id: string; name: string }[]>([])
+  const [viewingUserId, setViewingUserId] = useState<string | null>(null)
+
+  // Establish who's logged in, which pools they're in, and who else shares those pools.
   useEffect(() => {
-    async function load() {
+    async function init() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { window.location.href = '/auth/login'; return }
@@ -409,17 +425,47 @@ export default function ProfilePage() {
         supabase.from('pools').select('id').eq('admin_id', user.id),
         supabase.from('pool_members').select('pool_id').eq('user_id', user.id),
       ])
-      const poolIds = [...new Set([
+      const ids = [...new Set([
         ...(adminPools || []).map(p => p.id),
         ...(memberRows || []).map(m => m.pool_id),
       ])]
 
-      if (poolIds.length === 0) { setLoading(false); return }
+      setViewerId(user.id)
+      setPoolIds(ids)
+      setViewingUserId(user.id)
+
+      if (ids.length > 0) {
+        const { data: allMembers } = await supabase
+          .from('pool_members')
+          .select('user_id, display_name')
+          .in('pool_id', ids)
+          .neq('user_id', user.id)
+        const seen = new Set<string>()
+        const others: { id: string; name: string }[] = []
+        for (const m of allMembers || []) {
+          if (seen.has(m.user_id)) continue
+          seen.add(m.user_id)
+          others.push({ id: m.user_id, name: m.display_name })
+        }
+        setOtherMembers(others.sort((a, b) => a.name.localeCompare(b.name)))
+      }
+    }
+    init()
+  }, [])
+
+  // Loads the full record for whichever user is currently selected, scoped to only the
+  // pools the viewer themselves belongs to (so switching to someone else's record can
+  // never surface a pool the viewer isn't actually in with them).
+  useEffect(() => {
+    if (!viewingUserId || poolIds.length === 0) { if (viewingUserId) setLoading(false); return }
+    async function load(targetUserId: string) {
+      setLoading(true)
+      const supabase = createClient()
 
       const [{ data: preds }, { data: categories }, { data: poolRules }, { data: pools }] = await Promise.all([
         supabase.from('predictions_v2')
           .select('pool_id, category_id, points_earned, is_correct, fixture_id, value_wld')
-          .eq('user_id', user.id)
+          .eq('user_id', targetUserId)
           .in('pool_id', poolIds)
           .not('points_earned', 'is', null),
         supabase.from('ruleset_categories').select('id, sport, name, sort_order'),
@@ -588,23 +634,57 @@ export default function ProfilePage() {
       setPlHypoTable(plHypoTable)
       setLoading(false)
     }
-    load()
-  }, [])
+    load(viewingUserId)
+  }, [viewingUserId, poolIds])
 
   if (loading) return <div style={{ padding: '2rem', color: 'var(--text-dim)', fontSize: '0.875rem' }}>loading...</div>
 
   const totalPicks = sportStats.reduce((sum, s) => sum + s.total, 0)
+  const isSelf = viewingUserId === viewerId
+  const viewingName = isSelf ? null : otherMembers.find(m => m.id === viewingUserId)?.name || 'this member'
 
   return (
     <div>
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ fontWeight: 700, fontSize: '1.25rem', marginBottom: 4 }}>your record</h1>
-        <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>your prediction accuracy across every pool you've played, broken down by sport and prop.</p>
+      <div style={{ marginBottom: '1rem' }}>
+        <h1 style={{ fontWeight: 700, fontSize: '1.25rem', marginBottom: 4 }}>{isSelf ? 'your record' : `${viewingName}'s record`}</h1>
+        <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>
+          {isSelf ? "your prediction accuracy across every pool you've played" : `${viewingName}'s prediction accuracy across every pool you share`}, broken down by sport and prop.
+        </p>
       </div>
+
+      {otherMembers.length > 0 && (
+        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' as const, marginBottom: '1.5rem' }}>
+          <button onClick={() => setViewingUserId(viewerId)}
+            style={{
+              fontSize: '0.78rem', padding: '4px 10px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
+              borderColor: isSelf ? '#C8102E' : 'var(--border)',
+              background: isSelf ? '#fff5f5' : 'white',
+              color: isSelf ? '#C8102E' : '#555',
+              fontWeight: isSelf ? 700 : 400,
+            }}>
+            you
+          </button>
+          {otherMembers.map(m => {
+            const active = viewingUserId === m.id
+            return (
+              <button key={m.id} onClick={() => setViewingUserId(m.id)}
+                style={{
+                  fontSize: '0.78rem', padding: '4px 10px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
+                  borderColor: active ? '#C8102E' : 'var(--border)',
+                  background: active ? '#fff5f5' : 'white',
+                  color: active ? '#C8102E' : '#555',
+                  fontWeight: active ? 700 : 400,
+                }}>
+                {m.name}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {totalPicks === 0 ? (
         <div style={{ textAlign: 'center', padding: '4rem 0', borderTop: '1px solid var(--border)', color: 'var(--text-dim)' }}>
-          no scored picks yet — check back once games kick off.
+          {isSelf ? 'no scored picks yet — check back once games kick off.' : `${viewingName} doesn't have any scored picks yet.`}
         </div>
       ) : (
         <>
@@ -660,14 +740,14 @@ export default function ProfilePage() {
                 ))}
 
                 {s.sport === 'soccer' && soccerPicks.length > 0 && (
-                  <PicksExplorer picks={soccerPicks} defaultColumns={HOME_DRAW_AWAY_COLUMNS}
+                  <PicksExplorer picks={soccerPicks} defaultColumns={HOME_DRAW_AWAY_COLUMNS} subjectLabel={isSelf ? 'you' : (viewingName || 'this member')}
                     competitions={s.competitions.filter(c => soccerPicks.some(p => p.tournamentId === c.tournamentId)).map(c => ({ id: c.tournamentId, name: c.name, status: c.status }))} />
                 )}
                 {s.sport === 'soccer' && plHypoTable.length > 0 && (
-                  <PLHypotheticalTable rows={plHypoTable} />
+                  <PLHypotheticalTable rows={plHypoTable} subjectLabel={isSelf ? 'you' : (viewingName || 'this member')} />
                 )}
                 {s.sport === 'nfl' && nflPicks.length > 0 && (
-                  <PicksExplorer picks={nflPicks} defaultColumns={HOME_AWAY_COLUMNS}
+                  <PicksExplorer picks={nflPicks} defaultColumns={HOME_AWAY_COLUMNS} subjectLabel={isSelf ? 'you' : (viewingName || 'this member')}
                     competitions={s.competitions.filter(c => nflPicks.some(p => p.tournamentId === c.tournamentId)).map(c => ({ id: c.tournamentId, name: c.name, status: c.status }))} />
                 )}
               </section>
