@@ -56,8 +56,10 @@ interface WldPick {
   tournamentId: string
   homeTeam: string
   awayTeam: string
+  date: string
   predictedWld: 'home' | 'away' | 'draw'
   isCorrect: boolean
+  pointsEarned: number | null
   closingOddsHome: number | null
   closingOddsDraw: number | null
   closingOddsAway: number | null
@@ -95,79 +97,195 @@ function groupCategoriesForSport(categoryList: CategoryStat[]) {
   return groups
 }
 
-// Team + result-type filter over a sport's graded W/D/L picks, with a $1-per-pick betting
-// simulation using the closing odds captured at kickoff (see closing_odds_* on fixtures —
-// frozen there specifically so this can't silently use stale/live-drifted odds).
-function PicksExplorer({ picks, hasDraw }: { picks: WldPick[]; hasDraw: boolean }) {
-  const [team, setTeam] = useState('all')
-  const [outcome, setOutcome] = useState<'all' | 'home' | 'away' | 'draw'>('all')
+// Sequential single-hue ramp (green — this app's existing "correct" color) for hit-rate
+// magnitude, light→dark, per the dataviz skill's sequential-encoding rule. Returns both
+// the fill and a text color picked from the fill's actual luminance (not a fixed
+// percentage threshold), so labels stay legible across the whole ramp.
+function hitRateStyle(pct: number): { bg: string; text: string } {
+  const t = Math.max(0, Math.min(1, pct / 100))
+  const from = { r: 0xee, g: 0xf7, b: 0xee }
+  const to = { r: 0x1c, g: 0x4d, b: 0x1c }
+  const r = Math.round(from.r + (to.r - from.r) * t)
+  const g = Math.round(from.g + (to.g - from.g) * t)
+  const b = Math.round(from.b + (to.b - from.b) * t)
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255
+  return { bg: `rgb(${r},${g},${b})`, text: luminance > 0.55 ? '#1a1a19' : '#fdfdfc' }
+}
+
+const OUTCOME_LABEL: Record<string, string> = { home: 'home win', draw: 'draw', away: 'away win' }
+
+type PickSelection =
+  | { kind: 'all' }
+  | { kind: 'team'; team: string }
+  | { kind: 'outcome'; outcome: string }
+  | { kind: 'cell'; team: string; outcome: string }
+
+// Team × predicted-outcome heatmap over a sport's graded W/D/L picks — built to be
+// scanned for patterns (which teams/outcomes you're best or worst at calling) rather
+// than looked up one filter at a time. Click any row, column, or cell to drill into the
+// exact picks behind it, including a $1-per-pick P&L using closing odds.
+function PicksExplorer({ picks, outcomes }: { picks: WldPick[]; outcomes: ('home' | 'draw' | 'away')[] }) {
+  const [selection, setSelection] = useState<PickSelection>({ kind: 'all' })
 
   const teams = [...new Set(picks.flatMap(p => [p.homeTeam, p.awayTeam]))].sort()
 
-  const filtered = picks.filter(p => {
-    if (team !== 'all' && p.homeTeam !== team && p.awayTeam !== team) return false
-    if (outcome !== 'all' && p.predictedWld !== outcome) return false
-    return true
-  })
+  function statsFor(rows: WldPick[]) {
+    const hits = rows.filter(p => p.isCorrect).length
+    return { hits, total: rows.length, pct: rows.length > 0 ? Math.round((hits / rows.length) * 100) : null }
+  }
 
-  const hits = filtered.filter(p => p.isCorrect).length
-  const total = filtered.length
-  const pct = total > 0 ? Math.round((hits / total) * 100) : 0
+  const selectedPicks = picks.filter(p => {
+    if (selection.kind === 'team') return p.homeTeam === selection.team || p.awayTeam === selection.team
+    if (selection.kind === 'outcome') return p.predictedWld === selection.outcome
+    if (selection.kind === 'cell') return (p.homeTeam === selection.team || p.awayTeam === selection.team) && p.predictedWld === selection.outcome
+    return true
+  }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+  const { hits, total, pct } = statsFor(selectedPicks)
 
   let staked = 0
   let netPnl = 0
   let oddsMissing = 0
-  for (const p of filtered) {
+  for (const p of selectedPicks) {
     const odds = p.predictedWld === 'home' ? p.closingOddsHome : p.predictedWld === 'away' ? p.closingOddsAway : p.closingOddsDraw
     if (odds == null) { oddsMissing++; continue }
     staked += 1
     netPnl += p.isCorrect ? (odds - 1) : -1
   }
 
+  const selectionLabel = selection.kind === 'all' ? 'all picks'
+    : selection.kind === 'team' ? selection.team
+    : selection.kind === 'outcome' ? `picked ${OUTCOME_LABEL[selection.outcome]}`
+    : `${selection.team} · ${OUTCOME_LABEL[selection.outcome]}`
+
   return (
     <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border-light)' }}>
-      <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bbb', marginBottom: '0.5rem' }}>explore your picks</div>
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' as const, marginBottom: '0.6rem' }}>
-        <select value={team} onChange={e => setTeam(e.target.value)}
-          style={{ fontSize: '0.8rem', padding: '0.35rem 0.5rem', border: '1px solid var(--border)', fontFamily: 'inherit', background: 'white' }}>
-          <option value="all">all teams</option>
-          {teams.map(t => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <select value={outcome} onChange={e => setOutcome(e.target.value as any)}
-          style={{ fontSize: '0.8rem', padding: '0.35rem 0.5rem', border: '1px solid var(--border)', fontFamily: 'inherit', background: 'white' }}>
-          <option value="all">any result</option>
-          <option value="home">picked home win</option>
-          {hasDraw && <option value="draw">picked draw</option>}
-          <option value="away">picked away win</option>
-        </select>
+      <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bbb', marginBottom: '0.15rem' }}>explore your picks</div>
+      <div style={{ fontSize: '0.72rem', color: '#bbb', marginBottom: '0.55rem' }}>click a team, a result, or a cell to drill in</div>
+
+      {/* Sequential legend — one hue, light→dark, no series to name so no legend box */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.7rem', fontSize: '0.65rem', color: '#999' }}>
+        <span>hit rate</span>
+        <span style={{ width: 90, height: 8, borderRadius: 2, background: `linear-gradient(to right, ${hitRateStyle(0).bg}, ${hitRateStyle(100).bg})`, border: '1px solid var(--border-light)' }} />
+        <span>0% → 100%</span>
       </div>
 
-      {total === 0 ? (
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>no picks match this filter.</p>
-      ) : (
-        <>
-          <div style={{ fontSize: '0.85rem', marginBottom: '0.35rem' }}>
-            <span style={{ fontWeight: 600, color: pct >= 50 ? '#2d7a2d' : 'var(--text-dim)' }}>{pct}%</span>
-            <span style={{ color: 'var(--text-dim)' }}> ({hits}/{total} correct{team !== 'all' ? ` · ${team}` : ''}{outcome !== 'all' ? ` · picked ${outcome}` : ''})</span>
-          </div>
-          {staked > 0 ? (
-            <div style={{ fontSize: '0.85rem' }}>
-              <span style={{ fontWeight: 600, color: netPnl >= 0 ? '#2d7a2d' : '#C8102E' }}>{netPnl >= 0 ? '+' : ''}${netPnl.toFixed(2)}</span>
-              <span style={{ color: 'var(--text-dim)' }}> if you'd bet $1 on each of these {staked} picks at closing odds{oddsMissing > 0 ? ` (${oddsMissing} excluded — no odds recorded)` : ''}</span>
-            </div>
-          ) : (
-            <p style={{ fontSize: '0.75rem', color: '#bbb' }}>no closing-odds data recorded yet for these picks.</p>
+      <div style={{ overflowX: 'auto' as const }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: '0.75rem' }}>
+          <thead>
+            <tr>
+              <td style={{ padding: '3px 8px' }} />
+              {outcomes.map(o => {
+                const active = selection.kind === 'outcome' && selection.outcome === o
+                return (
+                  <td key={o} onClick={() => setSelection(active ? { kind: 'all' } : { kind: 'outcome', outcome: o })}
+                    style={{ padding: '3px 8px', textAlign: 'center' as const, cursor: 'pointer', color: active ? '#111' : '#888', fontWeight: active ? 700 : 500, textDecoration: active ? 'underline' : 'none', whiteSpace: 'nowrap' as const }}>
+                    {OUTCOME_LABEL[o]}
+                  </td>
+                )
+              })}
+              <td style={{ padding: '3px 8px', textAlign: 'center' as const, color: '#ccc' }}>all</td>
+            </tr>
+          </thead>
+          <tbody>
+            {teams.map(team => {
+              const rowActive = selection.kind === 'team' && selection.team === team
+              const rowStats = statsFor(picks.filter(p => p.homeTeam === team || p.awayTeam === team))
+              return (
+                <tr key={team}>
+                  <td onClick={() => setSelection(rowActive ? { kind: 'all' } : { kind: 'team', team })}
+                    style={{ padding: '3px 8px', cursor: 'pointer', color: rowActive ? '#111' : '#333', fontWeight: rowActive ? 700 : 500, textDecoration: rowActive ? 'underline' : 'none', whiteSpace: 'nowrap' as const }}>
+                    {team}
+                  </td>
+                  {outcomes.map(o => {
+                    const cellStats = statsFor(picks.filter(p => (p.homeTeam === team || p.awayTeam === team) && p.predictedWld === o))
+                    const cellActive = selection.kind === 'cell' && selection.team === team && selection.outcome === o
+                    const style = cellStats.pct != null ? hitRateStyle(cellStats.pct) : { bg: '#f7f7f5', text: '#ccc' }
+                    return (
+                      <td key={o}
+                        onClick={() => cellStats.total > 0 && setSelection(cellActive ? { kind: 'all' } : { kind: 'cell', team, outcome: o })}
+                        title={cellStats.total > 0 ? `${team} · ${OUTCOME_LABEL[o]}: ${cellStats.hits}/${cellStats.total} (${cellStats.pct}%)` : `${team} · ${OUTCOME_LABEL[o]}: no picks`}
+                        style={{
+                          padding: '6px 10px', textAlign: 'center' as const, minWidth: 56,
+                          cursor: cellStats.total > 0 ? 'pointer' : 'default',
+                          background: style.bg, color: style.text,
+                          fontWeight: cellActive ? 700 : 400,
+                          boxShadow: cellActive ? 'inset 0 0 0 2px #C8102E' : 'none',
+                        }}>
+                        {cellStats.total > 0 ? `${cellStats.hits}/${cellStats.total}` : '—'}
+                      </td>
+                    )
+                  })}
+                  <td style={{ padding: '6px 10px', textAlign: 'center' as const, color: '#888' }}>{rowStats.total > 0 ? `${rowStats.hits}/${rowStats.total}` : '—'}</td>
+                </tr>
+              )
+            })}
+            <tr>
+              <td style={{ padding: '4px 8px', color: '#ccc' }}>all</td>
+              {outcomes.map(o => {
+                const colStats = statsFor(picks.filter(p => p.predictedWld === o))
+                return <td key={o} style={{ padding: '4px 8px', textAlign: 'center' as const, color: '#888' }}>{colStats.total > 0 ? `${colStats.hits}/${colStats.total}` : '—'}</td>
+              })}
+              <td style={{ padding: '4px 8px', textAlign: 'center' as const, color: '#ccc' }}>{picks.filter(p => p.isCorrect).length}/{picks.length}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* Drill-down — exact values behind whatever's selected above */}
+      <div style={{ marginTop: '0.85rem', paddingTop: '0.7rem', borderTop: '1px dashed var(--border-light)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.5rem' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{selectionLabel}</span>
+          {selection.kind !== 'all' && (
+            <button onClick={() => setSelection({ kind: 'all' })}
+              style={{ fontSize: '0.7rem', color: '#888', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontFamily: 'inherit' }}>
+              clear selection
+            </button>
           )}
-        </>
-      )}
+        </div>
+
+        {total === 0 ? (
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>no picks in this selection.</p>
+        ) : (
+          <>
+            <div style={{ fontSize: '0.85rem', marginBottom: '0.35rem' }}>
+              <span style={{ fontWeight: 600, color: pct != null && pct >= 50 ? '#2d7a2d' : 'var(--text-dim)' }}>{pct}%</span>
+              <span style={{ color: 'var(--text-dim)' }}> ({hits}/{total} correct)</span>
+            </div>
+            {staked > 0 ? (
+              <div style={{ fontSize: '0.85rem', marginBottom: '0.6rem' }}>
+                <span style={{ fontWeight: 600, color: netPnl >= 0 ? '#2d7a2d' : '#C8102E' }}>{netPnl >= 0 ? '+' : ''}${netPnl.toFixed(2)}</span>
+                <span style={{ color: 'var(--text-dim)' }}> if you'd bet $1 on each of these {staked} picks at closing odds{oddsMissing > 0 ? ` (${oddsMissing} excluded — no odds recorded)` : ''}</span>
+              </div>
+            ) : (
+              <p style={{ fontSize: '0.75rem', color: '#bbb', marginBottom: '0.6rem' }}>no closing-odds data recorded yet for these picks.</p>
+            )}
+
+            <div style={{ border: '1px solid var(--border-light)', maxHeight: 240, overflowY: 'auto' as const }}>
+              {selectedPicks.map(p => (
+                <div key={p.fixtureId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '0.4rem 0.6rem', borderTop: '1px solid var(--border-light)', fontSize: '0.78rem' }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                    {p.awayTeam} @ {p.homeTeam} <span style={{ color: '#bbb' }}>· {new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    <span style={{ color: '#888' }}>picked {OUTCOME_LABEL[p.predictedWld]}</span>
+                    <span style={{ fontWeight: 600, color: p.isCorrect ? '#2d7a2d' : '#aaa' }}>
+                      {p.isCorrect ? '✓' : '✗'}{p.pointsEarned != null ? ` +${p.pointsEarned}` : ''}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }
 
 // "If your picks were always right" — a simulated Premier League table built entirely
-// from the user's own predicted results (not actual ones), standard 3/1/0 points. Deliberately
-// includes predictions for games that haven't been played yet — the whole point is
-// pretending every pick, including future ones, came true.
+// from the user's own predicted results (not actual ones) for games that have already
+// been decided, standard 3/1/0 points. Grows one game at a time as the season plays out.
 function PLHypotheticalTable({ rows }: { rows: PLTableRow[] }) {
   const [open, setOpen] = useState(false)
   return (
@@ -208,7 +326,7 @@ function PLHypotheticalTable({ rows }: { rows: PLTableRow[] }) {
             </tbody>
           </table>
           <p style={{ fontSize: '0.7rem', color: '#bbb', marginTop: '0.5rem' }}>
-            built from your own predicted results, including games not played yet — not the real table.
+            built from your own predicted results for games decided so far — not the real table.
           </p>
         </div>
       )}
@@ -263,32 +381,35 @@ export default function ProfilePage() {
       // ── "Explore your picks" — team/result filters + $1-per-pick P&L, soccer + NFL only ──
       // (see PicksExplorer below). Reuses `preds` (already graded — points_earned not
       // null) rather than a second query, since fixture_id/value_wld are now in that select.
+      // The hypothetical table below deliberately reuses this same graded-only set too —
+      // "if my picks were always right" tallies only games that have actually been
+      // decided so far, not speculative future picks (a table entry only exists once a
+      // real result exists to compare it against).
+      // Deduped by fixture_id — a user in several pools for the same tournament makes
+      // one predictions_v2 row per pool for the same real-world match, which would
+      // otherwise count that one match's pick multiple times here (verified: one user
+      // had 15 rows on a single fixture from 15 different pools). Every pool-level pick
+      // is still fully counted in the per-sport hit-rate section above; this dedup is
+      // scoped to just the picks explorer/hypothetical-table, where the unit is "a real
+      // match," not "a pool's copy of a prediction."
+      const seenFixture: Record<'soccer' | 'nfl', Set<number>> = { soccer: new Set(), nfl: new Set() }
       const wldPredsBySport: Record<string, typeof preds> = { soccer: [], nfl: [] }
       for (const p of preds || []) {
-        if (p.category_id === 'soccer_result' && p.fixture_id != null) wldPredsBySport.soccer!.push(p)
-        else if (p.category_id === 'nfl_result' && p.fixture_id != null) wldPredsBySport.nfl!.push(p)
+        const sportKey = p.category_id === 'soccer_result' ? 'soccer' : p.category_id === 'nfl_result' ? 'nfl' : null
+        if (!sportKey || p.fixture_id == null) continue
+        if (seenFixture[sportKey].has(p.fixture_id)) continue
+        seenFixture[sportKey].add(p.fixture_id)
+        wldPredsBySport[sportKey]!.push(p)
       }
-
-      // Separate, ungraded-inclusive fetch for the PL hypothetical table — "if my picks
-      // were always right" simulates a world where every pick (including ones for games
-      // not yet played) came true, so it can't reuse the graded-only `preds` fetch above.
-      const { data: allPlResultPreds } = await supabase
-        .from('predictions_v2')
-        .select('pool_id, fixture_id, value_wld')
-        .eq('user_id', user.id)
-        .in('pool_id', poolIds)
-        .eq('category_id', 'soccer_result')
-        .not('fixture_id', 'is', null)
 
       const allWldFixtureIds = [...new Set([
         ...wldPredsBySport.soccer!.map(p => p.fixture_id as number),
         ...wldPredsBySport.nfl!.map(p => p.fixture_id as number),
-        ...(allPlResultPreds || []).map(p => p.fixture_id as number),
       ])]
 
       const { data: wldFixtures } = allWldFixtureIds.length
         ? await supabase.from('fixtures')
-            .select('id, tournament_id, home_team, away_team, home_score, away_score, status, closing_odds_home, closing_odds_draw, closing_odds_away')
+            .select('id, tournament_id, home_team, away_team, date, home_score, away_score, status, closing_odds_home, closing_odds_draw, closing_odds_away')
             .in('id', allWldFixtureIds)
         : { data: [] as any[] }
       const fixtureMap = new Map((wldFixtures || []).map(f => [f.id, f]))
@@ -303,8 +424,10 @@ export default function ProfilePage() {
             tournamentId: f.tournament_id,
             homeTeam: f.home_team,
             awayTeam: f.away_team,
+            date: f.date,
             predictedWld: p.value_wld as 'home' | 'away' | 'draw',
             isCorrect: !!p.is_correct,
+            pointsEarned: p.points_earned,
             closingOddsHome: f.closing_odds_home,
             closingOddsDraw: f.closing_odds_draw,
             closingOddsAway: f.closing_odds_away,
@@ -312,8 +435,10 @@ export default function ProfilePage() {
         }
       }
 
-      // PL hypothetical table — one row per team that's appeared in a pl_2026 prediction,
-      // tallied from predicted (not actual) results using standard 3/1/0 points.
+      // PL hypothetical table — one row per team with a graded pl_2026 prediction so far,
+      // tallied from predicted (not actual) results using standard 3/1/0 points. Only
+      // decided games count — a game the user predicted but hasn't happened yet doesn't
+      // add a "phantom" result to either team's tally.
       const plTableMap = new Map<string, { team: string; w: number; d: number; l: number; pts: number; played: number }>()
       function bump(team: string, outcome: 'w' | 'd' | 'l') {
         const row = plTableMap.get(team) || { team, w: 0, d: 0, l: 0, pts: 0, played: 0 }
@@ -323,12 +448,11 @@ export default function ProfilePage() {
         else row.l += 1
         plTableMap.set(team, row)
       }
-      for (const p of allPlResultPreds || []) {
-        const f = fixtureMap.get(p.fixture_id as number)
-        if (!f || f.tournament_id !== 'pl_2026' || !p.value_wld) continue
-        if (p.value_wld === 'home') { bump(f.home_team, 'w'); bump(f.away_team, 'l') }
-        else if (p.value_wld === 'away') { bump(f.away_team, 'w'); bump(f.home_team, 'l') }
-        else { bump(f.home_team, 'd'); bump(f.away_team, 'd') }
+      for (const p of wldPicksBySport.soccer) {
+        if (p.tournamentId !== 'pl_2026') continue
+        if (p.predictedWld === 'home') { bump(p.homeTeam, 'w'); bump(p.awayTeam, 'l') }
+        else if (p.predictedWld === 'away') { bump(p.awayTeam, 'w'); bump(p.homeTeam, 'l') }
+        else { bump(p.homeTeam, 'd'); bump(p.awayTeam, 'd') }
       }
       const plHypoTable = [...plTableMap.values()].sort((a, b) => b.pts - a.pts || b.w - a.w)
 
@@ -479,13 +603,13 @@ export default function ProfilePage() {
                 ))}
 
                 {s.sport === 'soccer' && soccerPicks.length > 0 && (
-                  <PicksExplorer picks={soccerPicks} hasDraw />
+                  <PicksExplorer picks={soccerPicks} outcomes={['home', 'draw', 'away']} />
                 )}
                 {s.sport === 'soccer' && plHypoTable.length > 0 && (
                   <PLHypotheticalTable rows={plHypoTable} />
                 )}
                 {s.sport === 'nfl' && nflPicks.length > 0 && (
-                  <PicksExplorer picks={nflPicks} hasDraw={false} />
+                  <PicksExplorer picks={nflPicks} outcomes={['home', 'away']} />
                 )}
               </section>
             )
