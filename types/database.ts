@@ -357,6 +357,9 @@ export type Database = {
           line_total_corners: number | null
           line_total_goals: number | null
           line_total_rounds: number | null
+          closing_odds_away: number | null
+          closing_odds_draw: number | null
+          closing_odds_home: number | null
           live_away_cards: number | null
           live_away_corners: number | null
           live_home_cards: number | null
@@ -418,6 +421,9 @@ export type Database = {
           line_total_corners?: number | null
           line_total_goals?: number | null
           line_total_rounds?: number | null
+          closing_odds_away?: number | null
+          closing_odds_draw?: number | null
+          closing_odds_home?: number | null
           live_away_cards?: number | null
           live_away_corners?: number | null
           live_home_cards?: number | null
@@ -479,6 +485,9 @@ export type Database = {
           line_total_corners?: number | null
           line_total_goals?: number | null
           line_total_rounds?: number | null
+          closing_odds_away?: number | null
+          closing_odds_draw?: number | null
+          closing_odds_home?: number | null
           live_away_cards?: number | null
           live_away_corners?: number | null
           live_home_cards?: number | null
@@ -1134,6 +1143,8 @@ export type Database = {
           package_id: string
           payout_structure: string | null
           pick_mode: string | null
+          cfb_best10_admin_override: boolean
+          cfb_game_mode: string | null
           pl_best_weeks: number | null
           pl_best5_admin_override: boolean
           pl_game_mode: string | null
@@ -1168,6 +1179,8 @@ export type Database = {
           package_id: string
           payout_structure?: string | null
           pick_mode?: string | null
+          cfb_best10_admin_override?: boolean
+          cfb_game_mode?: string | null
           pl_best_weeks?: number | null
           pl_best5_admin_override?: boolean
           pl_game_mode?: string | null
@@ -1202,6 +1215,8 @@ export type Database = {
           package_id?: string
           payout_structure?: string | null
           pick_mode?: string | null
+          cfb_best10_admin_override?: boolean
+          cfb_game_mode?: string | null
           pl_best_weeks?: number | null
           pl_best5_admin_override?: boolean
           pl_game_mode?: string | null
