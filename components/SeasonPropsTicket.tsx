@@ -125,16 +125,21 @@ export default function SeasonPropsTicket({ poolId, userId, tournamentId, onLock
   const [collapsed, setCollapsed] = useState(false)
   const [savedFlash, setSavedFlash] = useState<Record<string, boolean>>({})
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  const [members, setMembers] = useState<Record<string, string>>({})
+  const [allPicks, setAllPicks] = useState<Record<string, any>>({})
 
   useEffect(() => {
     async function load() {
       const supabase = createClient()
-      const [rulesRes, picksRes, teamsRes, playersRes, fixturesRes] = await Promise.all([
+      const [rulesRes, picksRes, teamsRes, playersRes, fixturesRes, allPicksRes, membersRes, ghostRes] = await Promise.all([
         supabase.from('season_prop_rules').select('category').eq('pool_id', poolId),
         supabase.from('season_props').select('*').eq('pool_id', poolId).eq('user_id', userId),
         supabase.from('pl_teams').select('id, name, logo').eq('season', 2026).order('name'),
         supabase.from('pl_players').select('id, name, team_id, position').eq('season', 2026).order('name'),
         supabase.from('fixtures').select('date').eq('tournament_id', tournamentId).eq('round', 'Matchday 1'),
+        supabase.from('season_props').select('*').eq('pool_id', poolId),
+        supabase.from('pool_members').select('user_id, display_name').eq('pool_id', poolId),
+        supabase.from('ghost_entries').select('id, name').eq('pool_id', poolId),
       ])
 
       const cats = new Set((rulesRes.data || []).map((r: any) => r.category))
@@ -147,6 +152,15 @@ export default function SeasonPropsTicket({ poolId, userId, tournamentId, onLock
         const parts = pickMap.relegated.value.split(',').map((s: string) => s.trim())
         setRelegatedSlots([parts[0] || '', parts[1] || '', parts[2] || ''])
       }
+
+      const allPickMap: Record<string, any> = {}
+      ;(allPicksRes.data || []).forEach((p: any) => { allPickMap[`${p.user_id}:${p.category}`] = p })
+      setAllPicks(allPickMap)
+
+      const memberMap: Record<string, string> = {}
+      ;(membersRes.data || []).forEach((m: any) => { memberMap[m.user_id] = m.display_name })
+      ;(ghostRes.data || []).forEach((g: any) => { memberMap[g.id] = g.name })
+      setMembers(memberMap)
 
       const teamMap: Record<number, string> = {}
       ;(teamsRes.data || []).forEach((t: any) => { teamMap[t.id] = t.name })
@@ -245,6 +259,58 @@ export default function SeasonPropsTicket({ poolId, userId, tournamentId, onLock
               </div>
             )
           })}
+        </div>
+      )}
+      {locked && Object.keys(members).length > 0 && (
+        <div style={{ padding: '12px', borderTop: '1px solid #f0f0f0' }}>
+          <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb', marginBottom: 8 }}>everyone's picks</div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+              <thead>
+                <tr>
+                  <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const }}></td>
+                  {enabledCategories.map(cat => (
+                    <td key={cat} style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const, textAlign: 'center' as const }}>{PROP_META[cat]?.label || cat}</td>
+                  ))}
+                  <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>pts</td>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(members)
+                  .filter(([memberId]) => enabledCategories.some(cat => allPicks[`${memberId}:${cat}`]?.value_text))
+                  .map(([memberId, name]) => {
+                    const totalPts = enabledCategories.reduce((sum, cat) => sum + (allPicks[`${memberId}:${cat}`]?.points_earned ?? 0), 0)
+                    return { memberId, name, totalPts }
+                  })
+                  .sort((a, b) => b.totalPts - a.totalPts)
+                  .map(({ memberId, name, totalPts }) => {
+                    const isMe = memberId === userId
+                    return (
+                      <tr key={memberId} style={{ background: isMe ? '#fff5f5' : 'transparent' }}>
+                        <td style={{ padding: '4px 6px', fontWeight: isMe ? 700 : 400, color: isMe ? '#C8102E' : '#555', whiteSpace: 'nowrap' as const, borderTop: '1px solid #f5f5f5' }}>
+                          {name}{isMe ? ' (you)' : ''}
+                        </td>
+                        {enabledCategories.map(cat => {
+                          const p = allPicks[`${memberId}:${cat}`]
+                          const display = p?.value_text || '—'
+                          const correct = p?.is_correct ?? null
+                          return (
+                            <td key={cat} style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', color: correct === true ? '#2d7a2d' : correct === false ? '#aaa' : '#555', whiteSpace: 'nowrap' as const }}>
+                              {display === '—' ? <span style={{ color: '#ddd' }}>—</span> : display}
+                              {correct === true && ' ✓'}
+                              {correct === false && ' ✗'}
+                            </td>
+                          )
+                        })}
+                        <td style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', fontWeight: 600, color: totalPts > 0 ? '#C8102E' : '#aaa' }}>
+                          {totalPts}
+                        </td>
+                      </tr>
+                    )
+                  })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
