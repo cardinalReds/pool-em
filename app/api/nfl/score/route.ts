@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
 
       const { data: ourFixture } = await supabase
         .from('fixtures')
-        .select('id, scored, status, line_asian_handicap_home, line_total_goals, line_ht_asian_handicap_home, line_ht_total_points')
+        .select('id, scored, status, odds_home, odds_draw, odds_away, closing_odds_home, line_asian_handicap_home, line_total_goals, line_ht_asian_handicap_home, line_ht_total_points')
         .eq('id', g.game.id)
         .maybeSingle()
 
@@ -74,12 +74,23 @@ export async function POST(request: NextRequest) {
       const htHomeScore = homeQ1 != null && homeQ2 != null ? homeQ1 + homeQ2 : null
       const htAwayScore = awayQ1 != null && awayQ2 != null ? awayQ1 + awayQ2 : null
 
+      // Freeze whatever odds are on the fixture right now as the closing line, the
+      // instant it first goes live — see app/api/live/route.ts for the fuller comment.
+      // Functionally redundant for NFL today (odds_home/away already never get touched
+      // again once a fixture leaves 'NS' — see app/api/nfl/odds/route.ts), but keeping
+      // the same closing_odds_* capture here means the stats page can read one
+      // consistent field regardless of sport instead of special-casing NFL.
+      const closingOddsUpdate = !finished && ourFixture.status !== 'live' && ourFixture.closing_odds_home == null
+        ? { closing_odds_home: ourFixture.odds_home, closing_odds_draw: ourFixture.odds_draw, closing_odds_away: ourFixture.odds_away }
+        : {}
+
       await supabase.from('fixtures').update({
         status: finished ? 'FT' : 'live',
         home_score: homeTotal,
         away_score: awayTotal,
         ht_home_score: htHomeScore,
         ht_away_score: htAwayScore,
+        ...closingOddsUpdate,
       }).eq('id', ourFixture.id)
 
       const facts: NFLMatchFacts = {
