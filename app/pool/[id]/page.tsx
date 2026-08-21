@@ -442,16 +442,6 @@ export default function PoolPage({ params }: { params: { id: string } }) {
     setLeaderboard(prev => prev.map(m => m.id === member.id && m.is_ghost === member.is_ghost ? { ...m, is_paid: newValue } : m))
   }
 
-  // Delegates ghost-entry pick management to a trusted member — admin-only, enforced
-  // server-side too (see 20260821200000_ghost_entry_managers.sql guard trigger).
-  async function toggleCanManageGhosts(member: any) {
-    const supabase = createClient()
-    const newValue = !member.can_manage_ghosts
-    const { error } = await supabase.from('pool_members').update({ can_manage_ghosts: newValue }).eq('id', member.id)
-    if (error) { console.error(error); return }
-    setLeaderboard(prev => prev.map(m => m.id === member.id ? { ...m, can_manage_ghosts: newValue } : m))
-  }
-
   if (loading) return (
     <div style={{minHeight: '100vh', background: '#f7f7f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', color: '#888'}}>
       loading...
@@ -612,16 +602,6 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               <div style={{width: 68, display: 'flex', justifyContent: 'center', flexShrink: 0}}>
                 <PaidPill member={member} />
               </div>
-            )}
-            {isUnrestrictedOverall && isAdmin && !member.is_ghost && member.user_id !== user?.id && (
-              <button onClick={() => toggleCanManageGhosts(member)}
-                title="lets this member enter picks for ghost entries in this pool, even past lock"
-                style={{fontSize: '10px', fontWeight: 600, padding: '3px 8px', borderRadius: 10, border: '1px solid',
-                  borderColor: member.can_manage_ghosts ? '#C8102E' : '#ddd',
-                  background: member.can_manage_ghosts ? '#C8102E' : 'white',
-                  color: member.can_manage_ghosts ? 'white' : '#888', cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, whiteSpace: 'nowrap' as const}}>
-                {member.can_manage_ghosts ? 'manages ghosts' : 'grant ghost access'}
-              </button>
             )}
             <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', textAlign: 'right' as const, flexShrink: 0, whiteSpace: 'nowrap' as const}}>
               {member.points}{member.games != null && <span style={{fontSize: '10px', fontWeight: 400, color: '#bbb'}}> · {member.games} {member.games === 1 ? unit : unitPlural}</span>}

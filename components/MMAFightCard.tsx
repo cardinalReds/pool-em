@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatOdds, type OddsFormat } from '@/lib/oddsFormat'
+import GhostAccessManager from '@/components/GhostAccessManager'
 
 const supabase = createClient()
 
@@ -363,6 +364,7 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
               </button>
             </div>
           )}
+          {isAdmin && <GhostAccessManager poolId={poolId} currentUserId={userId} />}
         </div>
       )}
 

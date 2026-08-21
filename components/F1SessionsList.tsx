@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import GhostAccessManager from '@/components/GhostAccessManager'
 
 // ── 2026 F1 Grid — 11 teams, 22 drivers ──────────────────────────────────────
 const F1_GRID = [
@@ -666,6 +667,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
               </button>
             </div>
           )}
+          {isAdmin && <GhostAccessManager poolId={poolId} currentUserId={userId} />}
         </div>
       )}
 

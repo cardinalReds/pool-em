@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { WC_SQUADS } from '@/lib/wc_squads'
 import Best5Selector from '@/components/Best5Selector'
+import GhostAccessManager from '@/components/GhostAccessManager'
 import { formatOdds, type OddsFormat } from '@/lib/oddsFormat'
 import {
   syncGhostToPublicPools, copyGhostPredictionsToMirrors,
@@ -2231,6 +2232,7 @@ export default function FixturesList({
               </button>
             </div>
           )}
+          {isAdmin && <GhostAccessManager poolId={poolId} currentUserId={userId} />}
         </div>
       )}
       {/* Controls */}

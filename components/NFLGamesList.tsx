@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import GhostAccessManager from '@/components/GhostAccessManager'
 
 interface NFLFixture {
   id: number
@@ -242,6 +243,7 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
               </button>
             </div>
           )}
+          {isAdmin && <GhostAccessManager poolId={poolId} currentUserId={userId} />}
         </div>
       )}
 
