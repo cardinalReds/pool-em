@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatOdds, type OddsFormat } from '@/lib/oddsFormat'
 
@@ -62,6 +62,7 @@ interface Props {
   deadlineType: string
   tournamentId: string
   isAdmin?: boolean
+  canManageGhosts?: boolean
 }
 
 const SEGMENT_LABEL: Record<string, string> = {
@@ -113,7 +114,7 @@ function fmtTime(dateStr: string) {
   })
 }
 
-export default function MMAFightCard({ poolId, userId, deadlineType, tournamentId, isAdmin }: Props) {
+export default function MMAFightCard({ poolId, userId, deadlineType, tournamentId, isAdmin, canManageGhosts }: Props) {
   const [fixtures, setFixtures] = useState<MMAFixture[]>([])
   const [poolRules, setPoolRules] = useState<PoolRule[]>([])
   const [preds, setPreds] = useState<Record<string, Pred>>({})
@@ -128,6 +129,8 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
   const [revealedOddsIds, setRevealedOddsIds] = useState<Set<number>>(new Set())
   const [oddsFormat, setOddsFormat] = useState<OddsFormat>('decimal')
   const [oddsAlwaysVisible, setOddsAlwaysVisible] = useState(false)
+  const activeEntryIdRef = useRef(activeEntryId)
+  useEffect(() => { activeEntryIdRef.current = activeEntryId }, [activeEntryId])
 
   useEffect(() => {
     async function load() {
@@ -190,6 +193,18 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
         supabase.from('predictions_v2').select('*').eq('pool_id', poolId).then(({ data }) => {
           if (data) setAllPreds(data)
         })
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ghost_entries', filter: `pool_id=eq.${poolId}` }, (payload) => {
+        const g = payload.new as { id: string; name: string }
+        setGhostEntries(prev => prev.some(e => e.id === g.id) ? prev : [...prev, g])
+        setMembers(prev => prev.some(m => m.user_id === g.id) ? prev : [...prev, { user_id: g.id, display_name: g.name }])
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'ghost_entries', filter: `pool_id=eq.${poolId}` }, (payload) => {
+        const deletedId = payload.old.id as string
+        setGhostEntries(prev => prev.filter(e => e.id !== deletedId))
+        setMembers(prev => prev.filter(m => m.user_id !== deletedId))
+        // If we were mid-edit on the entry that just got deleted, fall back to our own picks
+        if (activeEntryIdRef.current === deletedId) switchEntry(userId)
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
@@ -301,8 +316,8 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
         </div>
       </div>
 
-      {/* Entry switcher — admin only for now */}
-      {isAdmin && (
+      {/* Entry switcher — admin or a member granted ghost-management access */}
+      {(isAdmin || canManageGhosts) && (
         <div style={{ marginBottom: 16, padding: '10px 12px', background: '#f9f9f9', border: '1px solid #e0e0db' }}>
           <div style={{ fontSize: '10px', fontWeight: 600, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>making picks for</div>
           <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginBottom: 8 }}>
@@ -324,15 +339,15 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                 {g.name}
               </button>
             ))}
-            {/* Add new */}
-            {!addingGhost && (
+            {/* Add new — admin only; ghost managers can pick for existing entries but not create/remove them */}
+            {isAdmin && !addingGhost && (
               <button type="button" onClick={() => setAddingGhost(true)}
                 style={{ padding: '5px 10px', fontSize: '12px', border: '1px dashed #ddd', background: 'white', color: '#aaa', cursor: 'pointer', fontFamily: 'inherit' }}>
                 + add entry
               </button>
             )}
           </div>
-          {addingGhost && (
+          {isAdmin && addingGhost && (
             <div style={{ display: 'flex', gap: 6 }}>
               <input autoFocus value={newGhostName} onChange={e => setNewGhostName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && addGhostEntry()}
@@ -379,7 +394,10 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
 
       {/* Fights for active tab */}
       {tabFights.map(fight => {
-        const locked = isLocked(fight, activeTab)
+        // Ghost entries stay editable past the normal lock — activeEntryId can only ever
+        // be `userId` or one of ghostEntries' ids, so this only ever bypasses lock while
+        // an authorized admin/manager is actively picking on a ghost's behalf.
+        const locked = activeEntryId === userId && isLocked(fight, activeTab)
         const isLive = fight.status === 'live'
         const cardStarted = Object.values(bySegment).flat().some(f => f.status === 'FT')
         const isNextUp = cardStarted && fight.status === 'NS' && 

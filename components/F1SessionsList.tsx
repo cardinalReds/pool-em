@@ -322,8 +322,8 @@ function isLocked(session: F1Session, deadlineType: string, gpSessions: F1Sessio
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function F1SessionsList({ poolId, userId, deadlineType, tournamentId, isAdmin = false }: {
-  poolId: string; userId: string; deadlineType: string; tournamentId: string; isAdmin?: boolean
+export default function F1SessionsList({ poolId, userId, deadlineType, tournamentId, isAdmin = false, canManageGhosts = false }: {
+  poolId: string; userId: string; deadlineType: string; tournamentId: string; isAdmin?: boolean; canManageGhosts?: boolean
 }) {
   const [sessions, setSessions] = useState<F1Session[]>([])
   const [poolRules, setPoolRules] = useState<PoolRule[]>([])
@@ -343,9 +343,11 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
   const predsRef = useRef(preds)
   const poolRulesRef = useRef(poolRules)
   const sessionsRef = useRef(sessions)
+  const activeEntryIdRef = useRef(activeEntryId)
   useEffect(() => { predsRef.current = preds }, [preds])
   useEffect(() => { poolRulesRef.current = poolRules }, [poolRules])
   useEffect(() => { sessionsRef.current = sessions }, [sessions])
+  useEffect(() => { activeEntryIdRef.current = activeEntryId }, [activeEntryId])
   // Use a ref for saveSession so updatePred always calls the latest version
   const saveSessionRef = useRef<(sessionId: number) => Promise<void>>(async () => {})
 
@@ -484,6 +486,27 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
     return () => { supabase.removeChannel(channel) }
   }, [tournamentId])
 
+  // Realtime subscription — keep the ghost-entry switcher in sync when the admin
+  // adds/removes one from the leaderboard, without needing a full page reload
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`f1-ghost-entries-${poolId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ghost_entries', filter: `pool_id=eq.${poolId}` }, (payload) => {
+        const g = payload.new as { id: string; name: string }
+        setGhostEntries(prev => prev.some(e => e.id === g.id) ? prev : [...prev, g])
+        setMembers(prev => ({ ...prev, [g.id]: g.name }))
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'ghost_entries', filter: `pool_id=eq.${poolId}` }, (payload) => {
+        const deletedId = payload.old.id as string
+        setGhostEntries(prev => prev.filter(e => e.id !== deletedId))
+        // If we were mid-edit on the entry that just got deleted, fall back to our own picks
+        if (activeEntryIdRef.current === deletedId) switchEntry(userId)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [poolId, userId])
+
   function updatePred(sessionId: number, categoryId: string, value: any) {
     const scrollY = window.scrollY
     const key = `${sessionId}:${categoryId}`
@@ -596,8 +619,8 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
 
   return (
     <div>
-      {/* Entry switcher — admin only, lets the admin pick on behalf of ghost entries */}
-      {isAdmin && (
+      {/* Entry switcher — admin or a member granted ghost-management access can pick on behalf of ghost entries */}
+      {(isAdmin || canManageGhosts) && (
         <div style={{ marginBottom: 16, padding: '10px 12px', background: '#f9f9f9', border: '1px solid #e0e0db' }}>
           <div style={{ fontSize: '10px', fontWeight: 600, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>making picks for</div>
           <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginBottom: 8 }}>
@@ -619,15 +642,15 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                 {g.name}
               </button>
             ))}
-            {/* Add new */}
-            {!addingGhost && (
+            {/* Add new — admin only; ghost managers can pick for existing entries but not create/remove them */}
+            {isAdmin && !addingGhost && (
               <button type="button" onClick={() => setAddingGhost(true)}
                 style={{ padding: '5px 10px', fontSize: '12px', border: '1px dashed #ddd', background: 'white', color: '#aaa', cursor: 'pointer', fontFamily: 'inherit' }}>
                 + add entry
               </button>
             )}
           </div>
-          {addingGhost && (
+          {isAdmin && addingGhost && (
             <div style={{ display: 'flex', gap: 6 }}>
               <input autoFocus value={newGhostName} onChange={e => setNewGhostName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && addGhostEntry()}
@@ -696,7 +719,10 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
         const catIds = SESSION_CATEGORIES[session.session_type] || []
         const sessionRules = poolRules.filter(r => catIds.includes(r.category_id))
         if (sessionRules.length === 0) return null
-        const locked = isLocked(session, deadlineType, allGpMap[currentGP] || gpSessions)
+        // Ghost entries stay editable past the normal lock — only relevant while an
+        // authorized admin/manager is actively picking on a ghost's behalf, since
+        // activeEntryId can only ever be `userId` or one of ghostEntries' ids.
+        const locked = activeEntryId === userId && isLocked(session, deadlineType, allGpMap[currentGP] || gpSessions)
         const isLive = session.status === 'In Progress'
 
         return (

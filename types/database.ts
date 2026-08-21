@@ -1031,6 +1031,7 @@ export type Database = {
       }
       pool_members: {
         Row: {
+          can_manage_ghosts: boolean
           display_name: string
           id: string
           is_paid: boolean | null
@@ -1040,6 +1041,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          can_manage_ghosts?: boolean
           display_name: string
           id?: string
           is_paid?: boolean | null
@@ -1049,6 +1051,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          can_manage_ghosts?: boolean
           display_name?: string
           id?: string
           is_paid?: boolean | null

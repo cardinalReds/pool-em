@@ -824,7 +824,7 @@ function buildRoundSpecialState(preds: any[]) {
 
 export default function FixturesList({
   poolId, userId, packageId, deadlineType, tournamentId,
-  hideControls, externalSortMode, externalViewMode, isAdmin,
+  hideControls, externalSortMode, externalViewMode, isAdmin, canManageGhosts,
   plGameMode, plBest5AdminOverride, previewMode, onPreviewInteract,
 }: {
   poolId: string
@@ -837,6 +837,7 @@ export default function FixturesList({
   externalSortMode?: 'date' | 'group' | 'round'
   externalViewMode?: 'pages' | 'list'
   isAdmin?: boolean
+  canManageGhosts?: boolean
   plGameMode?: string
   plBest5AdminOverride?: boolean
   // Signed-out visitor browsing a pool before creating an account: renders the real
@@ -1194,8 +1195,10 @@ export default function FixturesList({
 
   // Use a ref to always have fresh preds in saveFixture
   const predsRef = useRef(preds)
+  const activeEntryIdRef = useRef(activeEntryId)
   useEffect(() => { predsRef.current = preds }, [preds])
   useEffect(() => { linkedPredsRef.current = linkedPreds }, [linkedPreds])
+  useEffect(() => { activeEntryIdRef.current = activeEntryId }, [activeEntryId])
 
   // Use a ref for saveFixture so updateLocal always calls the latest version
   const saveFixtureRef = useRef<(fixtureId: number) => Promise<void>>(async () => {})
@@ -1418,6 +1421,10 @@ export default function FixturesList({
   }, [fixtures, deadlineType])
 
   function isLocked(f: Fixture) {
+    // Ghost entries stay editable past the normal lock — activeEntryId can only ever be
+    // `userId` or one of ghostEntries' ids, so this only bypasses lock while an authorized
+    // admin/manager is actively picking on a ghost's behalf.
+    if (activeEntryId !== userId) return false
     if (deadlineType === 'before_tournament') return false
     if (deadlineType === 'before_weekend') {
       // Lock when the first game of this matchday starts
@@ -1459,6 +1466,27 @@ export default function FixturesList({
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [tournamentId])
+
+  // Realtime subscription — keep the ghost-entry switcher in sync when the admin
+  // adds/removes one from the leaderboard, without needing a full page reload
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`fixtures-ghost-entries-${poolId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ghost_entries', filter: `pool_id=eq.${poolId}` }, (payload) => {
+        const g = payload.new as { id: string; name: string }
+        setGhostEntries(prev => prev.some(e => e.id === g.id) ? prev : [...prev, g])
+        setMembers(prev => ({ ...prev, [g.id]: g.name }))
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'ghost_entries', filter: `pool_id=eq.${poolId}` }, (payload) => {
+        const deletedId = payload.old.id as string
+        setGhostEntries(prev => prev.filter(e => e.id !== deletedId))
+        // If we were mid-edit on the entry that just got deleted, fall back to our own picks
+        if (activeEntryIdRef.current === deletedId) switchEntry(userId)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [poolId, userId])
   const MATCHDAY_ROUNDS = [
     { id: 'round_1', label: 'Round 1', start: '2026-06-11', end: '2026-06-17' },
     { id: 'round_2', label: 'Round 2', start: '2026-06-18', end: '2026-06-23' },
@@ -2159,8 +2187,8 @@ export default function FixturesList({
         </div>
       ))}
 
-      {/* Ghost entry switcher — admin only */}
-      {isAdmin && (
+      {/* Ghost entry switcher — admin or a member granted ghost-management access */}
+      {(isAdmin || canManageGhosts) && (
         <div style={{ padding: '10px 12px', background: '#f9f9f9', border: '1px solid #e0e0db' }}>
           <div style={{ fontSize: '10px', fontWeight: 600, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>making picks for</div>
           <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginBottom: addingGhost ? 8 : 0 }}>
@@ -2180,14 +2208,14 @@ export default function FixturesList({
                 {g.name}
               </button>
             ))}
-            {!addingGhost && (
+            {isAdmin && !addingGhost && (
               <button type="button" onClick={() => setAddingGhost(true)}
                 style={{ padding: '5px 10px', fontSize: '12px', border: '1px dashed #ddd', background: 'white', color: '#aaa', cursor: 'pointer', fontFamily: 'inherit' }}>
                 + add entry
               </button>
             )}
           </div>
-          {addingGhost && (
+          {isAdmin && addingGhost && (
             <div style={{ display: 'flex', gap: 6 }}>
               <input autoFocus value={newGhostName} onChange={e => setNewGhostName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && addGhostEntry()}
@@ -2316,7 +2344,7 @@ export default function FixturesList({
               <>
                 {isCustom && (() => {
                   const roundDef = MATCHDAY_ROUNDS.find(r => r.id === page.roundId)
-                  const roundLocked = roundDef ? new Date() >= new Date(roundDef.start + 'T00:00:00-07:00') : false
+                  const roundLocked = activeEntryId === userId && roundDef ? new Date() >= new Date(roundDef.start + 'T00:00:00-07:00') : false
                   return <RoundSpecialsCard matchday={page.roundId} locked={roundLocked} />
                 })()}
                 {Object.entries(dayMap).map(([day, fx]) => (

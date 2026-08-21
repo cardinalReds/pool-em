@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 interface NFLFixture {
@@ -60,8 +60,8 @@ const CATEGORY_ORDER = [
   'nfl_ht_result', 'nfl_ht_spread', 'nfl_ht_total_points_ou',
 ]
 
-export default function NFLGamesList({ poolId, userId, tournamentId, deadlineType = 'before_each_game', isAdmin = false }: {
-  poolId: string; userId: string; tournamentId: string; deadlineType?: string; isAdmin?: boolean
+export default function NFLGamesList({ poolId, userId, tournamentId, deadlineType = 'before_each_game', isAdmin = false, canManageGhosts = false }: {
+  poolId: string; userId: string; tournamentId: string; deadlineType?: string; isAdmin?: boolean; canManageGhosts?: boolean
 }) {
   const [games, setGames] = useState<NFLFixture[]>([])
   const [poolRules, setPoolRules] = useState<PoolRule[]>([])
@@ -73,6 +73,8 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
   const [newGhostName, setNewGhostName] = useState('')
   const [addingGhost, setAddingGhost] = useState(false)
   const [revealedOddsIds, setRevealedOddsIds] = useState<Set<number>>(new Set())
+  const activeEntryIdRef = useRef(activeEntryId)
+  useEffect(() => { activeEntryIdRef.current = activeEntryId }, [activeEntryId])
 
   async function load() {
     const supabase = createClient()
@@ -107,6 +109,26 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
   }
 
   useEffect(() => { load() }, [poolId, userId, tournamentId])
+
+  // Realtime subscription — keep the ghost-entry switcher in sync when the admin
+  // adds/removes one from the leaderboard, without needing a full page reload
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`nfl-ghost-entries-${poolId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ghost_entries', filter: `pool_id=eq.${poolId}` }, (payload) => {
+        const g = payload.new as { id: string; name: string }
+        setGhostEntries(prev => prev.some(e => e.id === g.id) ? prev : [...prev, g])
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'ghost_entries', filter: `pool_id=eq.${poolId}` }, (payload) => {
+        const deletedId = payload.old.id as string
+        setGhostEntries(prev => prev.filter(e => e.id !== deletedId))
+        // If we were mid-edit on the entry that just got deleted, fall back to our own picks
+        if (activeEntryIdRef.current === deletedId) switchEntry(userId)
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [poolId, userId])
 
   async function switchEntry(entryId: string) {
     // Fetch and set preds BEFORE flipping activeEntryId — the exact-score inputs are
@@ -176,8 +198,8 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
 
   return (
     <div>
-      {/* Entry switcher — admin only */}
-      {isAdmin && (
+      {/* Entry switcher — admin or a member granted ghost-management access */}
+      {(isAdmin || canManageGhosts) && (
         <div style={{ marginBottom: 16, padding: '10px 12px', background: '#f9f9f9', border: '1px solid #e0e0db' }}>
           <div style={{ fontSize: '10px', fontWeight: 600, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>making picks for</div>
           <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginBottom: 8 }}>
@@ -197,14 +219,14 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
                 {g.name}
               </button>
             ))}
-            {!addingGhost && (
+            {isAdmin && !addingGhost && (
               <button type="button" onClick={() => setAddingGhost(true)}
                 style={{ padding: '5px 10px', fontSize: '12px', border: '1px dashed #ddd', background: 'white', color: '#aaa', cursor: 'pointer', fontFamily: 'inherit' }}>
                 + add entry
               </button>
             )}
           </div>
-          {addingGhost && (
+          {isAdmin && addingGhost && (
             <div style={{ display: 'flex', gap: 6 }}>
               <input autoFocus value={newGhostName} onChange={e => setNewGhostName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && addGhostEntry()}
@@ -241,7 +263,10 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
 
       {/* Games for this week */}
       {weekGames.map(game => {
-        const locked = isGameLocked(game)
+        // Ghost entries stay editable past the normal lock — activeEntryId can only ever
+        // be `userId` or one of ghostEntries' ids, so this only bypasses lock while an
+        // authorized admin/manager is actively picking on a ghost's behalf.
+        const locked = activeEntryId === userId && isGameLocked(game)
         const finished = game.status === 'FT'
         const isLive = game.status === 'live'
         const hasAnyPick = enabledRules.some(r => {
