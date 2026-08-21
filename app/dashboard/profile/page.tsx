@@ -47,6 +47,24 @@ interface SportStat {
   competitions: CompetitionStat[]
 }
 
+// A single graded win/draw/loss-style pick (soccer_result or nfl_result), with enough
+// fixture context to filter by team/outcome and simulate a $1-per-pick bet. Odds are the
+// closing line (see closing_odds_* on fixtures) — the price at kickoff, not whatever
+// in-play odds happened to be showing later.
+interface WldPick {
+  fixtureId: number
+  tournamentId: string
+  homeTeam: string
+  awayTeam: string
+  predictedWld: 'home' | 'away' | 'draw'
+  isCorrect: boolean
+  closingOddsHome: number | null
+  closingOddsDraw: number | null
+  closingOddsAway: number | null
+}
+
+interface PLTableRow { team: string; w: number; d: number; l: number; pts: number; played: number }
+
 function groupCategoriesForSport(categoryList: CategoryStat[]) {
   const used = new Set<string>()
   const byId = new Map(categoryList.map(c => [c.categoryId, c]))
@@ -77,10 +95,134 @@ function groupCategoriesForSport(categoryList: CategoryStat[]) {
   return groups
 }
 
+// Team + result-type filter over a sport's graded W/D/L picks, with a $1-per-pick betting
+// simulation using the closing odds captured at kickoff (see closing_odds_* on fixtures —
+// frozen there specifically so this can't silently use stale/live-drifted odds).
+function PicksExplorer({ picks, hasDraw }: { picks: WldPick[]; hasDraw: boolean }) {
+  const [team, setTeam] = useState('all')
+  const [outcome, setOutcome] = useState<'all' | 'home' | 'away' | 'draw'>('all')
+
+  const teams = [...new Set(picks.flatMap(p => [p.homeTeam, p.awayTeam]))].sort()
+
+  const filtered = picks.filter(p => {
+    if (team !== 'all' && p.homeTeam !== team && p.awayTeam !== team) return false
+    if (outcome !== 'all' && p.predictedWld !== outcome) return false
+    return true
+  })
+
+  const hits = filtered.filter(p => p.isCorrect).length
+  const total = filtered.length
+  const pct = total > 0 ? Math.round((hits / total) * 100) : 0
+
+  let staked = 0
+  let netPnl = 0
+  let oddsMissing = 0
+  for (const p of filtered) {
+    const odds = p.predictedWld === 'home' ? p.closingOddsHome : p.predictedWld === 'away' ? p.closingOddsAway : p.closingOddsDraw
+    if (odds == null) { oddsMissing++; continue }
+    staked += 1
+    netPnl += p.isCorrect ? (odds - 1) : -1
+  }
+
+  return (
+    <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border-light)' }}>
+      <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bbb', marginBottom: '0.5rem' }}>explore your picks</div>
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' as const, marginBottom: '0.6rem' }}>
+        <select value={team} onChange={e => setTeam(e.target.value)}
+          style={{ fontSize: '0.8rem', padding: '0.35rem 0.5rem', border: '1px solid var(--border)', fontFamily: 'inherit', background: 'white' }}>
+          <option value="all">all teams</option>
+          {teams.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select value={outcome} onChange={e => setOutcome(e.target.value as any)}
+          style={{ fontSize: '0.8rem', padding: '0.35rem 0.5rem', border: '1px solid var(--border)', fontFamily: 'inherit', background: 'white' }}>
+          <option value="all">any result</option>
+          <option value="home">picked home win</option>
+          {hasDraw && <option value="draw">picked draw</option>}
+          <option value="away">picked away win</option>
+        </select>
+      </div>
+
+      {total === 0 ? (
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>no picks match this filter.</p>
+      ) : (
+        <>
+          <div style={{ fontSize: '0.85rem', marginBottom: '0.35rem' }}>
+            <span style={{ fontWeight: 600, color: pct >= 50 ? '#2d7a2d' : 'var(--text-dim)' }}>{pct}%</span>
+            <span style={{ color: 'var(--text-dim)' }}> ({hits}/{total} correct{team !== 'all' ? ` · ${team}` : ''}{outcome !== 'all' ? ` · picked ${outcome}` : ''})</span>
+          </div>
+          {staked > 0 ? (
+            <div style={{ fontSize: '0.85rem' }}>
+              <span style={{ fontWeight: 600, color: netPnl >= 0 ? '#2d7a2d' : '#C8102E' }}>{netPnl >= 0 ? '+' : ''}${netPnl.toFixed(2)}</span>
+              <span style={{ color: 'var(--text-dim)' }}> if you'd bet $1 on each of these {staked} picks at closing odds{oddsMissing > 0 ? ` (${oddsMissing} excluded — no odds recorded)` : ''}</span>
+            </div>
+          ) : (
+            <p style={{ fontSize: '0.75rem', color: '#bbb' }}>no closing-odds data recorded yet for these picks.</p>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+// "If your picks were always right" — a simulated Premier League table built entirely
+// from the user's own predicted results (not actual ones), standard 3/1/0 points. Deliberately
+// includes predictions for games that haven't been played yet — the whole point is
+// pretending every pick, including future ones, came true.
+function PLHypotheticalTable({ rows }: { rows: PLTableRow[] }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border-light)' }}>
+      <div onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+        <span style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bbb' }}>
+          🏆 the PL table if your picks were always right
+        </span>
+        <span style={{ fontSize: '0.75rem', color: '#888' }}>{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div style={{ overflowX: 'auto' as const, marginTop: '0.6rem' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+            <thead>
+              <tr>
+                <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600 }}>#</td>
+                <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600 }}>team</td>
+                <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>P</td>
+                <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>W</td>
+                <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>D</td>
+                <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>L</td>
+                <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>Pts</td>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r.team} style={{ borderTop: '1px solid var(--border-light)' }}>
+                  <td style={{ padding: '0.3rem 0.5rem', color: '#aaa' }}>{i + 1}</td>
+                  <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>{r.team}</td>
+                  <td style={{ padding: '0.3rem 0.5rem', textAlign: 'center' as const }}>{r.played}</td>
+                  <td style={{ padding: '0.3rem 0.5rem', textAlign: 'center' as const }}>{r.w}</td>
+                  <td style={{ padding: '0.3rem 0.5rem', textAlign: 'center' as const }}>{r.d}</td>
+                  <td style={{ padding: '0.3rem 0.5rem', textAlign: 'center' as const }}>{r.l}</td>
+                  <td style={{ padding: '0.3rem 0.5rem', textAlign: 'center' as const, fontWeight: 700, color: '#C8102E' }}>{r.pts}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p style={{ fontSize: '0.7rem', color: '#bbb', marginTop: '0.5rem' }}>
+            built from your own predicted results, including games not played yet — not the real table.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [sportStats, setSportStats] = useState<SportStat[]>([])
   const [hasPartialCredit, setHasPartialCredit] = useState(false)
+  const [soccerPicks, setSoccerPicks] = useState<WldPick[]>([])
+  const [nflPicks, setNflPicks] = useState<WldPick[]>([])
+  const [plHypoTable, setPlHypoTable] = useState<PLTableRow[]>([])
 
   useEffect(() => {
     async function load() {
@@ -101,7 +243,7 @@ export default function ProfilePage() {
 
       const [{ data: preds }, { data: categories }, { data: poolRules }, { data: pools }] = await Promise.all([
         supabase.from('predictions_v2')
-          .select('pool_id, category_id, points_earned, is_correct')
+          .select('pool_id, category_id, points_earned, is_correct, fixture_id, value_wld')
           .eq('user_id', user.id)
           .in('pool_id', poolIds)
           .not('points_earned', 'is', null),
@@ -117,6 +259,78 @@ export default function ProfilePage() {
         ? await supabase.from('tournaments').select('id, name, status').in('id', tournamentIds)
         : { data: [] as { id: string; name: string; status: string }[] }
       const tournamentMap = new Map((tournaments || []).map(t => [t.id, t]))
+
+      // ── "Explore your picks" — team/result filters + $1-per-pick P&L, soccer + NFL only ──
+      // (see PicksExplorer below). Reuses `preds` (already graded — points_earned not
+      // null) rather than a second query, since fixture_id/value_wld are now in that select.
+      const wldPredsBySport: Record<string, typeof preds> = { soccer: [], nfl: [] }
+      for (const p of preds || []) {
+        if (p.category_id === 'soccer_result' && p.fixture_id != null) wldPredsBySport.soccer!.push(p)
+        else if (p.category_id === 'nfl_result' && p.fixture_id != null) wldPredsBySport.nfl!.push(p)
+      }
+
+      // Separate, ungraded-inclusive fetch for the PL hypothetical table — "if my picks
+      // were always right" simulates a world where every pick (including ones for games
+      // not yet played) came true, so it can't reuse the graded-only `preds` fetch above.
+      const { data: allPlResultPreds } = await supabase
+        .from('predictions_v2')
+        .select('pool_id, fixture_id, value_wld')
+        .eq('user_id', user.id)
+        .in('pool_id', poolIds)
+        .eq('category_id', 'soccer_result')
+        .not('fixture_id', 'is', null)
+
+      const allWldFixtureIds = [...new Set([
+        ...wldPredsBySport.soccer!.map(p => p.fixture_id as number),
+        ...wldPredsBySport.nfl!.map(p => p.fixture_id as number),
+        ...(allPlResultPreds || []).map(p => p.fixture_id as number),
+      ])]
+
+      const { data: wldFixtures } = allWldFixtureIds.length
+        ? await supabase.from('fixtures')
+            .select('id, tournament_id, home_team, away_team, home_score, away_score, status, closing_odds_home, closing_odds_draw, closing_odds_away')
+            .in('id', allWldFixtureIds)
+        : { data: [] as any[] }
+      const fixtureMap = new Map((wldFixtures || []).map(f => [f.id, f]))
+
+      const wldPicksBySport: Record<'soccer' | 'nfl', WldPick[]> = { soccer: [], nfl: [] }
+      for (const sportKey of ['soccer', 'nfl'] as const) {
+        for (const p of wldPredsBySport[sportKey] || []) {
+          const f = fixtureMap.get(p.fixture_id as number)
+          if (!f || !p.value_wld) continue
+          wldPicksBySport[sportKey].push({
+            fixtureId: f.id,
+            tournamentId: f.tournament_id,
+            homeTeam: f.home_team,
+            awayTeam: f.away_team,
+            predictedWld: p.value_wld as 'home' | 'away' | 'draw',
+            isCorrect: !!p.is_correct,
+            closingOddsHome: f.closing_odds_home,
+            closingOddsDraw: f.closing_odds_draw,
+            closingOddsAway: f.closing_odds_away,
+          })
+        }
+      }
+
+      // PL hypothetical table — one row per team that's appeared in a pl_2026 prediction,
+      // tallied from predicted (not actual) results using standard 3/1/0 points.
+      const plTableMap = new Map<string, { team: string; w: number; d: number; l: number; pts: number; played: number }>()
+      function bump(team: string, outcome: 'w' | 'd' | 'l') {
+        const row = plTableMap.get(team) || { team, w: 0, d: 0, l: 0, pts: 0, played: 0 }
+        row.played += 1
+        if (outcome === 'w') { row.w += 1; row.pts += 3 }
+        else if (outcome === 'd') { row.d += 1; row.pts += 1 }
+        else row.l += 1
+        plTableMap.set(team, row)
+      }
+      for (const p of allPlResultPreds || []) {
+        const f = fixtureMap.get(p.fixture_id as number)
+        if (!f || f.tournament_id !== 'pl_2026' || !p.value_wld) continue
+        if (p.value_wld === 'home') { bump(f.home_team, 'w'); bump(f.away_team, 'l') }
+        else if (p.value_wld === 'away') { bump(f.away_team, 'w'); bump(f.home_team, 'l') }
+        else { bump(f.home_team, 'd'); bump(f.away_team, 'd') }
+      }
+      const plHypoTable = [...plTableMap.values()].sort((a, b) => b.pts - a.pts || b.w - a.w)
 
       // f1_podium_order_1/_2/_3 are scored individually but configured as one pool_rules
       // row under the base 'f1_podium_order' id — mirrors the ruleMap remap in
@@ -188,6 +402,9 @@ export default function ProfilePage() {
 
       setSportStats(sports)
       setHasPartialCredit(sawPartialCredit)
+      setSoccerPicks(wldPicksBySport.soccer)
+      setNflPicks(wldPicksBySport.nfl)
+      setPlHypoTable(plHypoTable)
       setLoading(false)
     }
     load()
@@ -260,6 +477,16 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 ))}
+
+                {s.sport === 'soccer' && soccerPicks.length > 0 && (
+                  <PicksExplorer picks={soccerPicks} hasDraw />
+                )}
+                {s.sport === 'soccer' && plHypoTable.length > 0 && (
+                  <PLHypotheticalTable rows={plHypoTable} />
+                )}
+                {s.sport === 'nfl' && nflPicks.length > 0 && (
+                  <PicksExplorer picks={nflPicks} hasDraw={false} />
+                )}
               </section>
             )
           })}
