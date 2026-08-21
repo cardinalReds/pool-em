@@ -112,7 +112,26 @@ function hitRateStyle(pct: number): { bg: string; text: string } {
   return { bg: `rgb(${r},${g},${b})`, text: luminance > 0.55 ? '#1a1a19' : '#fdfdfc' }
 }
 
-const OUTCOME_LABEL: Record<string, string> = { home: 'home win', draw: 'draw', away: 'away win' }
+// One column of the heatmap — a predicate over a pick, plus its header label. Domestic
+// leagues (PL) and NFL/NCAAF group by predicted home/draw/away since that's a real,
+// consistent advantage. Neutral-venue tournaments (World Cup) don't get that axis at
+// all — "home"/"away" there is just an arbitrary data-feed label, not a real advantage,
+// so grouping by it would be a meaningless (and confusing) pattern to go looking for.
+const HOME_DRAW_AWAY_COLUMNS: OutcomeColumn[] = [
+  { id: 'home', label: 'home win', match: p => p.predictedWld === 'home' },
+  { id: 'draw', label: 'draw', match: p => p.predictedWld === 'draw' },
+  { id: 'away', label: 'away win', match: p => p.predictedWld === 'away' },
+]
+const HOME_AWAY_COLUMNS: OutcomeColumn[] = HOME_DRAW_AWAY_COLUMNS.filter(c => c.id !== 'draw')
+const SINGLE_RESULT_COLUMN: OutcomeColumn[] = [{ id: 'any', label: 'result', match: () => true }]
+const NEUTRAL_VENUE_TOURNAMENTS = new Set(['wc_2026'])
+
+interface OutcomeColumn { id: string; label: string; match: (p: WldPick) => boolean }
+
+function predictedTeamLabel(p: WldPick): string {
+  if (p.predictedWld === 'draw') return 'draw'
+  return p.predictedWld === 'home' ? p.homeTeam : p.awayTeam
+}
 
 type PickSelection =
   | { kind: 'all' }
@@ -124,20 +143,32 @@ type PickSelection =
 // scanned for patterns (which teams/outcomes you're best or worst at calling) rather
 // than looked up one filter at a time. Click any row, column, or cell to drill into the
 // exact picks behind it, including a $1-per-pick P&L using closing odds.
-function PicksExplorer({ picks, outcomes }: { picks: WldPick[]; outcomes: ('home' | 'draw' | 'away')[] }) {
+function PicksExplorer({ picks, defaultColumns, competitions }: {
+  picks: WldPick[]
+  defaultColumns: OutcomeColumn[] // this sport's normal breakdown, e.g. home/draw/away
+  competitions: { id: string; name: string }[] // only the ones this user actually has picks in
+}) {
   const [selection, setSelection] = useState<PickSelection>({ kind: 'all' })
+  const [competitionId, setCompetitionId] = useState<string>(() => {
+    // Default to whichever competition has the most picks, not just the first alphabetically
+    const counts = new Map<string, number>()
+    for (const p of picks) counts.set(p.tournamentId, (counts.get(p.tournamentId) || 0) + 1)
+    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || competitions[0]?.id || ''
+  })
 
-  const teams = [...new Set(picks.flatMap(p => [p.homeTeam, p.awayTeam]))].sort()
+  const scopedPicks = picks.filter(p => p.tournamentId === competitionId)
+  const columns = NEUTRAL_VENUE_TOURNAMENTS.has(competitionId) ? SINGLE_RESULT_COLUMN : defaultColumns
+  const teams = [...new Set(scopedPicks.flatMap(p => [p.homeTeam, p.awayTeam]))].sort()
 
   function statsFor(rows: WldPick[]) {
     const hits = rows.filter(p => p.isCorrect).length
     return { hits, total: rows.length, pct: rows.length > 0 ? Math.round((hits / rows.length) * 100) : null }
   }
 
-  const selectedPicks = picks.filter(p => {
+  const selectedPicks = scopedPicks.filter(p => {
     if (selection.kind === 'team') return p.homeTeam === selection.team || p.awayTeam === selection.team
-    if (selection.kind === 'outcome') return p.predictedWld === selection.outcome
-    if (selection.kind === 'cell') return (p.homeTeam === selection.team || p.awayTeam === selection.team) && p.predictedWld === selection.outcome
+    if (selection.kind === 'outcome') return columns.find(c => c.id === selection.outcome)?.match(p) ?? false
+    if (selection.kind === 'cell') return (p.homeTeam === selection.team || p.awayTeam === selection.team) && (columns.find(c => c.id === selection.outcome)?.match(p) ?? false)
     return true
   }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
@@ -155,13 +186,30 @@ function PicksExplorer({ picks, outcomes }: { picks: WldPick[]; outcomes: ('home
 
   const selectionLabel = selection.kind === 'all' ? 'all picks'
     : selection.kind === 'team' ? selection.team
-    : selection.kind === 'outcome' ? `picked ${OUTCOME_LABEL[selection.outcome]}`
-    : `${selection.team} · ${OUTCOME_LABEL[selection.outcome]}`
+    : selection.kind === 'outcome' ? `picked ${columns.find(c => c.id === selection.outcome)?.label}`
+    : `${selection.team} · ${columns.find(c => c.id === selection.outcome)?.label}`
 
   return (
     <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border-light)' }}>
       <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bbb', marginBottom: '0.15rem' }}>explore your picks</div>
       <div style={{ fontSize: '0.72rem', color: '#bbb', marginBottom: '0.55rem' }}>click a team, a result, or a cell to drill in</div>
+
+      {competitions.length > 1 && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: '0.7rem' }}>
+          {competitions.map(c => (
+            <button key={c.id} onClick={() => { setCompetitionId(c.id); setSelection({ kind: 'all' }) }}
+              style={{
+                fontSize: '0.75rem', padding: '4px 10px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
+                borderColor: competitionId === c.id ? '#C8102E' : 'var(--border)',
+                background: competitionId === c.id ? '#fff5f5' : 'white',
+                color: competitionId === c.id ? '#C8102E' : '#555',
+                fontWeight: competitionId === c.id ? 700 : 400,
+              }}>
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Sequential legend — one hue, light→dark, no series to name so no legend box */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.7rem', fontSize: '0.65rem', color: '#999' }}>
@@ -175,36 +223,36 @@ function PicksExplorer({ picks, outcomes }: { picks: WldPick[]; outcomes: ('home
           <thead>
             <tr>
               <td style={{ padding: '3px 8px' }} />
-              {outcomes.map(o => {
-                const active = selection.kind === 'outcome' && selection.outcome === o
+              {columns.map(col => {
+                const active = selection.kind === 'outcome' && selection.outcome === col.id
                 return (
-                  <td key={o} onClick={() => setSelection(active ? { kind: 'all' } : { kind: 'outcome', outcome: o })}
+                  <td key={col.id} onClick={() => setSelection(active ? { kind: 'all' } : { kind: 'outcome', outcome: col.id })}
                     style={{ padding: '3px 8px', textAlign: 'center' as const, cursor: 'pointer', color: active ? '#111' : '#888', fontWeight: active ? 700 : 500, textDecoration: active ? 'underline' : 'none', whiteSpace: 'nowrap' as const }}>
-                    {OUTCOME_LABEL[o]}
+                    {col.label}
                   </td>
                 )
               })}
-              <td style={{ padding: '3px 8px', textAlign: 'center' as const, color: '#ccc' }}>all</td>
+              {columns.length > 1 && <td style={{ padding: '3px 8px', textAlign: 'center' as const, color: '#ccc' }}>all</td>}
             </tr>
           </thead>
           <tbody>
             {teams.map(team => {
               const rowActive = selection.kind === 'team' && selection.team === team
-              const rowStats = statsFor(picks.filter(p => p.homeTeam === team || p.awayTeam === team))
+              const rowStats = statsFor(scopedPicks.filter(p => p.homeTeam === team || p.awayTeam === team))
               return (
                 <tr key={team}>
                   <td onClick={() => setSelection(rowActive ? { kind: 'all' } : { kind: 'team', team })}
                     style={{ padding: '3px 8px', cursor: 'pointer', color: rowActive ? '#111' : '#333', fontWeight: rowActive ? 700 : 500, textDecoration: rowActive ? 'underline' : 'none', whiteSpace: 'nowrap' as const }}>
                     {team}
                   </td>
-                  {outcomes.map(o => {
-                    const cellStats = statsFor(picks.filter(p => (p.homeTeam === team || p.awayTeam === team) && p.predictedWld === o))
-                    const cellActive = selection.kind === 'cell' && selection.team === team && selection.outcome === o
+                  {columns.map(col => {
+                    const cellStats = statsFor(scopedPicks.filter(p => (p.homeTeam === team || p.awayTeam === team) && col.match(p)))
+                    const cellActive = selection.kind === 'cell' && selection.team === team && selection.outcome === col.id
                     const style = cellStats.pct != null ? hitRateStyle(cellStats.pct) : { bg: '#f7f7f5', text: '#ccc' }
                     return (
-                      <td key={o}
-                        onClick={() => cellStats.total > 0 && setSelection(cellActive ? { kind: 'all' } : { kind: 'cell', team, outcome: o })}
-                        title={cellStats.total > 0 ? `${team} · ${OUTCOME_LABEL[o]}: ${cellStats.hits}/${cellStats.total} (${cellStats.pct}%)` : `${team} · ${OUTCOME_LABEL[o]}: no picks`}
+                      <td key={col.id}
+                        onClick={() => cellStats.total > 0 && setSelection(cellActive ? { kind: 'all' } : { kind: 'cell', team, outcome: col.id })}
+                        title={cellStats.total > 0 ? `${team} · ${col.label}: ${cellStats.hits}/${cellStats.total} (${cellStats.pct}%)` : `${team} · ${col.label}: no picks`}
                         style={{
                           padding: '6px 10px', textAlign: 'center' as const, minWidth: 56,
                           cursor: cellStats.total > 0 ? 'pointer' : 'default',
@@ -216,18 +264,20 @@ function PicksExplorer({ picks, outcomes }: { picks: WldPick[]; outcomes: ('home
                       </td>
                     )
                   })}
-                  <td style={{ padding: '6px 10px', textAlign: 'center' as const, color: '#888' }}>{rowStats.total > 0 ? `${rowStats.hits}/${rowStats.total}` : '—'}</td>
+                  {columns.length > 1 && <td style={{ padding: '6px 10px', textAlign: 'center' as const, color: '#888' }}>{rowStats.total > 0 ? `${rowStats.hits}/${rowStats.total}` : '—'}</td>}
                 </tr>
               )
             })}
-            <tr>
-              <td style={{ padding: '4px 8px', color: '#ccc' }}>all</td>
-              {outcomes.map(o => {
-                const colStats = statsFor(picks.filter(p => p.predictedWld === o))
-                return <td key={o} style={{ padding: '4px 8px', textAlign: 'center' as const, color: '#888' }}>{colStats.total > 0 ? `${colStats.hits}/${colStats.total}` : '—'}</td>
-              })}
-              <td style={{ padding: '4px 8px', textAlign: 'center' as const, color: '#ccc' }}>{picks.filter(p => p.isCorrect).length}/{picks.length}</td>
-            </tr>
+            {columns.length > 1 && (
+              <tr>
+                <td style={{ padding: '4px 8px', color: '#ccc' }}>all</td>
+                {columns.map(col => {
+                  const colStats = statsFor(scopedPicks.filter(col.match))
+                  return <td key={col.id} style={{ padding: '4px 8px', textAlign: 'center' as const, color: '#888' }}>{colStats.total > 0 ? `${colStats.hits}/${colStats.total}` : '—'}</td>
+                })}
+                <td style={{ padding: '4px 8px', textAlign: 'center' as const, color: '#ccc' }}>{scopedPicks.filter(p => p.isCorrect).length}/{scopedPicks.length}</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -268,7 +318,7 @@ function PicksExplorer({ picks, outcomes }: { picks: WldPick[]; outcomes: ('home
                     {p.awayTeam} @ {p.homeTeam} <span style={{ color: '#bbb' }}>· {new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    <span style={{ color: '#888' }}>picked {OUTCOME_LABEL[p.predictedWld]}</span>
+                    <span style={{ color: '#888' }}>picked {predictedTeamLabel(p)}</span>
                     <span style={{ fontWeight: 600, color: p.isCorrect ? '#2d7a2d' : '#aaa' }}>
                       {p.isCorrect ? '✓' : '✗'}{p.pointsEarned != null ? ` +${p.pointsEarned}` : ''}
                     </span>
@@ -603,13 +653,15 @@ export default function ProfilePage() {
                 ))}
 
                 {s.sport === 'soccer' && soccerPicks.length > 0 && (
-                  <PicksExplorer picks={soccerPicks} outcomes={['home', 'draw', 'away']} />
+                  <PicksExplorer picks={soccerPicks} defaultColumns={HOME_DRAW_AWAY_COLUMNS}
+                    competitions={s.competitions.filter(c => soccerPicks.some(p => p.tournamentId === c.tournamentId)).map(c => ({ id: c.tournamentId, name: c.name }))} />
                 )}
                 {s.sport === 'soccer' && plHypoTable.length > 0 && (
                   <PLHypotheticalTable rows={plHypoTable} />
                 )}
                 {s.sport === 'nfl' && nflPicks.length > 0 && (
-                  <PicksExplorer picks={nflPicks} outcomes={['home', 'away']} />
+                  <PicksExplorer picks={nflPicks} defaultColumns={HOME_AWAY_COLUMNS}
+                    competitions={s.competitions.filter(c => nflPicks.some(p => p.tournamentId === c.tournamentId)).map(c => ({ id: c.tournamentId, name: c.name }))} />
                 )}
               </section>
             )
