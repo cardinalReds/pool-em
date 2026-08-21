@@ -146,14 +146,21 @@ type PickSelection =
 function PicksExplorer({ picks, defaultColumns, competitions }: {
   picks: WldPick[]
   defaultColumns: OutcomeColumn[] // this sport's normal breakdown, e.g. home/draw/away
-  competitions: { id: string; name: string }[] // only the ones this user actually has picks in
+  competitions: { id: string; name: string; status: string }[] // only the ones this user actually has picks in
 }) {
   const [selection, setSelection] = useState<PickSelection>({ kind: 'all' })
   const [competitionId, setCompetitionId] = useState<string>(() => {
-    // Default to whichever competition has the most picks, not just the first alphabetically
+    // Default to a currently-active competition over a finished one (a completed World
+    // Cup run has way more accumulated picks than a season just getting started, but
+    // it's not the one worth landing on) — most-picks is just the tiebreak among
+    // active competitions, or the fallback if none are active.
     const counts = new Map<string, number>()
     for (const p of picks) counts.set(p.tournamentId, (counts.get(p.tournamentId) || 0) + 1)
-    return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || competitions[0]?.id || ''
+    const byPickCount = (a: string, b: string) => (counts.get(b) || 0) - (counts.get(a) || 0)
+    const active = competitions.filter(c => c.status === 'active').map(c => c.id).sort(byPickCount)
+    if (active.length > 0) return active[0]
+    const allIds = competitions.map(c => c.id).sort(byPickCount)
+    return allIds[0] || competitions[0]?.id || ''
   })
 
   const scopedPicks = picks.filter(p => p.tournamentId === competitionId)
@@ -654,14 +661,14 @@ export default function ProfilePage() {
 
                 {s.sport === 'soccer' && soccerPicks.length > 0 && (
                   <PicksExplorer picks={soccerPicks} defaultColumns={HOME_DRAW_AWAY_COLUMNS}
-                    competitions={s.competitions.filter(c => soccerPicks.some(p => p.tournamentId === c.tournamentId)).map(c => ({ id: c.tournamentId, name: c.name }))} />
+                    competitions={s.competitions.filter(c => soccerPicks.some(p => p.tournamentId === c.tournamentId)).map(c => ({ id: c.tournamentId, name: c.name, status: c.status }))} />
                 )}
                 {s.sport === 'soccer' && plHypoTable.length > 0 && (
                   <PLHypotheticalTable rows={plHypoTable} />
                 )}
                 {s.sport === 'nfl' && nflPicks.length > 0 && (
                   <PicksExplorer picks={nflPicks} defaultColumns={HOME_AWAY_COLUMNS}
-                    competitions={s.competitions.filter(c => nflPicks.some(p => p.tournamentId === c.tournamentId)).map(c => ({ id: c.tournamentId, name: c.name }))} />
+                    competitions={s.competitions.filter(c => nflPicks.some(p => p.tournamentId === c.tournamentId)).map(c => ({ id: c.tournamentId, name: c.name, status: c.status }))} />
                 )}
               </section>
             )
