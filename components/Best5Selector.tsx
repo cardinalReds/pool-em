@@ -10,7 +10,7 @@ interface SimpleFixture {
   date: string
 }
 
-export default function Best5Selector({ poolId, round, selectedIds, allFixtures, locked, lockTime, onSwap }: {
+export default function Best5Selector({ poolId, round, selectedIds, allFixtures, locked, lockTime, onSwap, count = 5, roundNoun = 'matchweek' }: {
   poolId: string
   round: string
   selectedIds: number[]
@@ -18,6 +18,8 @@ export default function Best5Selector({ poolId, round, selectedIds, allFixtures,
   locked: boolean
   lockTime: Date | null
   onSwap: (oldFixtureId: number, newFixtureId: number) => void
+  count?: number // PL uses 5, NCAAF uses 10 — see lib/best5Selection.ts / lib/best10Selection.ts
+  roundNoun?: string // "matchweek" (PL) vs "week" (NCAAF)
 }) {
   const [swapping, setSwapping] = useState<number | null>(null)
   const [openFor, setOpenFor] = useState<number | null>(null)
@@ -40,7 +42,7 @@ export default function Best5Selector({ poolId, round, selectedIds, allFixtures,
   return (
     <div style={{ background: '#f9f9f9', border: '1px solid #e0e0db', padding: '10px 12px', marginBottom: 8 }}>
       <div style={{ fontSize: '10px', fontWeight: 600, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
-        <span>admin: edit this matchweek's 5 games</span>
+        <span>admin: edit this {roundNoun}'s {count} games</span>
         {lockTime && <span style={{ textTransform: 'none' as const, fontWeight: 400 }}>locks {lockTime.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>}
       </div>
       {selected.map(f => (

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import GhostAccessManager from '@/components/GhostAccessManager'
+import Best5Selector from '@/components/Best5Selector'
 
 interface NFLFixture {
   id: number
@@ -61,8 +62,9 @@ const CATEGORY_ORDER = [
   'nfl_ht_result', 'nfl_ht_spread', 'nfl_ht_total_points_ou',
 ]
 
-export default function NFLGamesList({ poolId, userId, tournamentId, deadlineType = 'before_each_game', isAdmin = false, canManageGhosts = false }: {
+export default function NFLGamesList({ poolId, userId, tournamentId, deadlineType = 'before_each_game', isAdmin = false, canManageGhosts = false, cfbGameMode = null, cfbBest10AdminOverride = false }: {
   poolId: string; userId: string; tournamentId: string; deadlineType?: string; isAdmin?: boolean; canManageGhosts?: boolean
+  cfbGameMode?: string | null; cfbBest10AdminOverride?: boolean
 }) {
   const [games, setGames] = useState<NFLFixture[]>([])
   const [poolRules, setPoolRules] = useState<PoolRule[]>([])
@@ -74,8 +76,12 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
   const [newGhostName, setNewGhostName] = useState('')
   const [addingGhost, setAddingGhost] = useState(false)
   const [revealedOddsIds, setRevealedOddsIds] = useState<Set<number>>(new Set())
+  const [best10Selections, setBest10Selections] = useState<Record<string, number[]>>({})
   const activeEntryIdRef = useRef(activeEntryId)
   useEffect(() => { activeEntryIdRef.current = activeEntryId }, [activeEntryId])
+  // NCAAF "best 10 games" — algorithm/admin picks 10 games a week instead of predicting
+  // the full ~60-100 game FBS slate. Mirrors FixturesList's isBest5Active for PL.
+  const isBest10Active = tournamentId === 'ncaaf_2026' && cfbGameMode === 'best10'
 
   async function load() {
     const supabase = createClient()
@@ -93,6 +99,32 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
       input_type: r.ruleset_categories?.input_type || 'wld',
     })))
     setGhostEntries(ghostRes.data || [])
+
+    // best10 pools: fetch whatever's already selected, then compute-and-store any week
+    // that hasn't been picked yet — same flow as FixturesList's PL best5 wiring.
+    if (isBest10Active && gamesRes.data && gamesRes.data.length > 0) {
+      const { data: existingRows } = await supabase
+        .from('pool_matchweek_selections')
+        .select('round, fixture_id')
+        .eq('pool_id', poolId)
+      const selMap: Record<string, number[]> = {}
+      for (const r of existingRows || []) {
+        (selMap[r.round] ??= []).push(r.fixture_id)
+      }
+      const rounds = [...new Set((gamesRes.data as any[]).map(g => g.round))]
+      const missingRounds = rounds.filter(r => !selMap[r])
+      if (missingRounds.length > 0) {
+        const computed = await Promise.all(missingRounds.map(round =>
+          fetch('/api/ncaaf/best10-select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ poolId, round }),
+          }).then(r => r.json()).then(j => ({ round, fixtureIds: j.fixtureIds || [] }))
+        ))
+        for (const { round, fixtureIds } of computed) selMap[round] = fixtureIds
+      }
+      setBest10Selections(selMap)
+    }
 
     const predMap: Record<string, Pred> = {}
     for (const p of predsRes.data || []) predMap[`${p.fixture_id}:${p.category_id}`] = p
@@ -182,7 +214,10 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
 
   const safeIdx = Math.min(Math.max(weekIndex, 0), weeks.length - 1)
   const currentWeek = weeks[safeIdx]
-  const weekGames = games.filter(g => g.round === currentWeek).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  const allWeekGames = games.filter(g => g.round === currentWeek).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  const weekGames = isBest10Active
+    ? allWeekGames.filter(g => !best10Selections[currentWeek] || best10Selections[currentWeek].includes(g.id))
+    : allWeekGames
   const enabledRules = CATEGORY_ORDER.map(id => poolRules.find(r => r.category_id === id)).filter(Boolean) as PoolRule[]
 
   // 'before_weekend' pools lock the whole gameweek at the first kickoff of that week,
@@ -262,6 +297,34 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
           ›
         </button>
       </div>
+
+      {isBest10Active && isAdmin && cfbBest10AdminOverride && (() => {
+        const selectedIds = best10Selections[currentWeek] || []
+        const selectedGames = allWeekGames.filter(g => selectedIds.includes(g.id))
+        // Swaps close one week before the earliest of the TEN selected kickoffs, not the
+        // week's overall first game — mirrors FixturesList's Best5Selector wiring for PL.
+        const earliestSelectedKickoff = selectedGames.length > 0
+          ? Math.min(...selectedGames.map(g => new Date(g.date).getTime()))
+          : null
+        const overrideLockTime = earliestSelectedKickoff !== null ? earliestSelectedKickoff - 7 * 24 * 60 * 60 * 1000 : null
+        const locked = overrideLockTime !== null && Date.now() >= overrideLockTime
+        return (
+          <Best5Selector
+            poolId={poolId}
+            round={currentWeek}
+            selectedIds={selectedIds}
+            allFixtures={allWeekGames}
+            locked={locked}
+            lockTime={overrideLockTime !== null ? new Date(overrideLockTime) : null}
+            count={10}
+            roundNoun="week"
+            onSwap={(oldId, newId) => setBest10Selections(prev => ({
+              ...prev,
+              [currentWeek]: (prev[currentWeek] || []).map(id => id === oldId ? newId : id),
+            }))}
+          />
+        )
+      })()}
 
       {/* Games for this week */}
       {weekGames.map(game => {

@@ -44,6 +44,13 @@ export default function CreatePoolPage() {
   const [plGameMode, setPlGameMode] = useState<'every_game' | 'best5'>('every_game')
   const [plBest5Override, setPlBest5Override] = useState(false)
 
+  // NCAAF-specific config — same "predict the full slate vs. algorithm/admin picks N
+  // games a week" idea as PL's best5, folded into step 1 (right after tournament/deadline
+  // selection) instead of its own wizard step, since it's a single toggle rather than
+  // PL's whole props/prize system.
+  const [cfbGameMode, setCfbGameMode] = useState<'every_game' | 'best10'>('every_game')
+  const [cfbBest10Override, setCfbBest10Override] = useState(false)
+
   // PL prize structure (step 4 for PL)
   const [plPrizeSeason, setPlPrizeSeason] = useState(false)
   const [plPrizeWeekly, setPlPrizeWeekly] = useState(false)
@@ -64,6 +71,7 @@ export default function CreatePoolPage() {
   ]
 
   const isPL = tournamentId.startsWith('pl_')
+  const isNCAAF = tournamentId.startsWith('ncaaf_')
   const defaultPropPts = Math.round(selectedRules.reduce((sum, r) => sum + (r.points || 0), 0) * 10 * 0.10)
 
   // Step 3b — bracket settings (before_tournament only)
@@ -266,6 +274,11 @@ export default function CreatePoolPage() {
           ? (weeklyPayoutTemplate === 'custom' ? weeklyCustomPayout.trim() : PAYOUT_TEMPLATES.find(t => t.id === weeklyPayoutTemplate)?.description || null)
           : null,
         season_props_enabled: plSeasonProps,
+      } : {}),
+      // NCAAF-specific
+      ...(isNCAAF ? {
+        cfb_game_mode: cfbGameMode,
+        cfb_best10_admin_override: cfbGameMode === 'best10' ? cfbBest10Override : false,
       } : {}),
     }).select().single()
 
@@ -567,6 +580,40 @@ export default function CreatePoolPage() {
                     </button>
                   ))}
                 </div>
+
+                {/* NCAAF-only: full slate vs. algorithm-picked 10 games — a college
+                    football week runs ~60-100 FBS games, so "every game" is a much
+                    heavier ask than PL's ~10-game matchday. */}
+                {isNCAAF && (
+                  <>
+                    <label style={{display: 'block', fontWeight: 600, marginBottom: '8px'}}>games per week</label>
+                    <div style={{display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '16px'}}>
+                      <button type="button" onClick={() => setCfbGameMode('every_game')}
+                        style={{padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer',
+                          borderColor: cfbGameMode === 'every_game' ? '#C8102E' : '#e0e0db',
+                          background: cfbGameMode === 'every_game' ? '#fff5f5' : 'white'}}>
+                        <div style={{fontWeight: 600, fontSize: '13px', color: cfbGameMode === 'every_game' ? '#C8102E' : '#111'}}>every game</div>
+                        <div style={{fontSize: '11px', color: '#aaa', marginTop: 3}}>predict the full FBS slate each week — typically 60-100 games</div>
+                      </button>
+                      <button type="button" onClick={() => setCfbGameMode('best10')}
+                        style={{padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer',
+                          borderColor: cfbGameMode === 'best10' ? '#C8102E' : '#e0e0db',
+                          background: cfbGameMode === 'best10' ? '#fff5f5' : 'white'}}>
+                        <div style={{fontWeight: 600, fontSize: '13px', color: cfbGameMode === 'best10' ? '#C8102E' : '#111'}}>best 10 games</div>
+                        <div style={{fontSize: '11px', color: '#aaa', marginTop: 3}}>algorithm picks 10 games a week, spread across kickoff slots so they don't all overlap</div>
+                      </button>
+                    </div>
+                    {cfbGameMode === 'best10' && (
+                      <label style={{display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: '16px', padding: '10px 12px', border: '1px solid #e0e0db', cursor: 'pointer'}}>
+                        <input type="checkbox" checked={cfbBest10Override} onChange={e => setCfbBest10Override(e.target.checked)} style={{marginTop: 2}} />
+                        <span>
+                          <div style={{fontWeight: 600, fontSize: '13px'}}>allow admin override</div>
+                          <div style={{fontSize: '11px', color: '#aaa', marginTop: 3}}>let yourself swap out any auto-picked game for a different one from that week, until one week before it kicks off</div>
+                        </span>
+                      </label>
+                    )}
+                  </>
+                )}
               </>
             )}
 
