@@ -28,6 +28,7 @@ const COMPETITION_IDS = [
   1,   // Australia
   2,   // Bahrain
   4,   // China
+  5,   // Netherlands (Zandvoort)
   6,   // Barcelona-Catalunya (Spain)
   7,   // Monaco
   8,   // Azerbaijan
