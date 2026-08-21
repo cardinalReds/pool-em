@@ -653,32 +653,15 @@ export default function ProfilePage() {
       </div>
 
       {otherMembers.length > 0 && (
-        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' as const, marginBottom: '1.5rem' }}>
-          <button onClick={() => setViewingUserId(viewerId)}
-            style={{
-              fontSize: '0.78rem', padding: '4px 10px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
-              borderColor: isSelf ? '#C8102E' : 'var(--border)',
-              background: isSelf ? '#fff5f5' : 'white',
-              color: isSelf ? '#C8102E' : '#555',
-              fontWeight: isSelf ? 700 : 400,
-            }}>
-            you
-          </button>
-          {otherMembers.map(m => {
-            const active = viewingUserId === m.id
-            return (
-              <button key={m.id} onClick={() => setViewingUserId(m.id)}
-                style={{
-                  fontSize: '0.78rem', padding: '4px 10px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
-                  borderColor: active ? '#C8102E' : 'var(--border)',
-                  background: active ? '#fff5f5' : 'white',
-                  color: active ? '#C8102E' : '#555',
-                  fontWeight: active ? 700 : 400,
-                }}>
-                {m.name}
-              </button>
-            )
-          })}
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bbb', marginBottom: '0.3rem' }}>viewing</label>
+          <select value={viewingUserId || ''} onChange={e => setViewingUserId(e.target.value)}
+            style={{ fontSize: '0.85rem', padding: '6px 10px', border: '1px solid var(--border)', fontFamily: 'inherit', background: 'white', color: '#111', minWidth: 180 }}>
+            <option value={viewerId || ''}>you</option>
+            {otherMembers.map(m => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
         </div>
       )}
 
