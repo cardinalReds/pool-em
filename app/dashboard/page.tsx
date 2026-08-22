@@ -76,20 +76,27 @@ export default function DashboardPage() {
     const { data: liveFixtures } = await supabase.from('fixtures').select('tournament_id').eq('status', 'live')
     const { data: liveF1Sessions } = await supabase.from('f1_sessions').select('tournament_id').eq('status', 'In Progress')
 
-    // MMA: live tag shows from first fight FT until all fights are scored
+    // MMA: live tag shows from first fight FT until all fights are scored. Bounded to
+    // events whose last fight was within the last 3 days — a single straggler fixture
+    // that never got a final status (verified: UFC 330 had 3 fights stuck at NS/unscored
+    // days after the card ended, with API-side data gone) would otherwise mark the
+    // tournament "in progress" forever, showing "live" right alongside the archive
+    // button once end_date also passes below — a real contradiction a user hit.
     const mmaTournamentIds = allPools.filter(p => p?.sport === 'mma').map(p => p.tournament_id).filter(Boolean)
     const mmaTournamentsInProgress = new Set<string>()
     if (mmaTournamentIds.length) {
-      const { data: mmaFixtures } = await supabase.from('fixtures').select('tournament_id, status, scored').in('tournament_id', mmaTournamentIds)
+      const { data: mmaFixtures } = await supabase.from('fixtures').select('tournament_id, status, scored, date').in('tournament_id', mmaTournamentIds)
       const byTournament: Record<string, any[]> = {}
       for (const f of mmaFixtures || []) {
         if (!byTournament[f.tournament_id]) byTournament[f.tournament_id] = []
         byTournament[f.tournament_id].push(f)
       }
+      const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
       for (const [tid, fights] of Object.entries(byTournament)) {
         const hasStarted = fights.some(f => f.status !== 'NS')
         const allDone = fights.every(f => f.scored)
-        if (hasStarted && !allDone) mmaTournamentsInProgress.add(tid)
+        const lastFightDate = new Date(Math.max(...fights.map(f => new Date(f.date).getTime())))
+        if (hasStarted && !allDone && lastFightDate >= threeDaysAgo) mmaTournamentsInProgress.add(tid)
       }
     }
 
@@ -334,13 +341,18 @@ export default function DashboardPage() {
 
   async function archivePool(poolId: string, archived: boolean) {
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    await fetch('/api/pool/archive', {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) return
+    const res = await fetch('/api/pool/archive', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ poolId, userId: user.id, archived }),
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ poolId, archived }),
     })
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({ error: 'failed to archive pool' }))
+      alert(error || 'failed to archive pool')
+      return
+    }
     load()
   }
 
