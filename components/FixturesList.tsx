@@ -970,34 +970,50 @@ export default function FixturesList({
         setBest5Selections(selMap)
       }
 
-      // Set initial page to next upcoming or live fixture (in PT timezone)
+      // Set initial page to next upcoming or live fixture (in PT timezone). This has to
+      // match whatever grouping `pages` actually renders with (sortMode) — it used to
+      // always compute a date-bucket index and apply it regardless of mode, which for PL
+      // (default sortMode 'group', grouped by matchday, not by date) landed on whatever
+      // matchday happened to share that index by coincidence rather than the real next/
+      // live one — confirmed: it consistently opened matchday 2.
       if (data.fixtures?.length > 0) {
-        const now = new Date()
         // Find the next fixture that is live or upcoming
         const upcoming = (data.fixtures as any[])
           .filter((f: any) => f.status === 'live' || f.status === 'NS' || !f.status)
           .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
         const nextFixture = upcoming[0]
         if (nextFixture) {
-          // Get the PT date of the next fixture
-          const ptDateStr = new Date(nextFixture.date).toLocaleDateString('en-US', {
-            timeZone: USER_TZ,
-            year: 'numeric', month: '2-digit', day: '2-digit'
-          })
-          // Convert MM/DD/YYYY → YYYY-MM-DD
-          const [m, d, y] = ptDateStr.split('/')
-          const targetIso = `${y}-${m}-${d}`
-          // Find which page has this date
-          const sorted = [...(data.fixtures as any[])].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
-          const dateMap: Record<string, boolean> = {}
-          sorted.forEach((f: any) => {
-            const ptD = new Date(f.date).toLocaleDateString('en-US', { timeZone: USER_TZ, year: 'numeric', month: '2-digit', day: '2-digit' })
-            const [fm, fd, fy] = ptD.split('/')
-            dateMap[`${fy}-${fm}-${fd}`] = true
-          })
-          const dates = Object.keys(dateMap).sort()
-          const pageIndex = dates.indexOf(targetIso)
-          if (pageIndex >= 0) setCurrentPage(pageIndex)
+          const sortedAll = [...(data.fixtures as any[])].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+          if (sortMode === 'group') {
+            // Distinct rounds in first-appearance order — exactly how the 'group' pages
+            // (one per matchday) get ordered from groupMap below.
+            const roundsInOrder: string[] = []
+            const seenRounds = new Set<string>()
+            for (const f of sortedAll) {
+              if (!seenRounds.has(f.round)) { seenRounds.add(f.round); roundsInOrder.push(f.round) }
+            }
+            const pageIndex = roundsInOrder.indexOf(nextFixture.round)
+            if (pageIndex >= 0) setCurrentPage(pageIndex)
+          } else {
+            // Get the PT date of the next fixture
+            const ptDateStr = new Date(nextFixture.date).toLocaleDateString('en-US', {
+              timeZone: USER_TZ,
+              year: 'numeric', month: '2-digit', day: '2-digit'
+            })
+            // Convert MM/DD/YYYY → YYYY-MM-DD
+            const [m, d, y] = ptDateStr.split('/')
+            const targetIso = `${y}-${m}-${d}`
+            // Find which page has this date
+            const dateMap: Record<string, boolean> = {}
+            sortedAll.forEach((f: any) => {
+              const ptD = new Date(f.date).toLocaleDateString('en-US', { timeZone: USER_TZ, year: 'numeric', month: '2-digit', day: '2-digit' })
+              const [fm, fd, fy] = ptD.split('/')
+              dateMap[`${fy}-${fm}-${fd}`] = true
+            })
+            const dates = Object.keys(dateMap).sort()
+            const pageIndex = dates.indexOf(targetIso)
+            if (pageIndex >= 0) setCurrentPage(pageIndex)
+          }
         }
       }
 
