@@ -584,20 +584,11 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           borderLeft: `3px solid ${member.user_id === user?.id ? '#C8102E' : 'transparent'}`,
         }}>
           <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, textAlign: 'left' as const}}>
-            {i + 1}. {member.display_name}{member.is_ghost ? <span style={{fontSize: '10px', color: '#bbb', marginLeft: 4}}>ghost</span> : ''}
+            {i + 1}. {member.is_ghost
+              ? <>{member.display_name}*</>
+              : <a href={`/dashboard/u/${member.user_id}`} style={{color: 'inherit', textDecoration: 'none'}}>{member.display_name}</a>}
           </span>
           <div style={{display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0}}>
-            {isUnrestrictedOverall && isAdmin && member.is_ghost && (
-              <button onClick={async () => {
-                if (!confirm(`Delete ${member.display_name}?`)) return
-                const supabase = (await import('@/lib/supabase/client')).createClient()
-                await supabase.from('predictions_v2').delete().eq('pool_id', pool.id).eq('user_id', member.user_id)
-                await supabase.from('ghost_entries').delete().eq('id', member.user_id)
-                setLeaderboard(prev => prev.filter(m => m.user_id !== member.user_id))
-              }} style={{fontSize: '11px', color: '#C8102E', background: 'none', border: 'none', cursor: 'pointer', padding: '8px 0', fontFamily: 'inherit'}}>
-                delete
-              </button>
-            )}
             {isUnrestrictedOverall && pool.buy_in_amount && !member.is_ghost && (
               <div style={{width: 68, display: 'flex', justifyContent: 'center', flexShrink: 0}}>
                 <PaidPill member={member} />
@@ -689,6 +680,12 @@ export default function PoolPage({ params }: { params: { id: string } }) {
             </div>
             {rows.map((member, i) => renderRow(member, i))}
           </>
+        )}
+
+        {rows.some(m => m.is_ghost) && (
+          <div style={{fontSize: '10px', color: '#bbb', marginTop: 8, paddingTop: 8, borderTop: '1px solid #f0f0f0'}}>
+            * predictions are inputted by the admin based on weekly video predictions.
+          </div>
         )}
 
         {isUnrestrictedOverall && user && pool.weekly_buy_in > 0 && <WeeklyLeaderboard poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} />}
@@ -880,7 +877,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       {user && pool.weekly_buy_in > 0 && <WeeklyPot poolId={pool.id} userId={user.id} isAdmin={isAdmin} weeklyBuyIn={pool.weekly_buy_in} tournamentId={pool.tournament_id} poolName={pool.name} venmoHandle={pool.venmo_handle} zelleHandle={pool.zelle_handle} weeklyPayoutStructure={pool.weekly_payout_structure} adminFeePercent={pool.admin_fee_percent} />}
 
       {/* Invite — admins always, members too if the pool allows it */}
-      {(isAdmin || pool.allow_member_invites) && (
+      {(isAdmin || pool.allow_member_invites || pool.is_public) && (
         <Section title="invite" defaultOpen={!isMobile}>
           {(pool.buy_in_amount || pool.weekly_buy_in) ? (
             <BuyInInvitePanel poolId={pool.id} />
@@ -919,8 +916,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       <div style={{background: 'white', borderBottom: '1px solid var(--border)', padding: '0.5rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 50}}>
         <a href="/dashboard" style={{fontWeight: 700, fontSize: '1.4rem', color: 'var(--red)', textDecoration: 'none'}}>pool'em</a>
         <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
+          <a href="/dashboard/profile" style={{fontSize: '11px', color: '#888', textDecoration: 'none'}}>your record</a>
           <span style={{fontSize: '11px', color: '#888'}}>
-            {user?.user_metadata?.display_name || user?.email?.split('@')[0]} ·{' '}
+            {user && <a href={`/dashboard/u/${user.id}`} style={{color: '#888', textDecoration: 'none'}}>{user?.user_metadata?.display_name || user?.email?.split('@')[0]}</a>} ·{' '}
             <button type="button" onClick={async () => { const s = createClient(); await s.auth.signOut(); window.location.href = '/' }}
               style={{background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '11px', fontFamily: 'inherit'}}>
               out
@@ -1070,7 +1068,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 )}
 
                 {/* Invite — admins always, members too if the pool allows it */}
-                {(isAdmin || pool.allow_member_invites) && (
+                {(isAdmin || pool.allow_member_invites || pool.is_public) && (
                   <div style={{marginBottom: 20}}>
                     <div style={{fontSize: '10px', fontWeight: 700, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.08em', marginBottom: 8}}>invite</div>
                     {(pool.buy_in_amount || pool.weekly_buy_in) ? (

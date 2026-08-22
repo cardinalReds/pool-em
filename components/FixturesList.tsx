@@ -1272,6 +1272,15 @@ export default function FixturesList({
     }
   }
 
+  async function deleteGhost(g: { id: string; name: string }) {
+    if (!confirm(`Delete ${g.name}? This also removes all of their picks.`)) return
+    const supabase = createClient()
+    await supabase.from('predictions_v2').delete().eq('pool_id', poolId).eq('user_id', g.id)
+    await supabase.from('ghost_entries').delete().eq('id', g.id)
+    setGhostEntries(prev => prev.filter(e => e.id !== g.id))
+    if (activeEntryId === g.id) switchEntry(userId)
+  }
+
   const updateLocal = useCallback((
     fixtureId: number,
     categoryId: string,
@@ -2215,13 +2224,21 @@ export default function FixturesList({
               you
             </button>
             {ghostEntries.map(g => (
-              <button key={g.id} type="button" onClick={() => switchEntry(g.id)}
-                style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
-                  borderColor: activeEntryId === g.id ? '#C8102E' : '#ddd',
-                  background: activeEntryId === g.id ? '#C8102E' : 'white',
-                  color: activeEntryId === g.id ? 'white' : '#555', fontWeight: activeEntryId === g.id ? 700 : 400 }}>
-                {g.name}
-              </button>
+              <div key={g.id} style={{ display: 'flex' }}>
+                <button type="button" onClick={() => switchEntry(g.id)}
+                  style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', borderRight: isAdmin ? 'none' : undefined, fontFamily: 'inherit', cursor: 'pointer',
+                    borderColor: activeEntryId === g.id ? '#C8102E' : '#ddd',
+                    background: activeEntryId === g.id ? '#C8102E' : 'white',
+                    color: activeEntryId === g.id ? 'white' : '#555', fontWeight: activeEntryId === g.id ? 700 : 400 }}>
+                  {g.name}
+                </button>
+                {isAdmin && (
+                  <button type="button" title={`delete ${g.name}`} onClick={() => deleteGhost(g)}
+                    style={{ padding: '5px 8px', fontSize: '12px', border: '1px solid #ddd', background: 'white', color: '#C8102E', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    ×
+                  </button>
+                )}
+              </div>
             ))}
             {isAdmin && !addingGhost && (
               <button type="button" onClick={() => setAddingGhost(true)}
