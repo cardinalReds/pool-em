@@ -51,7 +51,7 @@ export default function RecapPoster({ data, scale = 1, interactive = false }: { 
                   padding: `${s(7)}px 0`, borderTop: i === 0 ? 'none' : '1px solid #f2f2f0',
                 }}>
                   <span style={{ display: 'flex', fontSize: s(14), fontWeight: i === 0 ? 600 : 400 }}>
-                    {i + 1}. {row.display_name}{row.is_ghost ? ' (ghost)' : ''}
+                    {i + 1}. {row.display_name}{row.is_ghost ? '*' : ''}
                   </span>
                   <span style={{ display: 'flex', alignItems: 'baseline', fontSize: s(14), fontWeight: 600, color: i === 0 ? red : '#333' }}>
                     {row.points} pts
@@ -64,6 +64,11 @@ export default function RecapPoster({ data, scale = 1, interactive = false }: { 
                 </div>
               ))}
             </div>
+            {data.leaderboard.some(row => row.is_ghost) && (
+              <div style={{ display: 'flex', fontSize: s(10), color: faint, marginTop: s(6) }}>
+                * predictions are inputted by the admin based on weekly video predictions.
+              </div>
+            )}
           </div>
 
           {/* Recap items */}
