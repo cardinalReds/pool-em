@@ -71,11 +71,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
           <Link href="/dashboard/profile" style={{fontSize: '0.8rem', color: 'var(--text-dim)', padding: '4px 0', minHeight: 44, display: 'flex', alignItems: 'center'}}>your record</Link>
           <Link href="/dashboard/settings" style={{fontSize: '0.8rem', color: 'var(--text-dim)', padding: '4px 0', minHeight: 44, display: 'flex', alignItems: 'center'}}>settings</Link>
-          <Link href="/dashboard/messages" title="messages"
-            style={{position: 'relative', color: 'var(--text-dim)', padding: '4px 0', minHeight: 44, display: 'flex', alignItems: 'center', fontSize: '1.1rem'}}>
-            🔔
+          <Link href="/dashboard/messages"
+            style={{position: 'relative', fontSize: '0.8rem', color: unreadCount > 0 ? 'var(--red)' : 'var(--text-dim)', fontWeight: unreadCount > 0 ? 700 : 400, padding: '4px 0', minHeight: 44, display: 'flex', alignItems: 'center'}}>
+            messages
             {unreadCount > 0 && (
-              <span style={{position: 'absolute', top: 0, right: -6, background: '#C8102E', color: 'white', fontSize: '0.6rem', fontWeight: 700, borderRadius: 8, padding: '1px 5px', lineHeight: 1.3}}>
+              <span style={{marginLeft: 4, background: '#C8102E', color: 'white', fontSize: '0.6rem', fontWeight: 700, borderRadius: 8, padding: '1px 5px', lineHeight: 1.3}}>
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
