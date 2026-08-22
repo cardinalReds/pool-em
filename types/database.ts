@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      conversations: {
+        Row: {
+          id: string
+          user_a: string
+          user_b: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_a: string
+          user_b: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_a?: string
+          user_b?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      direct_messages: {
+        Row: {
+          id: string
+          conversation_id: string
+          sender_id: string
+          body: string
+          created_at: string
+          read_at: string | null
+        }
+        Insert: {
+          id?: string
+          conversation_id: string
+          sender_id: string
+          body: string
+          created_at?: string
+          read_at?: string | null
+        }
+        Update: {
+          id?: string
+          conversation_id?: string
+          sender_id?: string
+          body?: string
+          created_at?: string
+          read_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "direct_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       actual_standings: {
         Row: {
           advances: boolean | null

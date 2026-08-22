@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+
 import { createClient } from '@/lib/supabase/client'
 import RecordPanel from '@/components/RecordPanel'
+import { findOrCreateConversation } from '@/lib/dm'
 
 interface SharedPool { id: string; name: string; sport: string }
 
@@ -20,6 +22,8 @@ export default function UserProfilePage() {
   const [sharedPools, setSharedPools] = useState<SharedPool[]>([])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [messaging, setMessaging] = useState(false)
+  const [messageError, setMessageError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const isSelf = viewerId === targetUserId
@@ -81,6 +85,17 @@ export default function UserProfilePage() {
     setUploading(false)
   }
 
+  async function handleMessage() {
+    if (!viewerId || messaging) return
+    setMessaging(true)
+    setMessageError('')
+    const supabase = createClient()
+    const result = await findOrCreateConversation(supabase, viewerId, targetUserId)
+    setMessaging(false)
+    if ('error' in result) { setMessageError(result.error); return }
+    router.push(`/dashboard/messages/${result.id}`)
+  }
+
   if (loading) return <div style={{ padding: '2rem', color: 'var(--text-dim)', fontSize: '0.875rem' }}>loading...</div>
   if (notFound) return <div style={{ padding: '2rem', color: 'var(--text-dim)', fontSize: '0.875rem' }}>no profile found.</div>
 
@@ -112,12 +127,14 @@ export default function UserProfilePage() {
         <div>
           <h1 style={{ fontWeight: 700, fontSize: '1.25rem', marginBottom: 2 }}>{displayName}</h1>
           {uploadError && <p style={{ color: '#C8102E', fontSize: '0.75rem' }}>{uploadError}</p>}
-          {/* DM is a separate, not-yet-built feature — see conversation for scoping. */}
-          {!isSelf && (
-            <button disabled title="coming soon"
-              style={{ fontSize: '0.78rem', padding: '4px 10px', border: '1px solid var(--border)', background: '#f7f7f5', color: '#aaa', cursor: 'default', fontFamily: 'inherit', marginTop: 4 }}>
-              message (coming soon)
-            </button>
+          {!isSelf && sharedPools.length > 0 && (
+            <>
+              <button onClick={handleMessage} disabled={messaging}
+                style={{ fontSize: '0.78rem', padding: '4px 10px', border: '1px solid #C8102E', background: 'white', color: '#C8102E', cursor: messaging ? 'default' : 'pointer', fontFamily: 'inherit', marginTop: 4 }}>
+                {messaging ? 'opening…' : 'message'}
+              </button>
+              {messageError && <p style={{ color: '#C8102E', fontSize: '0.72rem', marginTop: 4 }}>{messageError}</p>}
+            </>
           )}
         </div>
       </div>
