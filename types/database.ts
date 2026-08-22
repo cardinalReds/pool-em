@@ -1350,6 +1350,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_url: string | null
           created_at: string | null
           display_name: string
           id: string
@@ -1359,6 +1360,7 @@ export type Database = {
           odds_always_visible: boolean
         }
         Insert: {
+          avatar_url?: string | null
           created_at?: string | null
           display_name: string
           id: string
@@ -1368,6 +1370,7 @@ export type Database = {
           odds_always_visible?: boolean
         }
         Update: {
+          avatar_url?: string | null
           created_at?: string | null
           display_name?: string
           id?: string
