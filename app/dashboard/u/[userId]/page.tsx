@@ -9,6 +9,8 @@ import { findOrCreateConversation } from '@/lib/dm'
 
 interface SharedPool { id: string; name: string; sport: string }
 
+const SPORT_EMOJI: Record<string, string> = { soccer: '⚽', nfl: '🏈', f1: '🏎', mma: '🥊' }
+
 export default function UserProfilePage() {
   const params = useParams()
   const router = useRouter()
@@ -24,6 +26,7 @@ export default function UserProfilePage() {
   const [uploadError, setUploadError] = useState('')
   const [messaging, setMessaging] = useState(false)
   const [messageError, setMessageError] = useState('')
+  const [poolsOpen, setPoolsOpen] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const isSelf = viewerId === targetUserId
@@ -140,18 +143,29 @@ export default function UserProfilePage() {
       </div>
 
       {sharedPools.length > 0 && (
-        <div style={{ marginBottom: '1.5rem' }}>
-          <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bbb', marginBottom: '0.4rem' }}>
-            {isSelf ? 'your pools' : 'pools you share'}
+        <div style={{ marginBottom: '1.5rem', border: '1px solid var(--border)' }}>
+          <div onClick={() => setPoolsOpen(o => !o)}
+            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.85rem', cursor: 'pointer', background: '#fafafa' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#888' }}>
+              {isSelf ? 'your pools' : 'pools you share'} ({sharedPools.length})
+            </span>
+            <span style={{ fontSize: '0.75rem', color: '#888' }}>{poolsOpen ? '▲' : '▼'}</span>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '0.4rem' }}>
-            {sharedPools.map(p => (
-              <a key={p.id} href={`/pool/${p.id}`}
-                style={{ fontSize: '0.78rem', padding: '4px 10px', border: '1px solid var(--border)', background: 'white', color: '#555', textDecoration: 'none' }}>
-                {p.name}
-              </a>
-            ))}
-          </div>
+          {poolsOpen && (
+            <div>
+              {sharedPools.map((p, i) => (
+                <a key={p.id} href={`/pool/${p.id}`}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.55rem 0.85rem',
+                    borderTop: i === 0 ? 'none' : '1px solid var(--border-light)',
+                    textDecoration: 'none', color: '#333', fontSize: '0.82rem',
+                  }}>
+                  <span>{SPORT_EMOJI[p.sport] || '🏆'}</span>
+                  <span>{p.name}</span>
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

@@ -593,10 +593,25 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel }: {
     load()
   }, [targetUserId, poolIds])
 
+  // Collapsed by default beyond the first sport — a member with picks across several
+  // sports otherwise dumps every category breakdown, heatmap, and hypothetical table on
+  // screen at once. `null` means "not yet touched by the user" so the first sport still
+  // defaults open once sportStats loads, without needing an effect to seed real state.
+  const [openSports, setOpenSports] = useState<Set<string> | null>(null)
+  function toggleSport(sport: string) {
+    setOpenSports(prev => {
+      const base = prev ?? new Set(sportStats[0] ? [sportStats[0].sport] : [])
+      const next = new Set(base)
+      if (next.has(sport)) next.delete(sport); else next.add(sport)
+      return next
+    })
+  }
+
   if (loading) return <div style={{ padding: '2rem', color: 'var(--text-dim)', fontSize: '0.875rem' }}>loading...</div>
 
   const totalPicks = sportStats.reduce((sum, s) => sum + s.total, 0)
   const possessiveCaps = subjectLabel === 'you' ? 'Your' : `${subjectLabel}'s`
+  const effectiveOpenSports = openSports ?? new Set(sportStats[0] ? [sportStats[0].sport] : [])
 
   if (totalPicks === 0) {
     return (
@@ -611,15 +626,18 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel }: {
       {sportStats.map(s => {
         const meta = SPORT_META[s.sport] || { emoji: '🏆', label: s.sport }
         const pct = s.total > 0 ? Math.round((s.hits / s.total) * 100) : 0
+        const isOpen = effectiveOpenSports.has(s.sport)
         return (
           <section key={s.sport} style={{ marginBottom: '2rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <div onClick={() => toggleSport(s.sport)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', cursor: 'pointer' }}>
               <span style={{ fontSize: '1.1rem' }}>{meta.emoji}</span>
               <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{meta.label}</span>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>{pct}% · {s.hits}/{s.total}</span>
               <div style={{ flex: 1, borderTop: '1px solid var(--border-light)' }} />
+              <span style={{ fontSize: '0.75rem', color: '#888' }}>{isOpen ? '▲' : '▼'}</span>
             </div>
 
+            {isOpen && <>
             {s.competitions.length > 1 && (
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' as const, marginBottom: '1rem' }}>
                 {s.competitions.map(c => {
@@ -670,6 +688,7 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel }: {
               <PicksExplorer picks={nflPicks} defaultColumns={HOME_AWAY_COLUMNS} subjectLabel={subjectLabel}
                 competitions={s.competitions.filter(c => nflPicks.some(p => p.tournamentId === c.tournamentId)).map(c => ({ id: c.tournamentId, name: c.name, status: c.status }))} />
             )}
+            </>}
           </section>
         )
       })}
