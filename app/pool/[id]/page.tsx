@@ -348,13 +348,16 @@ export default function PoolPage({ params }: { params: { id: string } }) {
           .eq('tournament_id', pool.tournament_id)
         setTotalFixtureCount(fixtureCount || 0)
 
-        // Only count finished games for the predicted count display
+        // Counts games that have started scoring — finished OR live, not just finished.
+        // Live games already contribute to `points` below (points_earned updates in
+        // real time as a match plays out), so excluding them here undercounted the
+        // denominator relative to the score it was sitting next to.
         // f1_sessions has no `round` column — the natural "round" for F1 is the Grand Prix
         // weekend itself (competition_name), since a weekend groups several sessions
         // (practice/qualifying/sprint/race) the way a matchday groups several fixtures.
         const { data: finishedFixtures } = isF1
           ? await supabase.from(gameTable).select('id, competition_name, date').eq('tournament_id', pool.tournament_id).eq('scored', true)
-          : await supabase.from(gameTable).select('id, round, date').eq('tournament_id', pool.tournament_id).eq('status', 'FT')
+          : await supabase.from(gameTable).select('id, round, date').eq('tournament_id', pool.tournament_id).in('status', ['FT', 'live'])
         const finishedIds = new Set((finishedFixtures || []).map((f: any) => f.id))
         setFinishedFixtureIds(finishedIds)
         setFinishedFixtureCount(finishedFixtures?.length || 0)
@@ -595,7 +598,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               </div>
             )}
             <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 700 : 400, color: member.user_id === user?.id ? '#C8102E' : '#888', textAlign: 'right' as const, flexShrink: 0, whiteSpace: 'nowrap' as const}}>
-              {member.points}{member.games != null && <span style={{fontSize: '10px', fontWeight: 400, color: '#bbb'}}> · {member.games} {member.games === 1 ? unit : unitPlural}</span>}
+              {member.points}{member.games != null && <span style={{fontSize: '10px', fontWeight: 400, color: '#bbb'}}> · {member.games}</span>}
             </span>
             {isUnrestrictedOverall && pool.deadline_type === 'before_tournament' && (
               <span style={{fontSize: '11px', color: '#bbb', width: 40, textAlign: 'center' as const, flexShrink: 0}}>
@@ -674,7 +677,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
               <span style={{flex: 1, minWidth: 0, textAlign: 'left' as const}}>player</span>
               <div style={{display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0}}>
                 {isUnrestrictedOverall && pool.buy_in_amount && <span style={{width: 68, textAlign: 'center' as const, flexShrink: 0}}>paid</span>}
-                <span style={{width: 64, textAlign: 'right' as const, flexShrink: 0}}>pts</span>
+                <span style={{width: 64, textAlign: 'right' as const, flexShrink: 0}}>pts{hasScopedData ? ` · ${unitPlural}` : ''}</span>
                 {isUnrestrictedOverall && pool.deadline_type === 'before_tournament' && <span style={{width: 40, textAlign: 'center' as const, flexShrink: 0}}>max</span>}
               </div>
             </div>
