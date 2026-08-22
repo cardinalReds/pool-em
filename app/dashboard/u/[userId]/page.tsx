@@ -56,8 +56,8 @@ export default function UserProfilePage() {
       const shared = [...viewerPoolIds].filter(id => targetPoolIds.has(id))
 
       if (shared.length > 0) {
-        const { data: poolsData } = await supabase.from('pools').select('id, name, sport').in('id', shared)
-        setSharedPools((poolsData || []).sort((a, b) => a.name.localeCompare(b.name)))
+        const { data: poolsData } = await supabase.from('pools').select('id, name, sport, archived').in('id', shared)
+        setSharedPools((poolsData || []).filter(p => !p.archived).sort((a, b) => a.name.localeCompare(b.name)))
       }
 
       setLoading(false)
