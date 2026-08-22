@@ -224,15 +224,35 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Early exit: only call the API if there are live fixtures or unscored finished fixtures
-    const { data: pendingFixtures } = await supabase
-      .from('fixtures')
-      .select('id')
-      .eq('tournament_id', 'wc_2026')
-      .or('status.eq.live,and(status.eq.FT,scored.eq.false)')
-      .limit(1)
+    // Early exit: only call the API if there are live fixtures, unscored finished
+    // fixtures, or a "stale" fixture — already scored, but a prediction on it still
+    // has points_earned null (a ghost pick edited after the match finished; see
+    // app/api/pl/score/route.ts for the fuller comment on why this is needed).
+    const { data: wcPools } = await supabase.from('pools').select('id').eq('tournament_id', 'wc_2026')
+    const wcPoolIds = (wcPools || []).map(p => p.id)
 
-    if (!pendingFixtures?.length) {
+    const [{ data: pendingFixtures }, { data: ungradedPicks }] = await Promise.all([
+      supabase
+        .from('fixtures')
+        .select('id')
+        .eq('tournament_id', 'wc_2026')
+        .or('status.eq.live,and(status.eq.FT,scored.eq.false)')
+        .limit(1),
+      wcPoolIds.length
+        ? supabase.from('predictions_v2').select('fixture_id').in('pool_id', wcPoolIds).is('points_earned', null).not('fixture_id', 'is', null)
+        : Promise.resolve({ data: [] as any[] }),
+    ])
+
+    // Ungraded picks are normal for any not-yet-played fixture (scored=false), so only
+    // fixtures that are ALREADY scored=true count as "stale" — cross-check against that
+    // before trusting the set, otherwise this early-exit never actually exits.
+    const wcCandidateFixtureIds = [...new Set((ungradedPicks || []).map((p: any) => p.fixture_id))]
+    const { data: wcStaleFixtureRows } = wcCandidateFixtureIds.length
+      ? await supabase.from('fixtures').select('id').eq('tournament_id', 'wc_2026').eq('scored', true).in('id', wcCandidateFixtureIds)
+      : { data: [] as any[] }
+    const staleFixtureIds = new Set((wcStaleFixtureRows || []).map((f: any) => f.id))
+
+    if (!pendingFixtures?.length && staleFixtureIds.size === 0) {
       return NextResponse.json({ ok: true, fixtures_scored: 0, skipped: true })
     }
 
@@ -261,7 +281,7 @@ export async function POST(request: NextRequest) {
         .maybeSingle()
 
       if (!ourFixture) continue
-      if (ourFixture.scored && !isLiveMatch) continue // skip already-scored finished games; always re-score live games
+      if (ourFixture.scored && !isLiveMatch && !staleFixtureIds.has(ourFixture.id)) continue // skip already-scored finished games (unless a ghost edit left an ungraded pick); always re-score live games
 
       const internalFixtureId = ourFixture.id
 

@@ -64,17 +64,41 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const activeMmaTournamentIds = (await supabase.from('tournaments').select('id').eq('sport', 'mma').eq('status', 'active')).data?.map(t => t.id) || []
+
     // Find MMA fixtures that are finished but not scored
-    const { data: fixtures } = await supabase
+    const { data: pendingFixtures } = await supabase
       .from('fixtures')
       .select('id, api_fixture_id, home_team, away_team, tournament_id, home_score, away_score')
       .eq('status', 'FT')
       .eq('scored', false)
-      .in('tournament_id', 
-        (await supabase.from('tournaments').select('id').eq('sport', 'mma').eq('status', 'active')).data?.map(t => t.id) || []
-      )
+      .in('tournament_id', activeMmaTournamentIds)
 
-    if (!fixtures?.length) {
+    // "Stale" fixtures — already scored=true, but a prediction on them still has
+    // points_earned null. Happens when a ghost pick is edited after the fight
+    // finished (ghosts can be edited post-lock/post-finish; see FixturesList.tsx /
+    // app/api/pl/score/route.ts for the fuller comment). The query above filters on
+    // scored=false so it never surfaces these on its own.
+    const { data: mmaPools } = activeMmaTournamentIds.length
+      ? await supabase.from('pools').select('id').in('tournament_id', activeMmaTournamentIds)
+      : { data: [] as any[] }
+    const mmaPoolIds = (mmaPools || []).map((p: any) => p.id)
+    const { data: ungradedPicks } = mmaPoolIds.length
+      ? await supabase.from('predictions_v2').select('fixture_id').in('pool_id', mmaPoolIds).is('points_earned', null).not('fixture_id', 'is', null)
+      : { data: [] as any[] }
+    const staleFixtureIds = [...new Set((ungradedPicks || []).map((p: any) => p.fixture_id))]
+    const { data: staleFixtures } = staleFixtureIds.length
+      ? await supabase
+          .from('fixtures')
+          .select('id, api_fixture_id, home_team, away_team, tournament_id, home_score, away_score')
+          .in('id', staleFixtureIds)
+          .eq('status', 'FT')
+          .eq('scored', true)
+      : { data: [] as any[] }
+
+    const fixtures = [...(pendingFixtures || []), ...(staleFixtures || [])]
+
+    if (!fixtures.length) {
       return NextResponse.json({ ok: true, scored: 0, skipped: true })
     }
 

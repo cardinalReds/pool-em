@@ -150,15 +150,37 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Early exit: only call the API if there are live fixtures or unscored finished fixtures
-    const { data: pendingFixtures } = await supabase
-      .from('fixtures')
-      .select('id')
-      .eq('tournament_id', TOURNAMENT_ID)
-      .or('status.eq.live,and(status.eq.FT,scored.eq.false)')
-      .limit(1)
+    // Early exit: only call the API if there are live fixtures, unscored finished
+    // fixtures, or a "stale" fixture — already scored, but a prediction on it still
+    // has points_earned null. That last case is a ghost pick edited after the match
+    // finished (ghosts can be edited post-lock/post-finish; see FixturesList.tsx) —
+    // without this, a fixture flips scored=true once and is skipped forever, so an
+    // edit made afterward would never get graded.
+    const { data: pools } = await supabase.from('pools').select('id').eq('tournament_id', TOURNAMENT_ID)
+    const poolIds = (pools || []).map(p => p.id)
 
-    if (!pendingFixtures?.length) {
+    const [{ data: pendingFixtures }, { data: ungradedPicks }] = await Promise.all([
+      supabase
+        .from('fixtures')
+        .select('id')
+        .eq('tournament_id', TOURNAMENT_ID)
+        .or('status.eq.live,and(status.eq.FT,scored.eq.false)')
+        .limit(1),
+      poolIds.length
+        ? supabase.from('predictions_v2').select('fixture_id').in('pool_id', poolIds).is('points_earned', null).not('fixture_id', 'is', null)
+        : Promise.resolve({ data: [] as any[] }),
+    ])
+
+    // Ungraded picks are normal for any not-yet-played fixture (scored=false), so only
+    // fixtures that are ALREADY scored=true count as "stale" — cross-check against that
+    // before trusting the set, otherwise this early-exit never actually exits.
+    const candidateFixtureIds = [...new Set((ungradedPicks || []).map((p: any) => p.fixture_id))]
+    const { data: staleFixtureRows } = candidateFixtureIds.length
+      ? await supabase.from('fixtures').select('id').eq('tournament_id', TOURNAMENT_ID).eq('scored', true).in('id', candidateFixtureIds)
+      : { data: [] as any[] }
+    const staleFixtureIds = new Set((staleFixtureRows || []).map((f: any) => f.id))
+
+    if (!pendingFixtures?.length && staleFixtureIds.size === 0) {
       return NextResponse.json({ ok: true, fixtures_scored: 0, skipped: true })
     }
 
@@ -185,7 +207,7 @@ export async function POST(request: NextRequest) {
         .maybeSingle()
 
       if (!ourFixture) continue
-      if (ourFixture.scored && !isLiveMatch) continue
+      if (ourFixture.scored && !isLiveMatch && !staleFixtureIds.has(ourFixture.id)) continue
 
       const internalFixtureId = ourFixture.id
 
@@ -253,11 +275,6 @@ export async function POST(request: NextRequest) {
       }).eq('id', internalFixtureId)
 
       // PL pools are always CUSTOM package_id — no legacy `predictions` table branch needed
-      const { data: pools } = await supabase
-        .from('pools')
-        .select('id')
-        .eq('tournament_id', TOURNAMENT_ID)
-
       for (const pool of pools || []) {
         const { data: rulesData } = await supabase
           .from('pool_rules')

@@ -27,15 +27,34 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Early exit — only hit the API if something's actually pending
-    const { data: pendingFixtures } = await supabase
-      .from('fixtures')
-      .select('id')
-      .eq('tournament_id', TOURNAMENT_ID)
-      .or('status.eq.live,and(status.eq.FT,scored.eq.false)')
-      .limit(1)
+    // Early exit — only hit the API if something's actually pending, or a "stale"
+    // fixture — already scored, but a prediction on it still has points_earned null
+    // (a ghost pick edited after the game finished; see app/api/pl/score/route.ts).
+    const { data: ncaafPools } = await supabase.from('pools').select('id').eq('tournament_id', TOURNAMENT_ID)
+    const ncaafPoolIds = (ncaafPools || []).map(p => p.id)
 
-    if (!pendingFixtures?.length) {
+    const [{ data: pendingFixtures }, { data: ungradedPicks }] = await Promise.all([
+      supabase
+        .from('fixtures')
+        .select('id')
+        .eq('tournament_id', TOURNAMENT_ID)
+        .or('status.eq.live,and(status.eq.FT,scored.eq.false)')
+        .limit(1),
+      ncaafPoolIds.length
+        ? supabase.from('predictions_v2').select('fixture_id').in('pool_id', ncaafPoolIds).is('points_earned', null).not('fixture_id', 'is', null)
+        : Promise.resolve({ data: [] as any[] }),
+    ])
+
+    // Ungraded picks are normal for any not-yet-played fixture (scored=false), so only
+    // fixtures that are ALREADY scored=true count as "stale" — cross-check against that
+    // before trusting the set, otherwise this early-exit never actually exits.
+    const ncaafCandidateFixtureIds = [...new Set((ungradedPicks || []).map((p: any) => p.fixture_id))]
+    const { data: ncaafStaleFixtureRows } = ncaafCandidateFixtureIds.length
+      ? await supabase.from('fixtures').select('id').eq('tournament_id', TOURNAMENT_ID).eq('scored', true).in('id', ncaafCandidateFixtureIds)
+      : { data: [] as any[] }
+    const staleFixtureIds = new Set((ncaafStaleFixtureRows || []).map((f: any) => f.id))
+
+    if (!pendingFixtures?.length && staleFixtureIds.size === 0) {
       return NextResponse.json({ ok: true, fixtures_scored: 0, skipped: true })
     }
 
@@ -63,7 +82,7 @@ export async function POST(request: NextRequest) {
       if (!ourFixture) continue
 
       const finished = isFinished(g.game.status.short)
-      if (ourFixture.scored && finished) continue // already scored, not live — skip
+      if (ourFixture.scored && finished && !staleFixtureIds.has(ourFixture.id)) continue // already scored, not live — skip (unless a ghost edit left an ungraded pick)
 
       const homeQ1 = g.scores?.home?.quarter_1
       const homeQ2 = g.scores?.home?.quarter_2
@@ -101,9 +120,7 @@ export async function POST(request: NextRequest) {
         htTotalLine: ourFixture.line_ht_total_points,
       }
 
-      const { data: pools } = await supabase.from('pools').select('id').eq('tournament_id', TOURNAMENT_ID)
-
-      for (const pool of pools || []) {
+      for (const pool of ncaafPools || []) {
         const { data: rulesData } = await supabase
           .from('pool_rules')
           .select('category_id, points, bonus_points')

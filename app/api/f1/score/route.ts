@@ -197,7 +197,27 @@ export async function POST(request: NextRequest) {
       .eq('status', 'In Progress')
       .limit(5)
 
-    const pendingSessions = [...(completedSessions || []), ...(liveSessions || [])]
+    // "Stale" sessions — already scored=true, but a prediction whose fixture_id points
+    // at them still has points_earned null. Happens when a ghost pick is edited after
+    // the session finished (ghosts can be edited post-lock/post-finish; see
+    // FixturesList.tsx / app/api/pl/score/route.ts for the fuller comment). The two
+    // queries above never surface these since they filter on scored=false, so without
+    // this a session that already flipped scored=true would never be revisited.
+    const { data: f1Pools } = await supabase.from('pools').select('id').eq('tournament_id', TOURNAMENT_ID)
+    const f1PoolIds = (f1Pools || []).map(p => p.id)
+    const { data: ungradedPicks } = f1PoolIds.length
+      ? await supabase.from('predictions_v2').select('fixture_id').in('pool_id', f1PoolIds).is('points_earned', null).not('fixture_id', 'is', null)
+      : { data: [] as any[] }
+    const staleSessionIds = [...new Set((ungradedPicks || []).map((p: any) => p.fixture_id))]
+    const { data: staleSessions } = staleSessionIds.length
+      ? await supabase
+          .from('f1_sessions')
+          .select('id, session_type, competition_id, season, status, scored, results')
+          .in('id', staleSessionIds)
+          .eq('scored', true)
+      : { data: [] as any[] }
+
+    const pendingSessions = [...(completedSessions || []), ...(liveSessions || []), ...(staleSessions || [])]
 
     if (!pendingSessions.length) {
       return NextResponse.json({ ok: true, sessions_scored: 0, skipped: true })
@@ -277,9 +297,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const { data: pools } = await supabase.from('pools').select('id').eq('tournament_id', TOURNAMENT_ID)
-
-      for (const pool of pools || []) {
+      for (const pool of f1Pools || []) {
         const { data: rulesData } = await supabase
           .from('pool_rules')
           .select('category_id, points, bonus_points')
