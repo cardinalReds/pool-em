@@ -81,7 +81,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      <RecordPanel targetUserId={viewingUserId} poolIds={poolIds} subjectLabel={isSelf ? 'you' : (viewingName || 'this member')} />
+      <RecordPanel targetUserId={viewingUserId} poolIds={poolIds} subjectLabel={isSelf ? 'you' : (viewingName || 'this member')} viewerId={viewerId || ''} />
     </div>
   )
 }

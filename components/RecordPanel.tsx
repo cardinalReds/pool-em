@@ -67,6 +67,22 @@ interface WldPick {
 
 interface PLTableRow { team: string; w: number; d: number; l: number; pts: number; played: number }
 
+interface CompareCandidate {
+  id: string
+  name: string
+  sharedPoolCount: number // pools, among the viewer's own pools, this person is also in
+  hitRatePct: number | null // rough accuracy across those shared pools — null if nothing graded yet
+}
+
+// Joins a list of display names into one readable phrase, always ending in a real name
+// (never a truncated "N others") so it stays safe to blindly suffix with an apostrophe-s
+// for possessive copy elsewhere ("Fred and Alex's picks").
+function formatNames(names: string[]): string {
+  if (names.length === 1) return names[0]
+  if (names.length === 2) return `${names[0]} and ${names[1]}`
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
 function groupCategoriesForSport(categoryList: CategoryStat[]) {
   const used = new Set<string>()
   const byId = new Map(categoryList.map(c => [c.categoryId, c]))
@@ -400,10 +416,11 @@ function PLHypotheticalTable({ rows, subjectLabel }: { rows: PLTableRow[]; subje
 // decides which: every pool the target's in for a self-view, or only the pools shared
 // with the viewer for someone else's). Used by /dashboard/profile (self, with a "viewing"
 // switcher around it) and /dashboard/u/[userId] (anyone sharing a pool with you).
-export default function RecordPanel({ targetUserId, poolIds, subjectLabel }: {
+export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewerId }: {
   targetUserId: string
   poolIds: string[]
   subjectLabel: string // "you" or the person's display name
+  viewerId: string // who's looking at this page — scopes the "compare" candidate list to their own pools
 }) {
   const [loading, setLoading] = useState(true)
   const [sportStats, setSportStats] = useState<SportStat[]>([])
@@ -412,21 +429,89 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel }: {
   const [nflPicks, setNflPicks] = useState<WldPick[]>([])
   const [plHypoTable, setPlHypoTable] = useState<PLTableRow[]>([])
 
+  // "Compare" — expands the dataset above from just targetUserId to targetUserId plus
+  // whoever's selected here, drawn from every real member across every pool the viewer
+  // (not necessarily the target) is in. Candidates are never listed alphabetically —
+  // that's an arbitrary order for a page whose whole point is performance, so the
+  // default order is by accuracy, with a toggle to sort by pools-shared-with-you instead.
+  const [viewerPoolIds, setViewerPoolIds] = useState<string[]>([])
+  const [compareCandidates, setCompareCandidates] = useState<CompareCandidate[]>([])
+  const [selectedCompareIds, setSelectedCompareIds] = useState<Set<string>>(new Set())
+  const [compareOpen, setCompareOpen] = useState(false)
+  const [compareSort, setCompareSort] = useState<'accuracy' | 'pools'>('accuracy')
+
   useEffect(() => {
-    if (!targetUserId || poolIds.length === 0) { setLoading(false); return }
+    setSelectedCompareIds(new Set())
+  }, [targetUserId])
+
+  useEffect(() => {
+    if (!viewerId) return
+    async function loadCandidates() {
+      const supabase = createClient()
+      const [{ data: adminPools }, { data: memberRows }] = await Promise.all([
+        supabase.from('pools').select('id').eq('admin_id', viewerId),
+        supabase.from('pool_members').select('pool_id').eq('user_id', viewerId),
+      ])
+      const vpIds = [...new Set([...(adminPools || []).map(p => p.id), ...(memberRows || []).map(m => m.pool_id)])]
+      setViewerPoolIds(vpIds)
+      if (vpIds.length === 0) { setCompareCandidates([]); return }
+
+      const [{ data: allMembers }, { data: gradedPreds }] = await Promise.all([
+        supabase.from('pool_members').select('user_id, pool_id, display_name').in('pool_id', vpIds).neq('user_id', viewerId),
+        supabase.from('predictions_v2').select('user_id, is_correct').in('pool_id', vpIds).not('points_earned', 'is', null),
+      ])
+
+      const poolsByUser = new Map<string, Set<string>>()
+      const nameByUser = new Map<string, string>()
+      for (const m of allMembers || []) {
+        nameByUser.set(m.user_id, m.display_name)
+        if (!poolsByUser.has(m.user_id)) poolsByUser.set(m.user_id, new Set())
+        poolsByUser.get(m.user_id)!.add(m.pool_id)
+      }
+
+      // Rough accuracy for ordering purposes only — is_correct rather than the exact
+      // partial-credit reconstruction used for the real stats below, since this is just
+      // deciding list order, not a number shown anywhere.
+      const hitsByUser = new Map<string, { hits: number; total: number }>()
+      for (const p of gradedPreds || []) {
+        const row = hitsByUser.get(p.user_id) || { hits: 0, total: 0 }
+        row.total += 1
+        if (p.is_correct) row.hits += 1
+        hitsByUser.set(p.user_id, row)
+      }
+
+      const candidates: CompareCandidate[] = [...nameByUser.entries()].map(([id, name]) => {
+        const h = hitsByUser.get(id)
+        return {
+          id, name,
+          sharedPoolCount: poolsByUser.get(id)?.size || 0,
+          hitRatePct: h && h.total > 0 ? Math.round((h.hits / h.total) * 100) : null,
+        }
+      })
+      setCompareCandidates(candidates)
+    }
+    loadCandidates()
+  }, [viewerId])
+
+  const compareKey = [...selectedCompareIds].sort().join(',')
+  const effectiveUserIds = [targetUserId, ...selectedCompareIds]
+  const effectivePoolIds = selectedCompareIds.size > 0 ? viewerPoolIds : poolIds
+
+  useEffect(() => {
+    if (!targetUserId || effectivePoolIds.length === 0) { setLoading(false); return }
     async function load() {
       setLoading(true)
       const supabase = createClient()
 
       const [{ data: preds }, { data: categories }, { data: poolRules }, { data: pools }] = await Promise.all([
         supabase.from('predictions_v2')
-          .select('pool_id, category_id, points_earned, is_correct, fixture_id, value_wld')
-          .eq('user_id', targetUserId)
-          .in('pool_id', poolIds)
+          .select('pool_id, category_id, points_earned, is_correct, fixture_id, value_wld, user_id')
+          .in('user_id', effectiveUserIds)
+          .in('pool_id', effectivePoolIds)
           .not('points_earned', 'is', null),
         supabase.from('ruleset_categories').select('id, sport, name, sort_order'),
-        supabase.from('pool_rules').select('pool_id, category_id, points, bonus_points').in('pool_id', poolIds),
-        supabase.from('pools').select('id, tournament_id').in('id', poolIds),
+        supabase.from('pool_rules').select('pool_id, category_id, points, bonus_points').in('pool_id', effectivePoolIds),
+        supabase.from('pools').select('id, tournament_id').in('id', effectivePoolIds),
       ])
 
       const categoryMap = new Map((categories || []).map(c => [c.id, c]))
@@ -444,20 +529,23 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel }: {
       // "if my picks were always right" tallies only games that have actually been
       // decided so far, not speculative future picks (a table entry only exists once a
       // real result exists to compare it against).
-      // Deduped by fixture_id — a user in several pools for the same tournament makes
+      // Deduped by user+fixture — a user in several pools for the same tournament makes
       // one predictions_v2 row per pool for the same real-world match, which would
       // otherwise count that one match's pick multiple times here (verified: one user
-      // had 15 rows on a single fixture from 15 different pools). Every pool-level pick
-      // is still fully counted in the per-sport hit-rate section above; this dedup is
-      // scoped to just the picks explorer/hypothetical-table, where the unit is "a real
-      // match," not "a pool's copy of a prediction."
-      const seenFixture: Record<'soccer' | 'nfl', Set<number>> = { soccer: new Set(), nfl: new Set() }
+      // had 15 rows on a single fixture from 15 different pools). Keying on user_id too
+      // (not just fixture_id) matters once compare is active: two different people's
+      // picks on the same match are two distinct datapoints, not a duplicate. Every
+      // pool-level pick is still fully counted in the per-sport hit-rate section above;
+      // this dedup is scoped to just the picks explorer/hypothetical-table, where the
+      // unit is "one person's call on a real match," not "a pool's copy of a prediction."
+      const seenFixture: Record<'soccer' | 'nfl', Set<string>> = { soccer: new Set(), nfl: new Set() }
       const wldPredsBySport: Record<string, typeof preds> = { soccer: [], nfl: [] }
       for (const p of preds || []) {
         const sportKey = p.category_id === 'soccer_result' ? 'soccer' : p.category_id === 'nfl_result' ? 'nfl' : null
         if (!sportKey || p.fixture_id == null) continue
-        if (seenFixture[sportKey].has(p.fixture_id)) continue
-        seenFixture[sportKey].add(p.fixture_id)
+        const dedupeKey = `${p.user_id}:${p.fixture_id}`
+        if (seenFixture[sportKey].has(dedupeKey)) continue
+        seenFixture[sportKey].add(dedupeKey)
         wldPredsBySport[sportKey]!.push(p)
       }
 
@@ -591,7 +679,7 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel }: {
       setLoading(false)
     }
     load()
-  }, [targetUserId, poolIds])
+  }, [targetUserId, poolIds, compareKey, viewerPoolIds])
 
   // Collapsed by default beyond the first sport — a member with picks across several
   // sports otherwise dumps every category breakdown, heatmap, and hypothetical table on
@@ -610,19 +698,100 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel }: {
   if (loading) return <div style={{ padding: '2rem', color: 'var(--text-dim)', fontSize: '0.875rem' }}>loading...</div>
 
   const totalPicks = sportStats.reduce((sum, s) => sum + s.total, 0)
-  const possessiveCaps = subjectLabel === 'you' ? 'Your' : `${subjectLabel}'s`
+  const otherCandidates = compareCandidates.filter(c => c.id !== targetUserId)
+  const sortedCandidates = [...otherCandidates].sort((a, b) => {
+    if (compareSort === 'accuracy') {
+      const diff = (b.hitRatePct ?? -1) - (a.hitRatePct ?? -1)
+      return diff !== 0 ? diff : a.name.localeCompare(b.name)
+    }
+    const diff = b.sharedPoolCount - a.sharedPoolCount
+    return diff !== 0 ? diff : a.name.localeCompare(b.name)
+  })
+  const selectedNames = otherCandidates.filter(c => selectedCompareIds.has(c.id)).map(c => c.name)
+  const isComparing = selectedNames.length > 0
+  const effectiveLabel = isComparing ? formatNames([subjectLabel, ...selectedNames]) : subjectLabel
+  const possessiveCaps = effectiveLabel === 'you' ? 'Your' : `${effectiveLabel}'s`
   const effectiveOpenSports = openSports ?? new Set(sportStats[0] ? [sportStats[0].sport] : [])
+
+  const compareBlock = otherCandidates.length > 0 && (
+    <div style={{ marginBottom: '1.5rem', border: '1px solid var(--border)' }}>
+      <div onClick={() => setCompareOpen(o => !o)}
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.85rem', cursor: 'pointer', background: '#fafafa' }}>
+        <span style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#888' }}>
+          compare{isComparing ? ` (${selectedNames.length})` : ''}
+        </span>
+        <span style={{ fontSize: '0.75rem', color: '#888' }}>{compareOpen ? '▲' : '▼'}</span>
+      </div>
+
+      {!compareOpen && isComparing && (
+        <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, padding: '0.6rem 0.85rem', borderTop: '1px solid var(--border-light)' }}>
+          {otherCandidates.filter(c => selectedCompareIds.has(c.id)).map(c => (
+            <span key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.75rem', padding: '3px 8px', background: '#fff5f5', border: '1px solid #C8102E', color: '#C8102E' }}>
+              {c.name}
+              <span onClick={() => setSelectedCompareIds(prev => { const next = new Set(prev); next.delete(c.id); return next })}
+                style={{ cursor: 'pointer', fontWeight: 700 }}>×</span>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {compareOpen && (
+        <div style={{ padding: '0.7rem 0.85rem', borderTop: '1px solid var(--border-light)' }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: '0.6rem' }}>
+            {(['accuracy', 'pools'] as const).map(mode => (
+              <button key={mode} onClick={() => setCompareSort(mode)}
+                style={{
+                  fontSize: '0.72rem', padding: '3px 9px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
+                  borderColor: compareSort === mode ? '#C8102E' : 'var(--border)',
+                  background: compareSort === mode ? '#fff5f5' : 'white',
+                  color: compareSort === mode ? '#C8102E' : '#666',
+                  fontWeight: compareSort === mode ? 700 : 400,
+                }}>
+                {mode === 'accuracy' ? 'sort by accuracy' : 'sort by pools shared'}
+              </button>
+            ))}
+          </div>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0.35rem 0', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', borderBottom: '1px solid var(--border-light)', marginBottom: '0.3rem' }}>
+            <input type="checkbox"
+              checked={selectedCompareIds.size === otherCandidates.length}
+              onChange={() => setSelectedCompareIds(selectedCompareIds.size === otherCandidates.length ? new Set() : new Set(otherCandidates.map(c => c.id)))} />
+            everyone
+          </label>
+
+          <div style={{ maxHeight: 220, overflowY: 'auto' as const }}>
+            {sortedCandidates.map(c => (
+              <label key={c.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '0.35rem 0', fontSize: '0.8rem', cursor: 'pointer' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input type="checkbox" checked={selectedCompareIds.has(c.id)}
+                    onChange={() => setSelectedCompareIds(prev => { const next = new Set(prev); if (next.has(c.id)) next.delete(c.id); else next.add(c.id); return next })} />
+                  {c.name}
+                </span>
+                <span style={{ color: '#aaa', fontSize: '0.72rem' }}>
+                  {compareSort === 'accuracy' ? (c.hitRatePct != null ? `${c.hitRatePct}%` : 'no picks yet') : `${c.sharedPoolCount} pool${c.sharedPoolCount === 1 ? '' : 's'}`}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 
   if (totalPicks === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: '4rem 0', borderTop: '1px solid var(--border)', color: 'var(--text-dim)' }}>
-        {subjectLabel === 'you' ? 'no scored picks yet — check back once games kick off.' : `${subjectLabel} doesn't have any scored picks yet.`}
+      <div>
+        {compareBlock}
+        <div style={{ textAlign: 'center', padding: '4rem 0', borderTop: '1px solid var(--border)', color: 'var(--text-dim)' }}>
+          {effectiveLabel === 'you' ? 'no scored picks yet — check back once games kick off.' : `${effectiveLabel} doesn't have any scored picks yet.`}
+        </div>
       </div>
     )
   }
 
   return (
     <div>
+      {compareBlock}
       {sportStats.map(s => {
         const meta = SPORT_META[s.sport] || { emoji: '🏆', label: s.sport }
         const pct = s.total > 0 ? Math.round((s.hits / s.total) * 100) : 0
@@ -678,14 +847,14 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel }: {
             ))}
 
             {s.sport === 'soccer' && soccerPicks.length > 0 && (
-              <PicksExplorer picks={soccerPicks} defaultColumns={HOME_DRAW_AWAY_COLUMNS} subjectLabel={subjectLabel}
+              <PicksExplorer picks={soccerPicks} defaultColumns={HOME_DRAW_AWAY_COLUMNS} subjectLabel={effectiveLabel}
                 competitions={s.competitions.filter(c => soccerPicks.some(p => p.tournamentId === c.tournamentId)).map(c => ({ id: c.tournamentId, name: c.name, status: c.status }))} />
             )}
             {s.sport === 'soccer' && plHypoTable.length > 0 && (
-              <PLHypotheticalTable rows={plHypoTable} subjectLabel={subjectLabel} />
+              <PLHypotheticalTable rows={plHypoTable} subjectLabel={effectiveLabel} />
             )}
             {s.sport === 'nfl' && nflPicks.length > 0 && (
-              <PicksExplorer picks={nflPicks} defaultColumns={HOME_AWAY_COLUMNS} subjectLabel={subjectLabel}
+              <PicksExplorer picks={nflPicks} defaultColumns={HOME_AWAY_COLUMNS} subjectLabel={effectiveLabel}
                 competitions={s.competitions.filter(c => nflPicks.some(p => p.tournamentId === c.tournamentId)).map(c => ({ id: c.tournamentId, name: c.name, status: c.status }))} />
             )}
             </>}
@@ -695,7 +864,7 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel }: {
 
       {hasPartialCredit && (
         <p style={{ fontSize: '0.75rem', color: '#bbb', marginTop: '1rem' }}>
-          exact-score and podium-order picks award partial credit toward {subjectLabel === 'you' ? 'your' : `${subjectLabel}'s`} pool total even when not fully right — a "hit" here only counts the fully-correct ones, so it can read lower than {possessiveCaps === 'Your' ? 'your' : 'their'} points in those pools.
+          exact-score and podium-order picks award partial credit toward {effectiveLabel === 'you' ? 'your' : `${effectiveLabel}'s`} pool total even when not fully right — a "hit" here only counts the fully-correct ones, so it can read lower than {possessiveCaps === 'Your' ? 'your' : 'their'} points in those pools.
         </p>
       )}
     </div>

@@ -174,7 +174,7 @@ export default function UserProfilePage() {
           {isSelf ? "you're not in any pools yet." : "you don't share a pool with this person, so there's nothing to show."}
         </div>
       ) : (
-        <RecordPanel targetUserId={targetUserId} poolIds={sharedPools.map(p => p.id)} subjectLabel={isSelf ? 'you' : displayName} />
+        <RecordPanel targetUserId={targetUserId} poolIds={sharedPools.map(p => p.id)} subjectLabel={isSelf ? 'you' : displayName} viewerId={viewerId || ''} />
       )}
     </div>
   )
