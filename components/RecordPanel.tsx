@@ -74,15 +74,6 @@ interface CompareCandidate {
   hitRatePct: number | null // rough accuracy across those shared pools — null if nothing graded yet
 }
 
-// Joins a list of display names into one readable phrase, always ending in a real name
-// (never a truncated "N others") so it stays safe to blindly suffix with an apostrophe-s
-// for possessive copy elsewhere ("Fred and Alex's picks").
-function formatNames(names: string[]): string {
-  if (names.length === 1) return names[0]
-  if (names.length === 2) return `${names[0]} and ${names[1]}`
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
-}
-
 function groupCategoriesForSport(categoryList: CategoryStat[]) {
   const used = new Set<string>()
   const byId = new Map(categoryList.map(c => [c.categoryId, c]))
@@ -411,6 +402,93 @@ function PLHypotheticalTable({ rows, subjectLabel }: { rows: PLTableRow[]; subje
   )
 }
 
+interface PersonStats {
+  sportStats: SportStat[]
+  hasPartialCredit: boolean
+  soccerPicks: WldPick[]
+  nflPicks: WldPick[]
+  plHypoTable: PLTableRow[]
+}
+
+// Side-by-side sport/category accuracy — the actual "compare" ask: each selected
+// person's numbers in their own column, never merged into one shared total. One table
+// per sport actually present among the people being compared, plus an "overall" row.
+function CompareTable({ people }: { people: { id: string; label: string; sportStats: SportStat[] }[] }) {
+  const sportsPresent = SPORT_ORDER.filter(sport => people.some(p => p.sportStats.some(s => s.sport === sport)))
+
+  return (
+    <div style={{ marginBottom: '1.5rem' }}>
+      {sportsPresent.map(sport => {
+        const meta = SPORT_META[sport] || { emoji: '🏆', label: sport }
+
+        // Union of categories across everyone being compared, so a category only one
+        // person has picks in still gets a row — it just reads "—" for the others.
+        const catMeta = new Map<string, { name: string; sortOrder: number }>()
+        for (const p of people) {
+          const s = p.sportStats.find(x => x.sport === sport)
+          if (!s) continue
+          for (const g of s.groups) for (const c of g.categories) {
+            if (!catMeta.has(c.categoryId)) catMeta.set(c.categoryId, { name: c.name, sortOrder: c.sortOrder })
+          }
+        }
+        const cats = [...catMeta.entries()].sort((a, b) => a[1].sortOrder - b[1].sortOrder)
+
+        function statFor(sportStats: SportStat[], categoryId?: string): { hits: number; total: number } | null {
+          const s = sportStats.find(x => x.sport === sport)
+          if (!s) return null
+          if (!categoryId) return { hits: s.hits, total: s.total }
+          const c = s.groups.flatMap(g => g.categories).find(x => x.categoryId === categoryId)
+          return c || null
+        }
+
+        function cell(sportStats: SportStat[], categoryId: string | undefined, key: string, bold?: boolean) {
+          const st = statFor(sportStats, categoryId)
+          const pct = st && st.total > 0 ? Math.round((st.hits / st.total) * 100) : null
+          const style = pct != null ? hitRateStyle(pct) : { bg: '#f7f7f5', text: '#ccc' }
+          return (
+            <td key={key} style={{ padding: '5px 10px', textAlign: 'center' as const, background: style.bg, color: style.text, fontWeight: bold ? 700 : 400, whiteSpace: 'nowrap' as const }}>
+              {st && st.total > 0 ? (bold ? `${pct}%` : `${pct}% (${st.hits}/${st.total})`) : '—'}
+            </td>
+          )
+        }
+
+        return (
+          <div key={sport} style={{ marginBottom: '1.25rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.5rem' }}>
+              <span style={{ fontSize: '1rem' }}>{meta.emoji}</span>
+              <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{meta.label}</span>
+            </div>
+            <div style={{ overflowX: 'auto' as const }}>
+              <table style={{ borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                <thead>
+                  <tr>
+                    <td style={{ padding: '5px 10px' }} />
+                    {people.map(p => (
+                      <td key={p.id} style={{ padding: '5px 10px', textAlign: 'center' as const, fontWeight: 700, color: '#333', whiteSpace: 'nowrap' as const }}>{p.label}</td>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr style={{ borderTop: '1px solid var(--border)' }}>
+                    <td style={{ padding: '5px 10px', color: '#888', fontWeight: 600, whiteSpace: 'nowrap' as const }}>overall</td>
+                    {people.map(p => cell(p.sportStats, undefined, p.id, true))}
+                  </tr>
+                  {cats.map(([categoryId, m]) => (
+                    <tr key={categoryId} style={{ borderTop: '1px solid var(--border-light)' }}>
+                      <td style={{ padding: '5px 10px', color: '#555', whiteSpace: 'nowrap' as const }}>{m.name}</td>
+                      {people.map(p => cell(p.sportStats, categoryId, p.id))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // The full prediction-record panel — sport breakdown, picks-explorer heatmap, and the PL
 // hypothetical table — for one target user, scoped to a fixed set of pools (the caller
 // decides which: every pool the target's in for a self-view, or only the pools shared
@@ -423,11 +501,12 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
   viewerId: string // who's looking at this page — scopes the "compare" candidate list to their own pools
 }) {
   const [loading, setLoading] = useState(true)
-  const [sportStats, setSportStats] = useState<SportStat[]>([])
-  const [hasPartialCredit, setHasPartialCredit] = useState(false)
-  const [soccerPicks, setSoccerPicks] = useState<WldPick[]>([])
-  const [nflPicks, setNflPicks] = useState<WldPick[]>([])
-  const [plHypoTable, setPlHypoTable] = useState<PLTableRow[]>([])
+  // Keyed by user_id — each person's stats are computed independently, never merged, so
+  // "compare with roy" shows roy's numbers next to yours rather than a blended total.
+  const [statsByUser, setStatsByUser] = useState<Map<string, PersonStats>>(new Map())
+  // Which person's picks-explorer/PL-hypothetical-table (the single-person deep-dive
+  // sections) is currently shown below the side-by-side comparison table.
+  const [focusUserId, setFocusUserId] = useState<string>('')
 
   // "Compare" — expands the dataset above from just targetUserId to targetUserId plus
   // whoever's selected here, drawn from every real member across every pool the viewer
@@ -522,87 +601,6 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
         : { data: [] as { id: string; name: string; status: string }[] }
       const tournamentMap = new Map((tournaments || []).map(t => [t.id, t]))
 
-      // ── "Explore your picks" — team/result filters + $1-per-pick P&L, soccer + NFL only ──
-      // (see PicksExplorer above). Reuses `preds` (already graded — points_earned not
-      // null) rather than a second query, since fixture_id/value_wld are now in that select.
-      // The hypothetical table below deliberately reuses this same graded-only set too —
-      // "if my picks were always right" tallies only games that have actually been
-      // decided so far, not speculative future picks (a table entry only exists once a
-      // real result exists to compare it against).
-      // Deduped by user+fixture — a user in several pools for the same tournament makes
-      // one predictions_v2 row per pool for the same real-world match, which would
-      // otherwise count that one match's pick multiple times here (verified: one user
-      // had 15 rows on a single fixture from 15 different pools). Keying on user_id too
-      // (not just fixture_id) matters once compare is active: two different people's
-      // picks on the same match are two distinct datapoints, not a duplicate. Every
-      // pool-level pick is still fully counted in the per-sport hit-rate section above;
-      // this dedup is scoped to just the picks explorer/hypothetical-table, where the
-      // unit is "one person's call on a real match," not "a pool's copy of a prediction."
-      const seenFixture: Record<'soccer' | 'nfl', Set<string>> = { soccer: new Set(), nfl: new Set() }
-      const wldPredsBySport: Record<string, typeof preds> = { soccer: [], nfl: [] }
-      for (const p of preds || []) {
-        const sportKey = p.category_id === 'soccer_result' ? 'soccer' : p.category_id === 'nfl_result' ? 'nfl' : null
-        if (!sportKey || p.fixture_id == null) continue
-        const dedupeKey = `${p.user_id}:${p.fixture_id}`
-        if (seenFixture[sportKey].has(dedupeKey)) continue
-        seenFixture[sportKey].add(dedupeKey)
-        wldPredsBySport[sportKey]!.push(p)
-      }
-
-      const allWldFixtureIds = [...new Set([
-        ...wldPredsBySport.soccer!.map(p => p.fixture_id as number),
-        ...wldPredsBySport.nfl!.map(p => p.fixture_id as number),
-      ])]
-
-      const { data: wldFixtures } = allWldFixtureIds.length
-        ? await supabase.from('fixtures')
-            .select('id, tournament_id, home_team, away_team, date, home_score, away_score, status, closing_odds_home, closing_odds_draw, closing_odds_away')
-            .in('id', allWldFixtureIds)
-        : { data: [] as any[] }
-      const fixtureMap = new Map((wldFixtures || []).map(f => [f.id, f]))
-
-      const wldPicksBySport: Record<'soccer' | 'nfl', WldPick[]> = { soccer: [], nfl: [] }
-      for (const sportKey of ['soccer', 'nfl'] as const) {
-        for (const p of wldPredsBySport[sportKey] || []) {
-          const f = fixtureMap.get(p.fixture_id as number)
-          if (!f || !p.value_wld) continue
-          wldPicksBySport[sportKey].push({
-            fixtureId: f.id,
-            tournamentId: f.tournament_id,
-            homeTeam: f.home_team,
-            awayTeam: f.away_team,
-            date: f.date,
-            predictedWld: p.value_wld as 'home' | 'away' | 'draw',
-            isCorrect: !!p.is_correct,
-            pointsEarned: p.points_earned,
-            closingOddsHome: f.closing_odds_home,
-            closingOddsDraw: f.closing_odds_draw,
-            closingOddsAway: f.closing_odds_away,
-          })
-        }
-      }
-
-      // PL hypothetical table — one row per team with a graded pl_2026 prediction so far,
-      // tallied from predicted (not actual) results using standard 3/1/0 points. Only
-      // decided games count — a game the user predicted but hasn't happened yet doesn't
-      // add a "phantom" result to either team's tally.
-      const plTableMap = new Map<string, { team: string; w: number; d: number; l: number; pts: number; played: number }>()
-      function bump(team: string, outcome: 'w' | 'd' | 'l') {
-        const row = plTableMap.get(team) || { team, w: 0, d: 0, l: 0, pts: 0, played: 0 }
-        row.played += 1
-        if (outcome === 'w') { row.w += 1; row.pts += 3 }
-        else if (outcome === 'd') { row.d += 1; row.pts += 1 }
-        else row.l += 1
-        plTableMap.set(team, row)
-      }
-      for (const p of wldPicksBySport.soccer) {
-        if (p.tournamentId !== 'pl_2026') continue
-        if (p.predictedWld === 'home') { bump(p.homeTeam, 'w'); bump(p.awayTeam, 'l') }
-        else if (p.predictedWld === 'away') { bump(p.awayTeam, 'w'); bump(p.homeTeam, 'l') }
-        else { bump(p.homeTeam, 'd'); bump(p.awayTeam, 'd') }
-      }
-      const plHypoTable = [...plTableMap.values()].sort((a, b) => b.pts - a.pts || b.w - a.w)
-
       // f1_podium_order_1/_2/_3 are scored individually but configured as one pool_rules
       // row under the base 'f1_podium_order' id — mirrors the ruleMap remap in
       // app/api/f1/score/route.ts so lookups by the prediction's actual category_id work.
@@ -627,55 +625,141 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
         return p.points_earned === fullCredit
       }
 
-      const bySport: Record<string, Record<string, CategoryStat>> = {}
-      const byCompetition: Record<string, Record<string, { hits: number; total: number }>> = {}
-      let sawPartialCredit = false
+      // WLD fixtures (soccer_result / nfl_result picks) — fetched once for the union of
+      // everyone being looked at, then split back out per person below in
+      // buildPersonStats. "Explore your picks" and the PL hypothetical table are
+      // inherently single-person views (each is its own heatmap/table), so unlike the
+      // sport/category breakdown below (which genuinely compares side by side), these
+      // stay scoped to whichever person is currently focused.
+      const allWldFixtureIds = [...new Set(
+        (preds || [])
+          .filter(p => (p.category_id === 'soccer_result' || p.category_id === 'nfl_result') && p.fixture_id != null)
+          .map(p => p.fixture_id as number)
+      )]
+      const { data: wldFixtures } = allWldFixtureIds.length
+        ? await supabase.from('fixtures')
+            .select('id, tournament_id, home_team, away_team, date, home_score, away_score, status, closing_odds_home, closing_odds_draw, closing_odds_away')
+            .in('id', allWldFixtureIds)
+        : { data: [] as any[] }
+      const fixtureMap = new Map((wldFixtures || []).map(f => [f.id, f]))
 
+      type PredRow = NonNullable<typeof preds>[number]
+      const predsByUser = new Map<string, PredRow[]>()
       for (const p of preds || []) {
-        const cat = categoryMap.get(p.category_id)
-        if (!cat) continue
-        if (PARTIAL_CREDIT_CATEGORIES.has(p.category_id)) sawPartialCredit = true
-        const hit = isFullyCorrect(p)
-
-        bySport[cat.sport] ??= {}
-        bySport[cat.sport][p.category_id] ??= { categoryId: p.category_id, name: cat.name, sortOrder: cat.sort_order ?? 0, hits: 0, total: 0 }
-        const stat = bySport[cat.sport][p.category_id]
-        stat.total += 1
-        if (hit) stat.hits += 1
-
-        const tournamentId = poolToTournament.get(p.pool_id)
-        if (tournamentId) {
-          byCompetition[cat.sport] ??= {}
-          byCompetition[cat.sport][tournamentId] ??= { hits: 0, total: 0 }
-          byCompetition[cat.sport][tournamentId].total += 1
-          if (hit) byCompetition[cat.sport][tournamentId].hits += 1
-        }
+        if (!predsByUser.has(p.user_id)) predsByUser.set(p.user_id, [])
+        predsByUser.get(p.user_id)!.push(p)
       }
 
-      const sports: SportStat[] = Object.entries(bySport).map(([sport, cats]) => {
-        const categoryList = Object.values(cats).sort((a, b) => a.sortOrder - b.sortOrder)
-        const hits = categoryList.reduce((sum, c) => sum + c.hits, 0)
-        const total = categoryList.reduce((sum, c) => sum + c.total, 0)
-        const competitions: CompetitionStat[] = Object.entries(byCompetition[sport] || {})
-          .map(([tournamentId, stat]) => ({
-            tournamentId,
-            name: tournamentMap.get(tournamentId)?.name || tournamentId,
-            status: tournamentMap.get(tournamentId)?.status || '',
-            hits: stat.hits,
-            total: stat.total,
-          }))
-          .sort((a, b) => b.total - a.total)
-        return { sport, hits, total, groups: groupCategoriesForSport(categoryList), competitions }
-      }).sort((a, b) => {
-        const ai = SPORT_ORDER.indexOf(a.sport), bi = SPORT_ORDER.indexOf(b.sport)
-        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
-      })
+      // Everything below runs once per person being looked at (just the target when not
+      // comparing) — each person's dedup, WLD picks, PL hypothetical table, and
+      // sport/category breakdown are computed entirely from their own predictions_v2
+      // rows, never mixed with anyone else's.
+      function buildPersonStats(userPreds: PredRow[]): PersonStats {
+        // Deduped by fixture_id — a user in several pools for the same tournament makes
+        // one predictions_v2 row per pool for the same real-world match, which would
+        // otherwise count that one match's pick multiple times here (verified: one user
+        // had 15 rows on a single fixture from 15 different pools). Every pool-level
+        // pick is still fully counted in the per-sport hit-rate section below; this
+        // dedup is scoped to just the picks explorer/hypothetical-table, where the unit
+        // is "a real match," not "a pool's copy of a prediction."
+        const seenFixture: Record<'soccer' | 'nfl', Set<number>> = { soccer: new Set(), nfl: new Set() }
+        const wldPicksBySport: Record<'soccer' | 'nfl', WldPick[]> = { soccer: [], nfl: [] }
+        for (const p of userPreds) {
+          const sportKey = p.category_id === 'soccer_result' ? 'soccer' : p.category_id === 'nfl_result' ? 'nfl' : null
+          if (!sportKey || p.fixture_id == null || !p.value_wld) continue
+          if (seenFixture[sportKey].has(p.fixture_id)) continue
+          seenFixture[sportKey].add(p.fixture_id)
+          const f = fixtureMap.get(p.fixture_id)
+          if (!f) continue
+          wldPicksBySport[sportKey].push({
+            fixtureId: f.id,
+            tournamentId: f.tournament_id,
+            homeTeam: f.home_team,
+            awayTeam: f.away_team,
+            date: f.date,
+            predictedWld: p.value_wld as 'home' | 'away' | 'draw',
+            isCorrect: !!p.is_correct,
+            pointsEarned: p.points_earned,
+            closingOddsHome: f.closing_odds_home,
+            closingOddsDraw: f.closing_odds_draw,
+            closingOddsAway: f.closing_odds_away,
+          })
+        }
 
-      setSportStats(sports)
-      setHasPartialCredit(sawPartialCredit)
-      setSoccerPicks(wldPicksBySport.soccer)
-      setNflPicks(wldPicksBySport.nfl)
-      setPlHypoTable(plHypoTable)
+        // PL hypothetical table — one row per team with a graded pl_2026 prediction so
+        // far, tallied from predicted (not actual) results using standard 3/1/0 points.
+        // Only decided games count — a game predicted but not yet played doesn't add a
+        // "phantom" result to either team's tally.
+        const plTableMap = new Map<string, { team: string; w: number; d: number; l: number; pts: number; played: number }>()
+        function bump(team: string, outcome: 'w' | 'd' | 'l') {
+          const row = plTableMap.get(team) || { team, w: 0, d: 0, l: 0, pts: 0, played: 0 }
+          row.played += 1
+          if (outcome === 'w') { row.w += 1; row.pts += 3 }
+          else if (outcome === 'd') { row.d += 1; row.pts += 1 }
+          else row.l += 1
+          plTableMap.set(team, row)
+        }
+        for (const p of wldPicksBySport.soccer) {
+          if (p.tournamentId !== 'pl_2026') continue
+          if (p.predictedWld === 'home') { bump(p.homeTeam, 'w'); bump(p.awayTeam, 'l') }
+          else if (p.predictedWld === 'away') { bump(p.awayTeam, 'w'); bump(p.homeTeam, 'l') }
+          else { bump(p.homeTeam, 'd'); bump(p.awayTeam, 'd') }
+        }
+        const plHypoTable = [...plTableMap.values()].sort((a, b) => b.pts - a.pts || b.w - a.w)
+
+        const bySport: Record<string, Record<string, CategoryStat>> = {}
+        const byCompetition: Record<string, Record<string, { hits: number; total: number }>> = {}
+        let sawPartialCredit = false
+
+        for (const p of userPreds) {
+          const cat = categoryMap.get(p.category_id)
+          if (!cat) continue
+          if (PARTIAL_CREDIT_CATEGORIES.has(p.category_id)) sawPartialCredit = true
+          const hit = isFullyCorrect(p)
+
+          bySport[cat.sport] ??= {}
+          bySport[cat.sport][p.category_id] ??= { categoryId: p.category_id, name: cat.name, sortOrder: cat.sort_order ?? 0, hits: 0, total: 0 }
+          const stat = bySport[cat.sport][p.category_id]
+          stat.total += 1
+          if (hit) stat.hits += 1
+
+          const tournamentId = poolToTournament.get(p.pool_id)
+          if (tournamentId) {
+            byCompetition[cat.sport] ??= {}
+            byCompetition[cat.sport][tournamentId] ??= { hits: 0, total: 0 }
+            byCompetition[cat.sport][tournamentId].total += 1
+            if (hit) byCompetition[cat.sport][tournamentId].hits += 1
+          }
+        }
+
+        const sportStats: SportStat[] = Object.entries(bySport).map(([sport, cats]) => {
+          const categoryList = Object.values(cats).sort((a, b) => a.sortOrder - b.sortOrder)
+          const hits = categoryList.reduce((sum, c) => sum + c.hits, 0)
+          const total = categoryList.reduce((sum, c) => sum + c.total, 0)
+          const competitions: CompetitionStat[] = Object.entries(byCompetition[sport] || {})
+            .map(([tournamentId, stat]) => ({
+              tournamentId,
+              name: tournamentMap.get(tournamentId)?.name || tournamentId,
+              status: tournamentMap.get(tournamentId)?.status || '',
+              hits: stat.hits,
+              total: stat.total,
+            }))
+            .sort((a, b) => b.total - a.total)
+          return { sport, hits, total, groups: groupCategoriesForSport(categoryList), competitions }
+        }).sort((a, b) => {
+          const ai = SPORT_ORDER.indexOf(a.sport), bi = SPORT_ORDER.indexOf(b.sport)
+          return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+        })
+
+        return { sportStats, hasPartialCredit: sawPartialCredit, soccerPicks: wldPicksBySport.soccer, nflPicks: wldPicksBySport.nfl, plHypoTable }
+      }
+
+      const newStatsByUser = new Map<string, PersonStats>()
+      for (const uid of effectiveUserIds) {
+        newStatsByUser.set(uid, buildPersonStats(predsByUser.get(uid) || []))
+      }
+
+      setStatsByUser(newStatsByUser)
       setLoading(false)
     }
     load()
@@ -684,9 +768,9 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
   // Collapsed by default beyond the first sport — a member with picks across several
   // sports otherwise dumps every category breakdown, heatmap, and hypothetical table on
   // screen at once. `null` means "not yet touched by the user" so the first sport still
-  // defaults open once sportStats loads, without needing an effect to seed real state.
+  // defaults open once stats load, without needing an effect to seed real state.
   const [openSports, setOpenSports] = useState<Set<string> | null>(null)
-  function toggleSport(sport: string) {
+  function toggleSport(sport: string, sportStats: SportStat[]) {
     setOpenSports(prev => {
       const base = prev ?? new Set(sportStats[0] ? [sportStats[0].sport] : [])
       const next = new Set(base)
@@ -697,7 +781,6 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
 
   if (loading) return <div style={{ padding: '2rem', color: 'var(--text-dim)', fontSize: '0.875rem' }}>loading...</div>
 
-  const totalPicks = sportStats.reduce((sum, s) => sum + s.total, 0)
   const otherCandidates = compareCandidates.filter(c => c.id !== targetUserId)
   const sortedCandidates = [...otherCandidates].sort((a, b) => {
     if (compareSort === 'accuracy') {
@@ -707,18 +790,28 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
     const diff = b.sharedPoolCount - a.sharedPoolCount
     return diff !== 0 ? diff : a.name.localeCompare(b.name)
   })
-  const selectedNames = otherCandidates.filter(c => selectedCompareIds.has(c.id)).map(c => c.name)
-  const isComparing = selectedNames.length > 0
-  const effectiveLabel = isComparing ? formatNames([subjectLabel, ...selectedNames]) : subjectLabel
-  const possessiveCaps = effectiveLabel === 'you' ? 'Your' : `${effectiveLabel}'s`
-  const effectiveOpenSports = openSports ?? new Set(sportStats[0] ? [sportStats[0].sport] : [])
+  const isComparing = selectedCompareIds.size > 0
+
+  function labelFor(uid: string): string {
+    if (uid === targetUserId) return subjectLabel
+    return otherCandidates.find(c => c.id === uid)?.name || 'them'
+  }
+
+  const totalPicks = [...statsByUser.values()].reduce((sum, ps) => sum + ps.sportStats.reduce((s, x) => s + x.total, 0), 0)
+  // Which person's picks-explorer/PL-hypothetical-table is shown below — falls back to
+  // the base target if the previously-focused person got deselected from compare.
+  const effectiveFocusUserId = focusUserId && effectiveUserIds.includes(focusUserId) ? focusUserId : targetUserId
+  const focusStats: PersonStats = statsByUser.get(effectiveFocusUserId) || { sportStats: [], hasPartialCredit: false, soccerPicks: [], nflPicks: [], plHypoTable: [] }
+  const focusLabel = labelFor(effectiveFocusUserId)
+  const possessiveCaps = focusLabel === 'you' ? 'Your' : `${focusLabel}'s`
+  const effectiveOpenSports = openSports ?? new Set(focusStats.sportStats[0] ? [focusStats.sportStats[0].sport] : [])
 
   const compareBlock = otherCandidates.length > 0 && (
     <div style={{ marginBottom: '1.5rem', border: '1px solid var(--border)' }}>
       <div onClick={() => setCompareOpen(o => !o)}
         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0.85rem', cursor: 'pointer', background: '#fafafa' }}>
         <span style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#888' }}>
-          compare{isComparing ? ` (${selectedNames.length})` : ''}
+          compare{isComparing ? ` (${selectedCompareIds.size})` : ''}
         </span>
         <span style={{ fontSize: '0.75rem', color: '#888' }}>{compareOpen ? '▲' : '▼'}</span>
       </div>
@@ -783,22 +876,45 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
       <div>
         {compareBlock}
         <div style={{ textAlign: 'center', padding: '4rem 0', borderTop: '1px solid var(--border)', color: 'var(--text-dim)' }}>
-          {effectiveLabel === 'you' ? 'no scored picks yet — check back once games kick off.' : `${effectiveLabel} doesn't have any scored picks yet.`}
+          {focusLabel === 'you' ? 'no scored picks yet — check back once games kick off.' : `${focusLabel} doesn't have any scored picks yet.`}
         </div>
       </div>
     )
   }
 
+  const comparePeople = effectiveUserIds.map(uid => ({ id: uid, label: labelFor(uid), sportStats: statsByUser.get(uid)?.sportStats || [] }))
+
   return (
     <div>
       {compareBlock}
-      {sportStats.map(s => {
+
+      {isComparing && <CompareTable people={comparePeople} />}
+
+      {isComparing && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '1rem', flexWrap: 'wrap' as const }}>
+          <span style={{ fontSize: '0.7rem', color: '#999' }}>explore below for</span>
+          {effectiveUserIds.map(uid => (
+            <button key={uid} onClick={() => setFocusUserId(uid)}
+              style={{
+                fontSize: '0.75rem', padding: '4px 10px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
+                borderColor: effectiveFocusUserId === uid ? '#C8102E' : 'var(--border)',
+                background: effectiveFocusUserId === uid ? '#fff5f5' : 'white',
+                color: effectiveFocusUserId === uid ? '#C8102E' : '#555',
+                fontWeight: effectiveFocusUserId === uid ? 700 : 400,
+              }}>
+              {labelFor(uid)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {focusStats.sportStats.map(s => {
         const meta = SPORT_META[s.sport] || { emoji: '🏆', label: s.sport }
         const pct = s.total > 0 ? Math.round((s.hits / s.total) * 100) : 0
         const isOpen = effectiveOpenSports.has(s.sport)
         return (
           <section key={s.sport} style={{ marginBottom: '2rem' }}>
-            <div onClick={() => toggleSport(s.sport)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', cursor: 'pointer' }}>
+            <div onClick={() => toggleSport(s.sport, focusStats.sportStats)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', cursor: 'pointer' }}>
               <span style={{ fontSize: '1.1rem' }}>{meta.emoji}</span>
               <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{meta.label}</span>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>{pct}% · {s.hits}/{s.total}</span>
@@ -825,7 +941,9 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
               </div>
             )}
 
-            {s.groups.map(group => (
+            {/* Skip the per-category breakdown while comparing — CompareTable above
+                already shows this same information, side by side, for everyone. */}
+            {!isComparing && s.groups.map(group => (
               <div key={group.label} style={{ marginBottom: '0.85rem' }}>
                 <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bbb', marginBottom: '0.35rem' }}>{group.label}</div>
                 <div style={{ background: 'white', border: '1px solid var(--border)' }}>
@@ -846,25 +964,25 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
               </div>
             ))}
 
-            {s.sport === 'soccer' && soccerPicks.length > 0 && (
-              <PicksExplorer picks={soccerPicks} defaultColumns={HOME_DRAW_AWAY_COLUMNS} subjectLabel={effectiveLabel}
-                competitions={s.competitions.filter(c => soccerPicks.some(p => p.tournamentId === c.tournamentId)).map(c => ({ id: c.tournamentId, name: c.name, status: c.status }))} />
+            {s.sport === 'soccer' && focusStats.soccerPicks.length > 0 && (
+              <PicksExplorer picks={focusStats.soccerPicks} defaultColumns={HOME_DRAW_AWAY_COLUMNS} subjectLabel={focusLabel}
+                competitions={s.competitions.filter(c => focusStats.soccerPicks.some(p => p.tournamentId === c.tournamentId)).map(c => ({ id: c.tournamentId, name: c.name, status: c.status }))} />
             )}
-            {s.sport === 'soccer' && plHypoTable.length > 0 && (
-              <PLHypotheticalTable rows={plHypoTable} subjectLabel={effectiveLabel} />
+            {s.sport === 'soccer' && focusStats.plHypoTable.length > 0 && (
+              <PLHypotheticalTable rows={focusStats.plHypoTable} subjectLabel={focusLabel} />
             )}
-            {s.sport === 'nfl' && nflPicks.length > 0 && (
-              <PicksExplorer picks={nflPicks} defaultColumns={HOME_AWAY_COLUMNS} subjectLabel={effectiveLabel}
-                competitions={s.competitions.filter(c => nflPicks.some(p => p.tournamentId === c.tournamentId)).map(c => ({ id: c.tournamentId, name: c.name, status: c.status }))} />
+            {s.sport === 'nfl' && focusStats.nflPicks.length > 0 && (
+              <PicksExplorer picks={focusStats.nflPicks} defaultColumns={HOME_AWAY_COLUMNS} subjectLabel={focusLabel}
+                competitions={s.competitions.filter(c => focusStats.nflPicks.some(p => p.tournamentId === c.tournamentId)).map(c => ({ id: c.tournamentId, name: c.name, status: c.status }))} />
             )}
             </>}
           </section>
         )
       })}
 
-      {hasPartialCredit && (
+      {focusStats.hasPartialCredit && (
         <p style={{ fontSize: '0.75rem', color: '#bbb', marginTop: '1rem' }}>
-          exact-score and podium-order picks award partial credit toward {effectiveLabel === 'you' ? 'your' : `${effectiveLabel}'s`} pool total even when not fully right — a "hit" here only counts the fully-correct ones, so it can read lower than {possessiveCaps === 'Your' ? 'your' : 'their'} points in those pools.
+          exact-score and podium-order picks award partial credit toward {focusLabel === 'you' ? 'your' : `${focusLabel}'s`} pool total even when not fully right — a "hit" here only counts the fully-correct ones, so it can read lower than {possessiveCaps === 'Your' ? 'your' : 'their'} points in those pools.
         </p>
       )}
     </div>
