@@ -240,8 +240,17 @@ export async function POST(request: NextRequest) {
         ? await fetchFastestLap(session.id)
         : null
 
-      // Fetch pit stop data once for race/sprint sessions
+      // Fetch pit stop data once for race/sprint sessions. Some races have no pit-stop
+      // data in the API at all (confirmed: two Completed sessions sat at scored=false
+      // indefinitely, re-fetching rankings/fastest-lap/pitstops from the API every
+      // single cron tick forever — same failure shape as the round_facts bug in
+      // app/api/pl/score/route.ts). `pitDataAttempted` looks at *last* tick's stored
+      // results (before this tick's write below) — if a prior tick already wrote a
+      // first_pit_lap metadata entry (even null), that's a real attempt already made,
+      // so this session is allowed to finish scoring below instead of waiting forever.
       let firstPitLap: number | null = null
+      const storedResultsBefore: any[] = Array.isArray(session.results) ? session.results : []
+      const pitDataAttempted = storedResultsBefore.some((r: any) => 'first_pit_lap' in r)
       if (mapping.categories.includes('f1_first_pit_lap')) {
         const pitRes = await fetch(`${F1_BASE}/pitstops?race=${session.id}`, {
           headers: { 'x-apisports-key': API_KEY },
@@ -255,8 +264,7 @@ export async function POST(request: NextRequest) {
         }
         // Fallback: check stored session results
         if (firstPitLap === null) {
-          const storedResults: any[] = Array.isArray(session.results) ? session.results : []
-          const pitMeta = storedResults.find((r: any) => r.first_pit_lap != null)
+          const pitMeta = storedResultsBefore.find((r: any) => r.first_pit_lap != null)
           if (pitMeta) firstPitLap = pitMeta.first_pit_lap
         }
       }
@@ -355,11 +363,11 @@ export async function POST(request: NextRequest) {
       }
 
       // Only mark as fully scored when Completed — keep rescoring while In Progress
-      // For Race/Sprint: don't mark scored until pit stop data is available
+      // For Race/Sprint: give pit stop data one real attempt (see pitDataAttempted
+      // above) before giving up — some races just never get pit-stop data from the API.
       if (session.status === 'Completed') {
-        // Don't mark scored if we still need pit stop data and it's not available yet
         const needsPitData = mapping.categories.includes('f1_first_pit_lap')
-        if (!needsPitData || firstPitLap !== null) {
+        if (!needsPitData || firstPitLap !== null || pitDataAttempted) {
           await supabase.from('f1_sessions').update({ scored: true }).eq('id', session.id)
           sessionsScored++
         }
