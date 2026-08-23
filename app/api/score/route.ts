@@ -99,66 +99,88 @@ async function scoreRoundSpecials(allFixtures: any[]) {
     const allFinished = roundFixtures.every(f => f.status === 'FT' || f.scored)
     if (!allFinished) continue
 
-    // Build round facts from all fixtures
-    // Teams with clean sheets (conceded 0 goals)
-    const cleanSheetTeams = new Set<string>()
-    // Teams that scored a penalty
-    const penaltyTeams = new Set<string>()
-    // Teams that got a red card
-    const redCardTeams = new Set<string>()
-    // Players who scored a brace (2+ goals)
-    const bracePlayers = new Set<string>()
+    // Reuse already-computed facts instead of re-fetching event data from the API on
+    // every tick — once a round is fully finished, its clean-sheet/penalty/red-card/
+    // brace facts never change. This used to redo every per-fixture API call here on
+    // every single cron run for as long as ANY match anywhere was live, compounding as
+    // more rounds finished — confirmed as what blew through a 75k-request/day plan (see
+    // the identical fix + fuller comment in app/api/pl/score/route.ts). Scoring below
+    // still re-runs every time (cheap, Supabase-only), so a round-level pick edited
+    // after the round finished — a ghost pick — still gets graded.
+    const { data: existingFacts } = await supabase
+      .from('round_facts')
+      .select('clean_sheet_teams, penalty_teams, red_card_teams, brace_players')
+      .eq('tournament_id', 'wc_2026')
+      .eq('round_id', round.id)
+      .maybeSingle()
 
-    for (const f of roundFixtures) {
-      if (f.home_score === 0) cleanSheetTeams.add(f.away_team)
-      if (f.away_score === 0) cleanSheetTeams.add(f.home_team)
+    let cleanSheetTeams: Set<string>
+    let penaltyTeams: Set<string>
+    let redCardTeams: Set<string>
+    let bracePlayers: Set<string>
 
-      // Get events for this fixture to find penalties, red cards, braces
-      if (!f.api_fixture_id) continue
-      
-      const evRes = await fetch(
-        `https://v3.football.api-sports.io/fixtures/events?fixture=${f.api_fixture_id}`,
-        { headers: { 'x-apisports-key': process.env.API_FOOTBALL_KEY! } }
-      )
-      const evData = await evRes.json()
-      const events = evData.response || []
+    if (existingFacts) {
+      cleanSheetTeams = new Set(existingFacts.clean_sheet_teams || [])
+      penaltyTeams = new Set(existingFacts.penalty_teams || [])
+      redCardTeams = new Set(existingFacts.red_card_teams || [])
+      bracePlayers = new Set(existingFacts.brace_players || [])
+    } else {
+      cleanSheetTeams = new Set()
+      penaltyTeams = new Set()
+      redCardTeams = new Set()
+      bracePlayers = new Set()
 
-      // Penalty goals
-      const penGoals = events.filter((e: any) => e.type === 'Goal' && e.detail === 'Penalty')
-      penGoals.forEach((e: any) => {
-        penaltyTeams.add(e.team.name)
-      })
+      for (const f of roundFixtures) {
+        if (f.home_score === 0) cleanSheetTeams.add(f.away_team)
+        if (f.away_score === 0) cleanSheetTeams.add(f.home_team)
 
-      // Red cards
-      const reds = events.filter((e: any) => e.type === 'Card' && (e.detail === 'Red Card' || e.detail === 'Second Yellow Card'))
-      reds.forEach((e: any) => {
-        redCardTeams.add(e.team.name)
-      })
+        // Get events for this fixture to find penalties, red cards, braces
+        if (!f.api_fixture_id) continue
 
-      // Brace scorers (count goals per player)
-      const goalsByPlayer: Record<string, number> = {}
-      events.filter((e: any) => e.type === 'Goal' && e.detail !== 'Missed Penalty' && e.player?.name)
-        .forEach((e: any) => {
-          const name = e.player.name
-          goalsByPlayer[name] = (goalsByPlayer[name] || 0) + 1
+        const evRes = await fetch(
+          `https://v3.football.api-sports.io/fixtures/events?fixture=${f.api_fixture_id}`,
+          { headers: { 'x-apisports-key': process.env.API_FOOTBALL_KEY! } }
+        )
+        const evData = await evRes.json()
+        const events = evData.response || []
+
+        // Penalty goals
+        const penGoals = events.filter((e: any) => e.type === 'Goal' && e.detail === 'Penalty')
+        penGoals.forEach((e: any) => {
+          penaltyTeams.add(e.team.name)
         })
-      Object.entries(goalsByPlayer).forEach(([name, count]) => {
-        if (count >= 2) bracePlayers.add(name)
-      })
 
-      await new Promise(r => setTimeout(r, 200)) // rate limit
+        // Red cards
+        const reds = events.filter((e: any) => e.type === 'Card' && (e.detail === 'Red Card' || e.detail === 'Second Yellow Card'))
+        reds.forEach((e: any) => {
+          redCardTeams.add(e.team.name)
+        })
+
+        // Brace scorers (count goals per player)
+        const goalsByPlayer: Record<string, number> = {}
+        events.filter((e: any) => e.type === 'Goal' && e.detail !== 'Missed Penalty' && e.player?.name)
+          .forEach((e: any) => {
+            const name = e.player.name
+            goalsByPlayer[name] = (goalsByPlayer[name] || 0) + 1
+          })
+        Object.entries(goalsByPlayer).forEach(([name, count]) => {
+          if (count >= 2) bracePlayers.add(name)
+        })
+
+        await new Promise(r => setTimeout(r, 200)) // rate limit
+      }
+
+      // Store round facts for display in UI
+      await supabase.from('round_facts').upsert({
+        tournament_id: 'wc_2026',
+        round_id: round.id,
+        clean_sheet_teams: [...cleanSheetTeams],
+        penalty_teams: [...penaltyTeams],
+        red_card_teams: [...redCardTeams],
+        brace_players: [...bracePlayers],
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'tournament_id,round_id' })
     }
-
-    // Store round facts for display in UI
-    await supabase.from('round_facts').upsert({
-      tournament_id: 'wc_2026',
-      round_id: round.id,
-      clean_sheet_teams: [...cleanSheetTeams],
-      penalty_teams: [...penaltyTeams],
-      red_card_teams: [...redCardTeams],
-      brace_players: [...bracePlayers],
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'tournament_id,round_id' })
 
     // Now score all round special predictions for this round across all pools
     for (const pool of pools) {
