@@ -127,6 +127,9 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
   const [activeEntryId, setActiveEntryId] = useState<string>(userId) // who we're making picks for
   const [newGhostName, setNewGhostName] = useState('')
   const [addingGhost, setAddingGhost] = useState(false)
+  // Nudge shown right after a ghost is added — ghosts are (so far) always YouTubers, so
+  // the natural next step is filling in their channel info on their own profile page.
+  const [justCreatedGhost, setJustCreatedGhost] = useState<{ id: string; name: string } | null>(null)
   const [ghostBoxCollapsed, setGhostBoxCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     try { return localStorage.getItem(`ghost_box_collapsed_${poolId}`) === '1' } catch { return false }
@@ -256,6 +259,7 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
       await switchEntry(data.id)
       setNewGhostName('')
       setAddingGhost(false)
+      setJustCreatedGhost({ id: data.id, name: data.name })
     }
   }
 
@@ -395,6 +399,13 @@ export default function MMAFightCard({ poolId, userId, deadlineType, tournamentI
                     style={{ padding: '6px 10px', background: 'none', border: '1px solid #ddd', fontSize: '12px', fontFamily: 'inherit', cursor: 'pointer', color: '#aaa' }}>
                     cancel
                   </button>
+                </div>
+              )}
+              {isAdmin && justCreatedGhost && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 8, padding: '7px 10px', background: '#fff5f5', border: '1px solid #f0d0d0', fontSize: '12px' }}>
+                  <span style={{ color: '#555' }}>✓ {justCreatedGhost.name} added — <a href={`/dashboard/g/${justCreatedGhost.id}`} style={{ color: '#C8102E', fontWeight: 600 }}>add their channel info →</a></span>
+                  <button type="button" onClick={() => setJustCreatedGhost(null)}
+                    style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', fontSize: '13px', fontFamily: 'inherit' }}>×</button>
                 </div>
               )}
               {isAdmin && <GhostAccessManager poolId={poolId} currentUserId={userId} />}

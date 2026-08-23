@@ -588,6 +588,9 @@ export type Database = {
       }
       ghost_entries: {
         Row: {
+          avatar_url: string | null
+          channel_name: string | null
+          channel_url: string | null
           created_at: string | null
           created_by: string | null
           id: string
@@ -597,6 +600,9 @@ export type Database = {
           source_ghost_entry_id: string | null
         }
         Insert: {
+          avatar_url?: string | null
+          channel_name?: string | null
+          channel_url?: string | null
           created_at?: string | null
           created_by?: string | null
           id?: string
@@ -606,6 +612,9 @@ export type Database = {
           source_ghost_entry_id?: string | null
         }
         Update: {
+          avatar_url?: string | null
+          channel_name?: string | null
+          channel_url?: string | null
           created_at?: string | null
           created_by?: string | null
           id?: string

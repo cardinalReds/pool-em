@@ -588,7 +588,7 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         }}>
           <span style={{fontSize: '13px', fontWeight: member.user_id === user?.id ? 600 : 400, color: member.user_id === user?.id ? '#111' : '#555', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, textAlign: 'left' as const}}>
             {i + 1}. {member.is_ghost
-              ? <>{member.display_name}*</>
+              ? <a href={`/dashboard/g/${member.user_id}`} style={{color: 'inherit', textDecoration: 'none'}}>{member.display_name}*</a>
               : <a href={`/dashboard/u/${member.user_id}`} style={{color: 'inherit', textDecoration: 'none'}}>{member.display_name}</a>}
           </span>
           <div style={{display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0}}>
