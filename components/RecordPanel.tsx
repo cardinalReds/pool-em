@@ -503,10 +503,14 @@ function CompareTable({ people }: { people: { id: string; label: string; sportSt
       {sportsPresent.map(sport => {
         const meta = SPORT_META[sport] || { emoji: '🏆', label: sport }
 
+        // Only people with picks in this sport get a column — a sport not everyone's
+        // played (F1, say) shouldn't drag in an all-dashes column for whoever hasn't.
+        const sportPeople = people.filter(p => p.sportStats.some(s => s.sport === sport))
+
         // Union of categories across everyone being compared, so a category only one
         // person has picks in still gets a row — it just reads "—" for the others.
         const catMeta = new Map<string, { name: string; sortOrder: number }>()
-        for (const p of people) {
+        for (const p of sportPeople) {
           const s = p.sportStats.find(x => x.sport === sport)
           if (!s) continue
           for (const g of s.groups) for (const c of g.categories) {
@@ -545,7 +549,7 @@ function CompareTable({ people }: { people: { id: string; label: string; sportSt
                 <thead>
                   <tr>
                     <td style={{ padding: '5px 10px' }} />
-                    {people.map(p => (
+                    {sportPeople.map(p => (
                       <td key={p.id} style={{ padding: '5px 10px', textAlign: 'center' as const, fontWeight: 700, color: '#333', whiteSpace: 'nowrap' as const }}>{p.label}</td>
                     ))}
                   </tr>
@@ -553,12 +557,12 @@ function CompareTable({ people }: { people: { id: string; label: string; sportSt
                 <tbody>
                   <tr style={{ borderTop: '1px solid var(--border)' }}>
                     <td style={{ padding: '5px 10px', color: '#888', fontWeight: 600, whiteSpace: 'nowrap' as const }}>overall</td>
-                    {people.map(p => cell(p.sportStats, undefined, p.id, true))}
+                    {sportPeople.map(p => cell(p.sportStats, undefined, p.id, true))}
                   </tr>
                   {cats.map(([categoryId, m]) => (
                     <tr key={categoryId} style={{ borderTop: '1px solid var(--border-light)' }}>
                       <td style={{ padding: '5px 10px', color: '#555', whiteSpace: 'nowrap' as const }}>{m.name}</td>
-                      {people.map(p => cell(p.sportStats, categoryId, p.id))}
+                      {sportPeople.map(p => cell(p.sportStats, categoryId, p.id))}
                     </tr>
                   ))}
                 </tbody>
