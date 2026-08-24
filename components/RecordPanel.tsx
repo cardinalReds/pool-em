@@ -571,6 +571,63 @@ function CompareTable({ people }: { people: { id: string; label: string; sportSt
   )
 }
 
+// "If everyone bet $1 on each pick" — one row per person, summed across every graded
+// win/draw/loss pick (soccer + NFL, every competition) that has a recorded closing
+// price, not scoped to whichever competition toggle happens to be selected in the
+// heatmap below. Sorted by net P&L so it doubles as "who's actually the best bettor."
+function MoneyCompareTable({ people }: { people: { id: string; label: string; picks: WldPick[] }[] }) {
+  const rows = people.map(p => {
+    let staked = 0
+    let netPnl = 0
+    let oddsMissing = 0
+    for (const pk of p.picks) {
+      const odds = pk.predictedWld === 'home' ? pk.closingOddsHome : pk.predictedWld === 'away' ? pk.closingOddsAway : pk.closingOddsDraw
+      if (odds == null) { oddsMissing++; continue }
+      staked += 1
+      netPnl += pk.isCorrect ? (odds - 1) : -1
+    }
+    return { id: p.id, label: p.label, staked, netPnl, oddsMissing }
+  }).sort((a, b) => b.netPnl - a.netPnl)
+
+  if (!rows.some(r => r.staked > 0)) return null
+
+  return (
+    <div style={{ marginBottom: '1.5rem' }}>
+      <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#bbb', marginBottom: '0.5rem' }}>
+        if everyone bet $1 on each pick
+      </div>
+      <div style={{ overflowX: 'auto' as const }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: '0.8rem', width: '100%' }}>
+          <thead>
+            <tr>
+              <td style={{ padding: '5px 10px' }} />
+              <td style={{ padding: '5px 10px', textAlign: 'center' as const, color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const }}>picks staked</td>
+              <td style={{ padding: '5px 10px', textAlign: 'center' as const, color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const }}>net P&amp;L</td>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.id} style={{ borderTop: i === 0 ? 'none' : '1px solid var(--border-light)' }}>
+                <td style={{ padding: '6px 10px', fontWeight: 700 }}>{r.label}</td>
+                <td style={{ padding: '6px 10px', textAlign: 'center' as const, color: '#888' }}>
+                  {r.staked > 0 ? r.staked : '—'}
+                  {r.oddsMissing > 0 && <span style={{ color: '#ccc' }}> ({r.oddsMissing} no odds)</span>}
+                </td>
+                <td style={{ padding: '6px 10px', textAlign: 'center' as const, fontWeight: 700, color: r.staked === 0 ? '#ccc' : r.netPnl >= 0 ? '#2d7a2d' : '#C8102E' }}>
+                  {r.staked === 0 ? '—' : `${r.netPnl >= 0 ? '+' : ''}$${r.netPnl.toFixed(2)}`}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p style={{ fontSize: '0.7rem', color: '#bbb', marginTop: '0.5rem' }}>
+        at closing odds, across every graded win/draw/loss pick with recorded odds.
+      </p>
+    </div>
+  )
+}
+
 // The full prediction-record panel — sport breakdown, picks-explorer heatmap, and the PL
 // hypothetical table — for one target user, scoped to a fixed set of pools (the caller
 // decides which: every pool the target's in for a self-view, or only the pools shared
@@ -993,6 +1050,13 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
       {compareBlock}
 
       {isComparing && <CompareTable people={comparePeople} />}
+
+      {isComparing && (
+        <MoneyCompareTable people={effectiveUserIds.map(uid => {
+          const ps = statsByUser.get(uid)
+          return { id: uid, label: labelFor(uid), picks: [...(ps?.soccerPicks || []), ...(ps?.nflPicks || [])] }
+        })} />
+      )}
 
       {sportsPresent.map(sport => {
         const meta = SPORT_META[sport] || { emoji: '🏆', label: sport }
