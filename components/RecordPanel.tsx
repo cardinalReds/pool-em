@@ -587,9 +587,9 @@ function MoneyCompareTable({ people }: { people: { id: string; label: string; pi
       netPnl += pk.isCorrect ? (odds - 1) : -1
     }
     return { id: p.id, label: p.label, staked, netPnl, oddsMissing }
-  }).sort((a, b) => b.netPnl - a.netPnl)
+  }).filter(r => r.staked > 0).sort((a, b) => b.netPnl - a.netPnl)
 
-  if (!rows.some(r => r.staked > 0)) return null
+  if (rows.length === 0) return null
 
   return (
     <div style={{ marginBottom: '1.5rem' }}>
@@ -610,11 +610,11 @@ function MoneyCompareTable({ people }: { people: { id: string; label: string; pi
               <tr key={r.id} style={{ borderTop: i === 0 ? 'none' : '1px solid var(--border-light)' }}>
                 <td style={{ padding: '6px 10px', fontWeight: 700 }}>{r.label}</td>
                 <td style={{ padding: '6px 10px', textAlign: 'center' as const, color: '#888' }}>
-                  {r.staked > 0 ? r.staked : '—'}
+                  {r.staked}
                   {r.oddsMissing > 0 && <span style={{ color: '#ccc' }}> ({r.oddsMissing} no odds)</span>}
                 </td>
-                <td style={{ padding: '6px 10px', textAlign: 'center' as const, fontWeight: 700, color: r.staked === 0 ? '#ccc' : r.netPnl >= 0 ? '#2d7a2d' : '#C8102E' }}>
-                  {r.staked === 0 ? '—' : `${r.netPnl >= 0 ? '+' : ''}$${r.netPnl.toFixed(2)}`}
+                <td style={{ padding: '6px 10px', textAlign: 'center' as const, fontWeight: 700, color: r.netPnl >= 0 ? '#2d7a2d' : '#C8102E' }}>
+                  {r.netPnl >= 0 ? '+' : ''}${r.netPnl.toFixed(2)}
                 </td>
               </tr>
             ))}
@@ -671,8 +671,12 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
       setViewerPoolIds(vpIds)
       if (vpIds.length === 0) { setCompareCandidates([]); return }
 
-      const [{ data: allMembers }, { data: gradedPreds }] = await Promise.all([
+      const [{ data: allMembers }, { data: allGhosts }, { data: gradedPreds }] = await Promise.all([
         supabase.from('pool_members').select('user_id, pool_id, display_name').in('pool_id', vpIds).neq('user_id', viewerId),
+        // Ghosts are candidates too — predictions_v2.user_id already accepts a
+        // ghost_entries.id (see the scoring routes/RecordPanel's own query below), so the
+        // accuracy query right after this already counts their picks with no changes.
+        supabase.from('ghost_entries').select('id, pool_id, name').in('pool_id', vpIds),
         supabase.from('predictions_v2').select('user_id, is_correct').in('pool_id', vpIds).not('points_earned', 'is', null),
       ])
 
@@ -682,6 +686,12 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
         nameByUser.set(m.user_id, m.display_name)
         if (!poolsByUser.has(m.user_id)) poolsByUser.set(m.user_id, new Set())
         poolsByUser.get(m.user_id)!.add(m.pool_id)
+      }
+      for (const g of allGhosts || []) {
+        if (!g.pool_id) continue
+        nameByUser.set(g.id, `${g.name}*`)
+        if (!poolsByUser.has(g.id)) poolsByUser.set(g.id, new Set())
+        poolsByUser.get(g.id)!.add(g.pool_id)
       }
 
       // Rough accuracy for ordering purposes only — is_correct rather than the exact
