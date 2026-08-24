@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { COMMON_IDS, CATEGORY_GROUPS, ROUND_SPECIALS, groupKeyFor } from '@/lib/categoryGroups'
 
@@ -143,21 +143,25 @@ function predictedTeamLabel(p: WldPick): string {
 type PickSelection =
   | { kind: 'all' }
   | { kind: 'team'; team: string }
-  | { kind: 'outcome'; outcome: string }
-  | { kind: 'cell'; team: string; outcome: string }
+  | { kind: 'person'; personId: string }
+  | { kind: 'personOutcome'; personId: string; outcome: string }
+  | { kind: 'cell'; personId: string; team: string; outcome: string }
 
-// Team × predicted-outcome heatmap over a sport's graded W/D/L picks — built to be
-// scanned for patterns (which teams/outcomes you're best or worst at calling) rather
-// than looked up one filter at a time. Click any row, column, or cell to drill into the
-// exact picks behind it, including a $1-per-pick P&L using closing odds.
-function PicksExplorer({ picks, defaultColumns, competitions, subjectLabel }: {
-  picks: WldPick[]
+interface ExplorerPerson { id: string; label: string; picks: WldPick[] }
+
+// Team × predicted-outcome heatmap over one or more people's graded W/D/L picks — built
+// to be scanned for patterns rather than looked up one filter at a time. With more than
+// one person, each gets its own block of outcome columns (a "you" block, a "roy" block,
+// ...) side by side in the same table, divided by a border, rather than separate tables —
+// so a row (team) is directly comparable across people without scrolling. Click any team,
+// person, result, or cell to drill into the exact picks behind it, including a
+// $1-per-pick P&L using closing odds.
+function PicksExplorer({ people, defaultColumns, competitions }: {
+  people: ExplorerPerson[] // one entry per person shown; order determines left-to-right column groups
   defaultColumns: OutcomeColumn[] // this sport's normal breakdown, e.g. home/draw/away
-  competitions: { id: string; name: string; status: string }[] // only the ones this user actually has picks in
-  subjectLabel: string // "you" or the member's name being viewed, for copy like "if you'd bet..."
+  competitions: { id: string; name: string; status: string }[] // union of competitions anyone here has picks in
 }) {
-  const possessive = subjectLabel === 'you' ? 'your' : `${subjectLabel}'s`
-  const hadBet = subjectLabel === 'you' ? "you'd" : `${subjectLabel} had`
+  const isMulti = people.length > 1
   const [selection, setSelection] = useState<PickSelection>({ kind: 'all' })
   const [competitionId, setCompetitionId] = useState<string>(() => {
     // Default to a currently-active competition over a finished one (a completed World
@@ -165,7 +169,7 @@ function PicksExplorer({ picks, defaultColumns, competitions, subjectLabel }: {
     // it's not the one worth landing on) — most-picks is just the tiebreak among
     // active competitions, or the fallback if none are active.
     const counts = new Map<string, number>()
-    for (const p of picks) counts.set(p.tournamentId, (counts.get(p.tournamentId) || 0) + 1)
+    for (const p of people) for (const pick of p.picks) counts.set(pick.tournamentId, (counts.get(pick.tournamentId) || 0) + 1)
     const byPickCount = (a: string, b: string) => (counts.get(b) || 0) - (counts.get(a) || 0)
     const active = competitions.filter(c => c.status === 'active').map(c => c.id).sort(byPickCount)
     if (active.length > 0) return active[0]
@@ -173,43 +177,61 @@ function PicksExplorer({ picks, defaultColumns, competitions, subjectLabel }: {
     return allIds[0] || competitions[0]?.id || ''
   })
 
-  const scopedPicks = picks.filter(p => p.tournamentId === competitionId)
   const columns = NEUTRAL_VENUE_TOURNAMENTS.has(competitionId) ? SINGLE_RESULT_COLUMN : defaultColumns
-  const teams = [...new Set(scopedPicks.flatMap(p => [p.homeTeam, p.awayTeam]))].sort()
+  const scoped = people.map(p => ({ ...p, scoped: p.picks.filter(x => x.tournamentId === competitionId) }))
+  const teams = [...new Set(scoped.flatMap(p => p.scoped.flatMap(x => [x.homeTeam, x.awayTeam])))].sort()
 
   function statsFor(rows: WldPick[]) {
     const hits = rows.filter(p => p.isCorrect).length
     return { hits, total: rows.length, pct: rows.length > 0 ? Math.round((hits / rows.length) * 100) : null }
   }
 
-  const selectedPicks = scopedPicks.filter(p => {
-    if (selection.kind === 'team') return p.homeTeam === selection.team || p.awayTeam === selection.team
-    if (selection.kind === 'outcome') return columns.find(c => c.id === selection.outcome)?.match(p) ?? false
-    if (selection.kind === 'cell') return (p.homeTeam === selection.team || p.awayTeam === selection.team) && (columns.find(c => c.id === selection.outcome)?.match(p) ?? false)
-    return true
-  }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  function matches(personId: string, p: WldPick, sel: PickSelection): boolean {
+    if (sel.kind === 'all') return true
+    if (sel.kind === 'team') return p.homeTeam === sel.team || p.awayTeam === sel.team
+    if (sel.kind === 'person') return personId === sel.personId
+    if (sel.kind === 'personOutcome') return personId === sel.personId && (columns.find(c => c.id === sel.outcome)?.match(p) ?? false)
+    return personId === sel.personId && (p.homeTeam === sel.team || p.awayTeam === sel.team) && (columns.find(c => c.id === sel.outcome)?.match(p) ?? false)
+  }
 
-  const { hits, total, pct } = statsFor(selectedPicks)
+  const selectedTagged = scoped
+    .flatMap(p => p.scoped.filter(x => matches(p.id, x, selection)).map(x => ({ ...x, ownerId: p.id, ownerLabel: p.label })))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+  const { hits, total, pct } = statsFor(selectedTagged)
 
   let staked = 0
   let netPnl = 0
   let oddsMissing = 0
-  for (const p of selectedPicks) {
+  for (const p of selectedTagged) {
     const odds = p.predictedWld === 'home' ? p.closingOddsHome : p.predictedWld === 'away' ? p.closingOddsAway : p.closingOddsDraw
     if (odds == null) { oddsMissing++; continue }
     staked += 1
     netPnl += p.isCorrect ? (odds - 1) : -1
   }
 
+  const personLabel = (id: string) => people.find(p => p.id === id)?.label ?? '?'
+  // A selection can span more than one person (e.g. clicking a team row shows everyone's
+  // picks for it) — possessive copy only makes sense when exactly one person is in view.
+  const scopedOwnerIds = new Set(selectedTagged.map(p => p.ownerId))
+  const singleOwner = scopedOwnerIds.size === 1 ? personLabel([...scopedOwnerIds][0]) : null
+  const possessive = singleOwner ? (singleOwner === 'you' ? 'your' : `${singleOwner}'s`) : "the group's"
+  const hadBet = singleOwner ? (singleOwner === 'you' ? "you'd" : `${singleOwner} had`) : 'the group had'
+
   const selectionLabel = selection.kind === 'all' ? 'all picks'
     : selection.kind === 'team' ? selection.team
-    : selection.kind === 'outcome' ? `picked ${columns.find(c => c.id === selection.outcome)?.label}`
-    : `${selection.team} · ${columns.find(c => c.id === selection.outcome)?.label}`
+    : selection.kind === 'person' ? `${personLabel(selection.personId)} · all picks`
+    : selection.kind === 'personOutcome' ? `${personLabel(selection.personId)} · picked ${columns.find(c => c.id === selection.outcome)?.label}`
+    : `${personLabel(selection.personId)} · ${selection.team} · ${columns.find(c => c.id === selection.outcome)?.label}`
 
   return (
     <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border-light)' }}>
-      <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bbb', marginBottom: '0.15rem' }}>explore {possessive} picks</div>
-      <div style={{ fontSize: '0.72rem', color: '#bbb', marginBottom: '0.55rem' }}>click a team, a result, or a cell to drill in</div>
+      <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bbb', marginBottom: '0.15rem' }}>
+        {isMulti ? 'explore picks' : `explore ${people[0].label === 'you' ? 'your' : `${people[0].label}'s`} picks`}
+      </div>
+      <div style={{ fontSize: '0.72rem', color: '#bbb', marginBottom: '0.55rem' }}>
+        click a team{isMulti ? ', a person' : ''}, a result, or a cell to drill in
+      </div>
 
       {competitions.length > 1 && (
         <div style={{ display: 'flex', gap: 6, marginBottom: '0.7rem' }}>
@@ -238,61 +260,109 @@ function PicksExplorer({ picks, defaultColumns, competitions, subjectLabel }: {
       <div style={{ overflowX: 'auto' as const }}>
         <table style={{ borderCollapse: 'collapse', fontSize: '0.75rem' }}>
           <thead>
+            {isMulti && (
+              <tr>
+                <td style={{ padding: '3px 8px' }} />
+                {scoped.map((p, pi) => {
+                  const active = selection.kind === 'person' && selection.personId === p.id
+                  return (
+                    <td key={p.id} colSpan={columns.length + (columns.length > 1 ? 1 : 0)}
+                      onClick={() => setSelection(active ? { kind: 'all' } : { kind: 'person', personId: p.id })}
+                      style={{
+                        padding: '3px 8px', textAlign: 'center' as const, cursor: 'pointer', fontWeight: 700,
+                        color: active ? '#C8102E' : '#555',
+                        borderLeft: pi > 0 ? '2px solid var(--border)' : 'none',
+                      }}>
+                      {p.label}
+                    </td>
+                  )
+                })}
+              </tr>
+            )}
             <tr>
               <td style={{ padding: '3px 8px' }} />
-              {columns.map(col => {
-                const active = selection.kind === 'outcome' && selection.outcome === col.id
-                return (
-                  <td key={col.id} onClick={() => setSelection(active ? { kind: 'all' } : { kind: 'outcome', outcome: col.id })}
-                    style={{ padding: '3px 8px', textAlign: 'center' as const, cursor: 'pointer', color: active ? '#111' : '#888', fontWeight: active ? 700 : 500, textDecoration: active ? 'underline' : 'none', whiteSpace: 'nowrap' as const }}>
-                    {col.label}
-                  </td>
-                )
-              })}
-              {columns.length > 1 && <td style={{ padding: '3px 8px', textAlign: 'center' as const, color: '#ccc' }}>all</td>}
+              {scoped.map((p, pi) => (
+                <Fragment key={p.id}>
+                  {columns.map((col, ci) => {
+                    const active = selection.kind === 'personOutcome' && selection.personId === p.id && selection.outcome === col.id
+                    return (
+                      <td key={col.id} onClick={() => setSelection(active ? { kind: 'all' } : { kind: 'personOutcome', personId: p.id, outcome: col.id })}
+                        style={{
+                          padding: '3px 8px', textAlign: 'center' as const, cursor: 'pointer', color: active ? '#111' : '#888',
+                          fontWeight: active ? 700 : 500, textDecoration: active ? 'underline' : 'none', whiteSpace: 'nowrap' as const,
+                          borderLeft: isMulti && ci === 0 && pi > 0 ? '2px solid var(--border)' : 'none',
+                        }}>
+                        {col.label}
+                      </td>
+                    )
+                  })}
+                  {columns.length > 1 && (
+                    <td onClick={() => setSelection(selection.kind === 'person' && selection.personId === p.id ? { kind: 'all' } : { kind: 'person', personId: p.id })}
+                      style={{ padding: '3px 8px', textAlign: 'center' as const, color: '#ccc', cursor: 'pointer' }}>
+                      all
+                    </td>
+                  )}
+                </Fragment>
+              ))}
             </tr>
           </thead>
           <tbody>
             {teams.map(team => {
               const rowActive = selection.kind === 'team' && selection.team === team
-              const rowStats = statsFor(scopedPicks.filter(p => p.homeTeam === team || p.awayTeam === team))
               return (
                 <tr key={team}>
                   <td onClick={() => setSelection(rowActive ? { kind: 'all' } : { kind: 'team', team })}
                     style={{ padding: '3px 8px', cursor: 'pointer', color: rowActive ? '#111' : '#333', fontWeight: rowActive ? 700 : 500, textDecoration: rowActive ? 'underline' : 'none', whiteSpace: 'nowrap' as const }}>
                     {team}
                   </td>
-                  {columns.map(col => {
-                    const cellStats = statsFor(scopedPicks.filter(p => (p.homeTeam === team || p.awayTeam === team) && col.match(p)))
-                    const cellActive = selection.kind === 'cell' && selection.team === team && selection.outcome === col.id
-                    const style = cellStats.pct != null ? hitRateStyle(cellStats.pct) : { bg: '#f7f7f5', text: '#ccc' }
+                  {scoped.map((p, pi) => {
+                    const personTeamPicks = p.scoped.filter(x => x.homeTeam === team || x.awayTeam === team)
+                    const rowStats = statsFor(personTeamPicks)
                     return (
-                      <td key={col.id}
-                        onClick={() => cellStats.total > 0 && setSelection(cellActive ? { kind: 'all' } : { kind: 'cell', team, outcome: col.id })}
-                        title={cellStats.total > 0 ? `${team} · ${col.label}: ${cellStats.hits}/${cellStats.total} (${cellStats.pct}%)` : `${team} · ${col.label}: no picks`}
-                        style={{
-                          padding: '6px 10px', textAlign: 'center' as const, minWidth: 56,
-                          cursor: cellStats.total > 0 ? 'pointer' : 'default',
-                          background: style.bg, color: style.text,
-                          fontWeight: cellActive ? 700 : 400,
-                          boxShadow: cellActive ? 'inset 0 0 0 2px #C8102E' : 'none',
-                        }}>
-                        {cellStats.total > 0 ? `${cellStats.hits}/${cellStats.total}` : '—'}
-                      </td>
+                      <Fragment key={p.id}>
+                        {columns.map((col, ci) => {
+                          const cellStats = statsFor(personTeamPicks.filter(col.match))
+                          const cellActive = selection.kind === 'cell' && selection.personId === p.id && selection.team === team && selection.outcome === col.id
+                          const style = cellStats.pct != null ? hitRateStyle(cellStats.pct) : { bg: '#f7f7f5', text: '#ccc' }
+                          return (
+                            <td key={col.id}
+                              onClick={() => cellStats.total > 0 && setSelection(cellActive ? { kind: 'all' } : { kind: 'cell', personId: p.id, team, outcome: col.id })}
+                              title={cellStats.total > 0 ? `${p.label} · ${team} · ${col.label}: ${cellStats.hits}/${cellStats.total} (${cellStats.pct}%)` : `${p.label} · ${team} · ${col.label}: no picks`}
+                              style={{
+                                padding: '6px 10px', textAlign: 'center' as const, minWidth: 56,
+                                cursor: cellStats.total > 0 ? 'pointer' : 'default',
+                                background: style.bg, color: style.text,
+                                fontWeight: cellActive ? 700 : 400,
+                                boxShadow: cellActive ? 'inset 0 0 0 2px #C8102E' : 'none',
+                                borderLeft: isMulti && ci === 0 && pi > 0 ? '2px solid var(--border)' : 'none',
+                              }}>
+                              {cellStats.total > 0 ? `${cellStats.hits}/${cellStats.total}` : '—'}
+                            </td>
+                          )
+                        })}
+                        {columns.length > 1 && <td style={{ padding: '6px 10px', textAlign: 'center' as const, color: '#888' }}>{rowStats.total > 0 ? `${rowStats.hits}/${rowStats.total}` : '—'}</td>}
+                      </Fragment>
                     )
                   })}
-                  {columns.length > 1 && <td style={{ padding: '6px 10px', textAlign: 'center' as const, color: '#888' }}>{rowStats.total > 0 ? `${rowStats.hits}/${rowStats.total}` : '—'}</td>}
                 </tr>
               )
             })}
             {columns.length > 1 && (
               <tr>
                 <td style={{ padding: '4px 8px', color: '#ccc' }}>all</td>
-                {columns.map(col => {
-                  const colStats = statsFor(scopedPicks.filter(col.match))
-                  return <td key={col.id} style={{ padding: '4px 8px', textAlign: 'center' as const, color: '#888' }}>{colStats.total > 0 ? `${colStats.hits}/${colStats.total}` : '—'}</td>
-                })}
-                <td style={{ padding: '4px 8px', textAlign: 'center' as const, color: '#ccc' }}>{scopedPicks.filter(p => p.isCorrect).length}/{scopedPicks.length}</td>
+                {scoped.map((p, pi) => (
+                  <Fragment key={p.id}>
+                    {columns.map((col, ci) => {
+                      const colStats = statsFor(p.scoped.filter(col.match))
+                      return (
+                        <td key={col.id} style={{ padding: '4px 8px', textAlign: 'center' as const, color: '#888', borderLeft: isMulti && ci === 0 && pi > 0 ? '2px solid var(--border)' : 'none' }}>
+                          {colStats.total > 0 ? `${colStats.hits}/${colStats.total}` : '—'}
+                        </td>
+                      )
+                    })}
+                    <td style={{ padding: '4px 8px', textAlign: 'center' as const, color: '#ccc' }}>{p.scoped.filter(x => x.isCorrect).length}/{p.scoped.length}</td>
+                  </Fragment>
+                ))}
               </tr>
             )}
           </tbody>
@@ -329,10 +399,10 @@ function PicksExplorer({ picks, defaultColumns, competitions, subjectLabel }: {
             )}
 
             <div style={{ border: '1px solid var(--border-light)', maxHeight: 240, overflowY: 'auto' as const }}>
-              {selectedPicks.map(p => (
-                <div key={p.fixtureId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '0.4rem 0.6rem', borderTop: '1px solid var(--border-light)', fontSize: '0.78rem' }}>
+              {selectedTagged.map(p => (
+                <div key={`${p.ownerId}:${p.fixtureId}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '0.4rem 0.6rem', borderTop: '1px solid var(--border-light)', fontSize: '0.78rem' }}>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                    {p.awayTeam} @ {p.homeTeam} <span style={{ color: '#bbb' }}>· {new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                    {p.awayTeam} @ {p.homeTeam} <span style={{ color: '#bbb' }}>· {new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}{isMulti ? ` · ${p.ownerLabel}` : ''}</span>
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                     <span style={{ color: '#888' }}>picked {predictedTeamLabel(p)}</span>
@@ -351,53 +421,65 @@ function PicksExplorer({ picks, defaultColumns, competitions, subjectLabel }: {
 }
 
 // "If your picks were always right" — a simulated Premier League table built entirely
-// from the user's own predicted results (not actual ones) for games that have already
+// from each person's own predicted results (not actual ones) for games that have already
 // been decided, standard 3/1/0 points. Grows one game at a time as the season plays out.
-function PLHypotheticalTable({ rows, subjectLabel }: { rows: PLTableRow[]; subjectLabel: string }) {
-  const possessive = subjectLabel === 'you' ? 'your' : `${subjectLabel}'s`
+// With more than one person, each gets their own fully-ranked table stacked below the
+// last (divided by a border) rather than merged into shared columns — team order here
+// is a real ranking by that person's points, and merging several people's independently-
+// ordered rankings into one row set would make the table unreadable as a "standings" list.
+function PLHypotheticalTable({ people }: { people: { id: string; label: string; rows: PLTableRow[] }[] }) {
+  const isMulti = people.length > 1
   const [open, setOpen] = useState(false)
+  const headerLabel = isMulti
+    ? `🏆 the PL table if everyone's picks were always right`
+    : `🏆 the PL table if ${people[0].label === 'you' ? 'your' : `${people[0].label}'s`} picks were always right`
+
   return (
     <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border-light)' }}>
       <div onClick={() => setOpen(o => !o)}
         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
         <span style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bbb' }}>
-          🏆 the PL table if {possessive} picks were always right
+          {headerLabel}
         </span>
         <span style={{ fontSize: '0.75rem', color: '#888' }}>{open ? '▲' : '▼'}</span>
       </div>
-      {open && (
-        <div style={{ overflowX: 'auto' as const, marginTop: '0.6rem' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-            <thead>
-              <tr>
-                <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600 }}>#</td>
-                <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600 }}>team</td>
-                <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>P</td>
-                <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>W</td>
-                <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>D</td>
-                <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>L</td>
-                <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>Pts</td>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r, i) => (
-                <tr key={r.team} style={{ borderTop: '1px solid var(--border-light)' }}>
-                  <td style={{ padding: '0.3rem 0.5rem', color: '#aaa' }}>{i + 1}</td>
-                  <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>{r.team}</td>
-                  <td style={{ padding: '0.3rem 0.5rem', textAlign: 'center' as const }}>{r.played}</td>
-                  <td style={{ padding: '0.3rem 0.5rem', textAlign: 'center' as const }}>{r.w}</td>
-                  <td style={{ padding: '0.3rem 0.5rem', textAlign: 'center' as const }}>{r.d}</td>
-                  <td style={{ padding: '0.3rem 0.5rem', textAlign: 'center' as const }}>{r.l}</td>
-                  <td style={{ padding: '0.3rem 0.5rem', textAlign: 'center' as const, fontWeight: 700, color: '#C8102E' }}>{r.pts}</td>
+      {open && people.map((person, pi) => {
+        const possessive = person.label === 'you' ? 'your' : `${person.label}'s`
+        return (
+          <div key={person.id} style={{ overflowX: 'auto' as const, marginTop: pi === 0 ? '0.6rem' : '1rem', paddingTop: pi === 0 ? 0 : '0.85rem', borderTop: pi === 0 ? 'none' : '1px dashed var(--border-light)' }}>
+            {isMulti && <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#555', marginBottom: '0.4rem' }}>{person.label}</div>}
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+              <thead>
+                <tr>
+                  <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600 }}>#</td>
+                  <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600 }}>team</td>
+                  <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>P</td>
+                  <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>W</td>
+                  <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>D</td>
+                  <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>L</td>
+                  <td style={{ padding: '0.3rem 0.5rem', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>Pts</td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <p style={{ fontSize: '0.7rem', color: '#bbb', marginTop: '0.5rem' }}>
-            built from {possessive} predicted results for games decided so far — not the real table.
-          </p>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {person.rows.map((r, i) => (
+                  <tr key={r.team} style={{ borderTop: '1px solid var(--border-light)' }}>
+                    <td style={{ padding: '0.3rem 0.5rem', color: '#aaa' }}>{i + 1}</td>
+                    <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>{r.team}</td>
+                    <td style={{ padding: '0.3rem 0.5rem', textAlign: 'center' as const }}>{r.played}</td>
+                    <td style={{ padding: '0.3rem 0.5rem', textAlign: 'center' as const }}>{r.w}</td>
+                    <td style={{ padding: '0.3rem 0.5rem', textAlign: 'center' as const }}>{r.d}</td>
+                    <td style={{ padding: '0.3rem 0.5rem', textAlign: 'center' as const }}>{r.l}</td>
+                    <td style={{ padding: '0.3rem 0.5rem', textAlign: 'center' as const, fontWeight: 700, color: '#C8102E' }}>{r.pts}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p style={{ fontSize: '0.7rem', color: '#bbb', marginTop: '0.5rem' }}>
+              built from {possessive} predicted results for games decided so far — not the real table.
+            </p>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -504,9 +586,6 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
   // Keyed by user_id — each person's stats are computed independently, never merged, so
   // "compare with roy" shows roy's numbers next to yours rather than a blended total.
   const [statsByUser, setStatsByUser] = useState<Map<string, PersonStats>>(new Map())
-  // Which person's picks-explorer/PL-hypothetical-table (the single-person deep-dive
-  // sections) is currently shown below the side-by-side comparison table.
-  const [focusUserId, setFocusUserId] = useState<string>('')
 
   // "Compare" — expands the dataset above from just targetUserId to targetUserId plus
   // whoever's selected here, drawn from every real member across every pool the viewer
@@ -770,9 +849,9 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
   // screen at once. `null` means "not yet touched by the user" so the first sport still
   // defaults open once stats load, without needing an effect to seed real state.
   const [openSports, setOpenSports] = useState<Set<string> | null>(null)
-  function toggleSport(sport: string, sportStats: SportStat[]) {
+  function toggleSport(sport: string, defaultSport: string | undefined) {
     setOpenSports(prev => {
-      const base = prev ?? new Set(sportStats[0] ? [sportStats[0].sport] : [])
+      const base = prev ?? new Set(defaultSport ? [defaultSport] : [])
       const next = new Set(base)
       if (next.has(sport)) next.delete(sport); else next.add(sport)
       return next
@@ -798,13 +877,12 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
   }
 
   const totalPicks = [...statsByUser.values()].reduce((sum, ps) => sum + ps.sportStats.reduce((s, x) => s + x.total, 0), 0)
-  // Which person's picks-explorer/PL-hypothetical-table is shown below — falls back to
-  // the base target if the previously-focused person got deselected from compare.
-  const effectiveFocusUserId = focusUserId && effectiveUserIds.includes(focusUserId) ? focusUserId : targetUserId
-  const focusStats: PersonStats = statsByUser.get(effectiveFocusUserId) || { sportStats: [], hasPartialCredit: false, soccerPicks: [], nflPicks: [], plHypoTable: [] }
-  const focusLabel = labelFor(effectiveFocusUserId)
-  const possessiveCaps = focusLabel === 'you' ? 'Your' : `${focusLabel}'s`
-  const effectiveOpenSports = openSports ?? new Set(focusStats.sportStats[0] ? [focusStats.sportStats[0].sport] : [])
+  const possessiveCaps = subjectLabel === 'you' ? 'Your' : `${subjectLabel}'s`
+  // Union of sports anyone currently in view has data for, in the app's canonical order —
+  // when not comparing this is just the target's own sports (effectiveUserIds has one
+  // entry), so this collapses to the exact same list as before.
+  const sportsPresent = SPORT_ORDER.filter(sport => effectiveUserIds.some(uid => statsByUser.get(uid)?.sportStats.some(s => s.sport === sport)))
+  const effectiveOpenSports = openSports ?? new Set(sportsPresent[0] ? [sportsPresent[0]] : [])
 
   const compareBlock = otherCandidates.length > 0 && (
     <div style={{ marginBottom: '1.5rem', border: '1px solid var(--border)' }}>
@@ -876,13 +954,39 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
       <div>
         {compareBlock}
         <div style={{ textAlign: 'center', padding: '4rem 0', borderTop: '1px solid var(--border)', color: 'var(--text-dim)' }}>
-          {focusLabel === 'you' ? 'no scored picks yet — check back once games kick off.' : `${focusLabel} doesn't have any scored picks yet.`}
+          {subjectLabel === 'you' ? 'no scored picks yet — check back once games kick off.' : `${subjectLabel} doesn't have any scored picks yet.`}
         </div>
       </div>
     )
   }
 
   const comparePeople = effectiveUserIds.map(uid => ({ id: uid, label: labelFor(uid), sportStats: statsByUser.get(uid)?.sportStats || [] }))
+  const anyPartialCredit = effectiveUserIds.some(uid => statsByUser.get(uid)?.hasPartialCredit)
+
+  // Builds one sport's picks-explorer person list — every selected person's picks for
+  // that sport, skipping anyone with none, plus the union of competitions they're
+  // spread across (so the toggle covers every tournament anyone here has picks in).
+  function explorerPeopleFor(sport: 'soccer' | 'nfl'): { people: ExplorerPerson[]; competitions: { id: string; name: string; status: string }[] } {
+    const people: ExplorerPerson[] = effectiveUserIds
+      .map(uid => {
+        const ps = statsByUser.get(uid)
+        const picks = sport === 'soccer' ? ps?.soccerPicks : ps?.nflPicks
+        return { id: uid, label: labelFor(uid), picks: picks || [] }
+      })
+      .filter(p => p.picks.length > 0)
+
+    const seenComps = new Map<string, { id: string; name: string; status: string }>()
+    for (const uid of effectiveUserIds) {
+      const s = statsByUser.get(uid)?.sportStats.find(x => x.sport === sport)
+      if (!s) continue
+      for (const c of s.competitions) {
+        if (!seenComps.has(c.tournamentId) && people.some(p => p.picks.some(pk => pk.tournamentId === c.tournamentId))) {
+          seenComps.set(c.tournamentId, { id: c.tournamentId, name: c.name, status: c.status })
+        }
+      }
+    }
+    return { people, competitions: [...seenComps.values()] }
+  }
 
   return (
     <div>
@@ -890,42 +994,24 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
 
       {isComparing && <CompareTable people={comparePeople} />}
 
-      {isComparing && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '1rem', flexWrap: 'wrap' as const }}>
-          <span style={{ fontSize: '0.7rem', color: '#999' }}>explore below for</span>
-          {effectiveUserIds.map(uid => (
-            <button key={uid} onClick={() => setFocusUserId(uid)}
-              style={{
-                fontSize: '0.75rem', padding: '4px 10px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
-                borderColor: effectiveFocusUserId === uid ? '#C8102E' : 'var(--border)',
-                background: effectiveFocusUserId === uid ? '#fff5f5' : 'white',
-                color: effectiveFocusUserId === uid ? '#C8102E' : '#555',
-                fontWeight: effectiveFocusUserId === uid ? 700 : 400,
-              }}>
-              {labelFor(uid)}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {focusStats.sportStats.map(s => {
-        const meta = SPORT_META[s.sport] || { emoji: '🏆', label: s.sport }
-        const pct = s.total > 0 ? Math.round((s.hits / s.total) * 100) : 0
-        const isOpen = effectiveOpenSports.has(s.sport)
+      {sportsPresent.map(sport => {
+        const meta = SPORT_META[sport] || { emoji: '🏆', label: sport }
+        const soloStat = !isComparing ? statsByUser.get(targetUserId)?.sportStats.find(s => s.sport === sport) : undefined
+        const isOpen = effectiveOpenSports.has(sport)
         return (
-          <section key={s.sport} style={{ marginBottom: '2rem' }}>
-            <div onClick={() => toggleSport(s.sport, focusStats.sportStats)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', cursor: 'pointer' }}>
+          <section key={sport} style={{ marginBottom: '2rem' }}>
+            <div onClick={() => toggleSport(sport, sportsPresent[0])} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', cursor: 'pointer' }}>
               <span style={{ fontSize: '1.1rem' }}>{meta.emoji}</span>
               <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{meta.label}</span>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>{pct}% · {s.hits}/{s.total}</span>
+              {soloStat && <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>{soloStat.total > 0 ? Math.round((soloStat.hits / soloStat.total) * 100) : 0}% · {soloStat.hits}/{soloStat.total}</span>}
               <div style={{ flex: 1, borderTop: '1px solid var(--border-light)' }} />
               <span style={{ fontSize: '0.75rem', color: '#888' }}>{isOpen ? '▲' : '▼'}</span>
             </div>
 
             {isOpen && <>
-            {s.competitions.length > 1 && (
+            {soloStat && soloStat.competitions.length > 1 && (
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' as const, marginBottom: '1rem' }}>
-                {s.competitions.map(c => {
+                {soloStat.competitions.map(c => {
                   const cPct = c.total > 0 ? Math.round((c.hits / c.total) * 100) : 0
                   return (
                     <div key={c.tournamentId} style={{
@@ -943,7 +1029,7 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
 
             {/* Skip the per-category breakdown while comparing — CompareTable above
                 already shows this same information, side by side, for everyone. */}
-            {!isComparing && s.groups.map(group => (
+            {soloStat && soloStat.groups.map(group => (
               <div key={group.label} style={{ marginBottom: '0.85rem' }}>
                 <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bbb', marginBottom: '0.35rem' }}>{group.label}</div>
                 <div style={{ background: 'white', border: '1px solid var(--border)' }}>
@@ -964,25 +1050,28 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
               </div>
             ))}
 
-            {s.sport === 'soccer' && focusStats.soccerPicks.length > 0 && (
-              <PicksExplorer picks={focusStats.soccerPicks} defaultColumns={HOME_DRAW_AWAY_COLUMNS} subjectLabel={focusLabel}
-                competitions={s.competitions.filter(c => focusStats.soccerPicks.some(p => p.tournamentId === c.tournamentId)).map(c => ({ id: c.tournamentId, name: c.name, status: c.status }))} />
-            )}
-            {s.sport === 'soccer' && focusStats.plHypoTable.length > 0 && (
-              <PLHypotheticalTable rows={focusStats.plHypoTable} subjectLabel={focusLabel} />
-            )}
-            {s.sport === 'nfl' && focusStats.nflPicks.length > 0 && (
-              <PicksExplorer picks={focusStats.nflPicks} defaultColumns={HOME_AWAY_COLUMNS} subjectLabel={focusLabel}
-                competitions={s.competitions.filter(c => focusStats.nflPicks.some(p => p.tournamentId === c.tournamentId)).map(c => ({ id: c.tournamentId, name: c.name, status: c.status }))} />
-            )}
+            {sport === 'soccer' && (() => {
+              const { people, competitions } = explorerPeopleFor('soccer')
+              return people.length > 0 && <PicksExplorer people={people} defaultColumns={HOME_DRAW_AWAY_COLUMNS} competitions={competitions} />
+            })()}
+            {sport === 'soccer' && (() => {
+              const plPeople = effectiveUserIds
+                .map(uid => ({ id: uid, label: labelFor(uid), rows: statsByUser.get(uid)?.plHypoTable || [] }))
+                .filter(p => p.rows.length > 0)
+              return plPeople.length > 0 && <PLHypotheticalTable people={plPeople} />
+            })()}
+            {sport === 'nfl' && (() => {
+              const { people, competitions } = explorerPeopleFor('nfl')
+              return people.length > 0 && <PicksExplorer people={people} defaultColumns={HOME_AWAY_COLUMNS} competitions={competitions} />
+            })()}
             </>}
           </section>
         )
       })}
 
-      {focusStats.hasPartialCredit && (
+      {anyPartialCredit && (
         <p style={{ fontSize: '0.75rem', color: '#bbb', marginTop: '1rem' }}>
-          exact-score and podium-order picks award partial credit toward {focusLabel === 'you' ? 'your' : `${focusLabel}'s`} pool total even when not fully right — a "hit" here only counts the fully-correct ones, so it can read lower than {possessiveCaps === 'Your' ? 'your' : 'their'} points in those pools.
+          exact-score and podium-order picks award partial credit toward {isComparing ? 'pool totals' : (subjectLabel === 'you' ? 'your' : `${subjectLabel}'s`) + ' pool total'} even when not fully right — a "hit" here only counts the fully-correct ones, so it can read lower than {isComparing ? 'actual' : (possessiveCaps === 'Your' ? 'your' : 'their')} points in those pools.
         </p>
       )}
     </div>
