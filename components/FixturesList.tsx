@@ -910,6 +910,83 @@ export default function FixturesList({
   const isMMA = tournamentId?.startsWith('ufc_') || tournamentId?.includes('mma')
   const isPL = tournamentId?.startsWith('pl_')
   const isBest5Active = isPL && plGameMode === 'best5'
+
+  // Recent form + real standings, shown under each team's badge on the fixture card
+  // itself — the point is to inform the pick you're about to make ("Arsenal are on a
+  // 4-game winning streak and sit 2nd"), not just to review it after the fact (see the
+  // near-identical fetch in components/RecordPanel.tsx's PicksExplorer, which serves the
+  // same data for the stats/record page). PL-only: pl_teams (the real synced standings
+  // table) only exists for the Premier League.
+  const [teamForm, setTeamForm] = useState<Map<string, { opponent: string; result: 'W' | 'D' | 'L'; scoreLabel: string }[]>>(new Map())
+  const [teamStandings, setTeamStandings] = useState<Map<string, { position: number; points: number; goalsFor: number; goalsAgainst: number }>>(new Map())
+  useEffect(() => {
+    if (!isPL || !tournamentId) { setTeamForm(new Map()); setTeamStandings(new Map()); return }
+    const tid = tournamentId
+    let cancelled = false
+    async function loadTeamInfo() {
+      const supabase = createClient()
+      const [{ data: finished }, { data: standings }] = await Promise.all([
+        supabase.from('fixtures').select('home_team, away_team, home_score, away_score, date').eq('tournament_id', tid).eq('status', 'FT').order('date', { ascending: false }),
+        supabase.from('pl_teams').select('name, position, points, goals_for, goals_against'),
+      ])
+      if (cancelled) return
+
+      const byTeam = new Map<string, { opponent: string; result: 'W' | 'D' | 'L'; scoreLabel: string }[]>()
+      for (const f of finished || []) {
+        if (f.home_score == null || f.away_score == null) continue
+        const homeResult: 'W' | 'D' | 'L' = f.home_score > f.away_score ? 'W' : f.home_score < f.away_score ? 'L' : 'D'
+        const awayResult: 'W' | 'D' | 'L' = homeResult === 'W' ? 'L' : homeResult === 'L' ? 'W' : 'D'
+        const scoreLabel = `${f.home_score}-${f.away_score}`
+        const entries: [string, string, 'W' | 'D' | 'L'][] = [[f.home_team, f.away_team, homeResult], [f.away_team, f.home_team, awayResult]]
+        for (const [team, opponent, result] of entries) {
+          const list = byTeam.get(team) || []
+          if (list.length < 5) list.push({ opponent, result, scoreLabel })
+          byTeam.set(team, list)
+        }
+      }
+      for (const [team, list] of byTeam) byTeam.set(team, [...list].reverse())
+      setTeamForm(byTeam)
+
+      const standingsMap = new Map<string, { position: number; points: number; goalsFor: number; goalsAgainst: number }>()
+      for (const t of standings || []) {
+        if (t.position == null) continue
+        standingsMap.set(t.name, { position: t.position, points: t.points ?? 0, goalsFor: t.goals_for ?? 0, goalsAgainst: t.goals_against ?? 0 })
+      }
+      setTeamStandings(standingsMap)
+    }
+    loadTeamInfo()
+    return () => { cancelled = true }
+  }, [isPL, tournamentId])
+
+  // Small badge row + standings line reused under every team badge on a PL fixture card.
+  function TeamFormStrip({ team }: { team: string }) {
+    const st = teamStandings.get(team)
+    const form = teamForm.get(team) || []
+    if (!st && form.length === 0) return null
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 2, marginTop: 2 }}>
+        {st && (
+          <span style={{ fontSize: '9px', color: '#999', whiteSpace: 'nowrap' as const }}>
+            #{st.position} · {st.points}pts · {st.goalsFor}-{st.goalsAgainst}
+          </span>
+        )}
+        {form.length > 0 && (
+          <div style={{ display: 'flex', gap: 2 }}>
+            {form.map((f, i) => {
+              const c = f.result === 'W' ? { bg: '#2d7a2d', text: 'white' } : f.result === 'L' ? { bg: '#C8102E', text: 'white' } : { bg: '#ccc', text: '#444' }
+              const word = f.result === 'W' ? 'won' : f.result === 'L' ? 'lost' : 'drew'
+              return (
+                <span key={i} title={`${word} vs ${f.opponent} (${f.scoreLabel})`}
+                  style={{ width: 13, height: 13, borderRadius: 2, background: c.bg, color: c.text, fontSize: '8px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {f.result}
+                </span>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
   const hasPerGame = poolRules.some(r => r.prediction_type === 'per_game')
   const hasPerRound = poolRules.some(r => r.prediction_type === 'per_round')
   const onlyRoundSpecials = isCustom && hasPerRound && !hasPerGame
@@ -1867,6 +1944,7 @@ export default function FixturesList({
                 : <span style={{ fontSize: '28px' }}>{FLAGS[fixture.home_team] || '⚽'}</span>
               }
               <span style={{ fontWeight: 700, fontSize: '11px', textAlign: 'center' as const, lineHeight: 1.2 }}>{fixture.home_team}</span>
+              <TeamFormStrip team={fixture.home_team} />
             </div>
             {/* Score or VS */}
             {(finished || isLive)
@@ -1880,6 +1958,7 @@ export default function FixturesList({
                 : <span style={{ fontSize: '28px' }}>{FLAGS[fixture.away_team] || '⚽'}</span>
               }
               <span style={{ fontWeight: 700, fontSize: '11px', textAlign: 'center' as const, lineHeight: 1.2 }}>{fixture.away_team}</span>
+              <TeamFormStrip team={fixture.away_team} />
             </div>
           </div>
         ) : (
