@@ -826,7 +826,7 @@ function buildRoundSpecialState(preds: any[]) {
 export default function FixturesList({
   poolId, userId, packageId, deadlineType, tournamentId,
   hideControls, externalSortMode, externalViewMode, isAdmin, canManageGhosts,
-  plGameMode, plBest5AdminOverride, previewMode, onPreviewInteract,
+  plGameMode, plBest5AdminOverride, previewMode, onPreviewInteract, onActiveEntryChange,
 }: {
   poolId: string
   userId: string
@@ -846,6 +846,10 @@ export default function FixturesList({
   // actually make a pick calls onPreviewInteract instead of saving anything.
   previewMode?: boolean
   onPreviewInteract?: () => void
+  // Reports the current "making picks for" target (self or a ghost) up to the parent —
+  // activeEntryId otherwise lives only in this component's own state, invisible to
+  // siblings like SeasonPropsTicket that need to know who to read/write for too.
+  onActiveEntryChange?: (entryId: string, entryLabel: string) => void
 }) {
   const [fixtures, setFixtures] = useState<Fixture[]>([])
   const [poolRules, setPoolRules] = useState<PoolRule[]>([])
@@ -883,6 +887,10 @@ export default function FixturesList({
   const [braceTeamByMatchday, setBraceTeamByMatchday] = useState<Record<string, string>>({})
   const [ghostEntries, setGhostEntries] = useState<{ id: string; name: string }[]>([])
   const [activeEntryId, setActiveEntryId] = useState<string>(userId)
+  useEffect(() => {
+    const label = activeEntryId === userId ? 'you' : ghostEntries.find(g => g.id === activeEntryId)?.name || 'ghost entry'
+    onActiveEntryChange?.(activeEntryId, label)
+  }, [activeEntryId, ghostEntries, userId])
   const [newGhostName, setNewGhostName] = useState('')
   const [addingGhost, setAddingGhost] = useState(false)
   // Nudge shown right after a ghost is added — ghosts are (so far) always YouTubers, so

@@ -164,6 +164,12 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   // identity (and its state silently reset) on every re-render; hooks in PoolPage's own
   // body don't have that problem, and ScopedLeaderboard already closes over this scope.
   const [leaderboardExpanded, setLeaderboardExpanded] = useState(false)
+  // FixturesList's own "making picks for" switcher reports here, so SeasonPropsTicket
+  // (a sibling, not a child of FixturesList) knows to read/write for the same ghost
+  // rather than always defaulting to the real logged-in user — see FixturesList's
+  // onActiveEntryChange and SeasonPropsTicket's targetUserId prop.
+  const [activeEntryId, setActiveEntryId] = useState('')
+  const [activeEntryLabel, setActiveEntryLabel] = useState('you')
   const mobilePanelRef = useRef<HTMLDivElement>(null)
 
   function switchMobilePanel(panel: 'picks' | 'leaderboard' | 'chat' | 'settings') {
@@ -1090,9 +1096,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                     : pool.sport === 'nfl'
                     ? <NFLGamesList poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} deadlineType={pool.deadline_type} isAdmin={isAdmin} canManageGhosts={canManageGhosts} cfbGameMode={pool.cfb_game_mode} cfbBest10AdminOverride={pool.cfb_best10_admin_override} />
                     : <>
-                        {pool.season_props_enabled && !seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
-                        <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} hideControls={true} externalSortMode={mobileSortMode} externalViewMode={mobileViewMode} isAdmin={isAdmin} canManageGhosts={canManageGhosts} plGameMode={pool.pl_game_mode} plBest5AdminOverride={pool.pl_best5_admin_override} />
-                        {pool.season_props_enabled && seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
+                        {pool.season_props_enabled && !seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} targetUserId={activeEntryId || user.id} targetLabel={activeEntryLabel} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
+                        <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} hideControls={true} externalSortMode={mobileSortMode} externalViewMode={mobileViewMode} isAdmin={isAdmin} canManageGhosts={canManageGhosts} plGameMode={pool.pl_game_mode} plBest5AdminOverride={pool.pl_best5_admin_override} onActiveEntryChange={(id, label) => { setActiveEntryId(id); setActiveEntryLabel(label) }} />
+                        {pool.season_props_enabled && seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} targetUserId={activeEntryId || user.id} targetLabel={activeEntryLabel} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
                       </>
                 )}
               </div>
@@ -1265,9 +1271,9 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                   : pool.sport === 'nfl'
                   ? <NFLGamesList poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} deadlineType={pool.deadline_type} isAdmin={isAdmin} canManageGhosts={canManageGhosts} cfbGameMode={pool.cfb_game_mode} cfbBest10AdminOverride={pool.cfb_best10_admin_override} />
                   : <>
-                      {pool.season_props_enabled && !seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
-                      <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} isAdmin={isAdmin} canManageGhosts={canManageGhosts} plGameMode={pool.pl_game_mode} plBest5AdminOverride={pool.pl_best5_admin_override} />
-                      {pool.season_props_enabled && seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
+                      {pool.season_props_enabled && !seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} targetUserId={activeEntryId || user.id} targetLabel={activeEntryLabel} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
+                      <FixturesList poolId={pool.id} userId={user.id} packageId={pool.package_id} deadlineType={pool.deadline_type} scope={pool.tournament_scope} tournamentId={pool.tournament_id} isAdmin={isAdmin} canManageGhosts={canManageGhosts} plGameMode={pool.pl_game_mode} plBest5AdminOverride={pool.pl_best5_admin_override} onActiveEntryChange={(id, label) => { setActiveEntryId(id); setActiveEntryLabel(label) }} />
+                      {pool.season_props_enabled && seasonPropsLocked && <SeasonPropsTicket poolId={pool.id} userId={user.id} targetUserId={activeEntryId || user.id} targetLabel={activeEntryLabel} tournamentId={pool.tournament_id} onLockChange={setSeasonPropsLocked} />}
                     </>
               )}
             </div>

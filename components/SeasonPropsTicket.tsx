@@ -112,9 +112,15 @@ function TeamPlayerPicker({ value, onChange, teams, playersByTeam, disabled, goa
   )
 }
 
-export default function SeasonPropsTicket({ poolId, userId, tournamentId, onLockChange }: {
-  poolId: string; userId: string; tournamentId: string; onLockChange?: (locked: boolean) => void
+export default function SeasonPropsTicket({ poolId, userId, targetUserId, targetLabel, tournamentId, onLockChange }: {
+  poolId: string
+  userId: string // the real logged-in viewer — used only for the "(you)" highlight below, never for reads/writes
+  targetUserId?: string // whose season props this form reads/writes — a ghost's id when "making picks for" one is active (see FixturesList's activeEntryId); defaults to userId
+  targetLabel?: string // display name for the header when targetUserId isn't the viewer's own
+  tournamentId: string
+  onLockChange?: (locked: boolean) => void
 }) {
+  const effectiveTargetId = targetUserId || userId
   const [loading, setLoading] = useState(true)
   const [enabledCategories, setEnabledCategories] = useState<string[]>([])
   const [picks, setPicks] = useState<Record<string, Pick>>({})
@@ -133,7 +139,7 @@ export default function SeasonPropsTicket({ poolId, userId, tournamentId, onLock
       const supabase = createClient()
       const [rulesRes, picksRes, teamsRes, playersRes, fixturesRes, allPicksRes, membersRes, ghostRes] = await Promise.all([
         supabase.from('season_prop_rules').select('category').eq('pool_id', poolId),
-        supabase.from('season_props').select('*').eq('pool_id', poolId).eq('user_id', userId),
+        supabase.from('season_props').select('*').eq('pool_id', poolId).eq('user_id', effectiveTargetId),
         supabase.from('pl_teams').select('id, name, logo').eq('season', 2026).order('name'),
         supabase.from('pl_players').select('id, name, team_id, position').eq('season', 2026).order('name'),
         supabase.from('fixtures').select('date').eq('tournament_id', tournamentId).eq('round', 'Matchday 1'),
@@ -184,7 +190,7 @@ export default function SeasonPropsTicket({ poolId, userId, tournamentId, onLock
       setLoading(false)
     }
     load()
-  }, [poolId, userId, tournamentId])
+  }, [poolId, effectiveTargetId, tournamentId])
 
   const locked = !!lockTime && Date.now() >= lockTime.getTime()
 
@@ -198,7 +204,7 @@ export default function SeasonPropsTicket({ poolId, userId, tournamentId, onLock
         await supabase.from('season_props').update({ value_text: value }).eq('id', existing.id)
       } else {
         const { data } = await supabase.from('season_props').insert({
-          pool_id: poolId, user_id: userId, category, value_text: value,
+          pool_id: poolId, user_id: effectiveTargetId, category, value_text: value,
         }).select().single()
         if (data) setPicks(prev => ({ ...prev, [category]: { id: data.id, value } }))
       }
@@ -221,7 +227,9 @@ export default function SeasonPropsTicket({ poolId, userId, tournamentId, onLock
       <div style={{ background: '#111', color: 'white', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
         onClick={() => setCollapsed(c => !c)}>
         <div>
-          <div style={{ fontWeight: 700, fontSize: '13px' }}>🏆 season-long predictions</div>
+          <div style={{ fontWeight: 700, fontSize: '13px' }}>
+            🏆 season-long predictions{effectiveTargetId !== userId ? ` — for ${targetLabel || 'ghost entry'}` : ''}
+          </div>
           <div style={{ fontSize: '10px', color: '#aaa', marginTop: 2 }}>
             {locked ? 'locked — season underway' : lockTime ? `locks at first kickoff · ${lockTime.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : 'predict before the season starts'}
           </div>
