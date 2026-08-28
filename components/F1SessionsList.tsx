@@ -718,6 +718,43 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
         </div>
       )}
 
+      {/* Sticky switcher — see components/FixturesList.tsx for the fuller comment. Stays
+          pinned near the top of the viewport as you scroll a long prediction list, so
+          switching who you're entering picks for doesn't require scrolling back up. */}
+      {(isAdmin || canManageGhosts) && ghostEntries.length > 0 && (
+        <div style={{
+          position: 'sticky', top: 41, zIndex: 40, background: 'white', border: '1px solid #ddd', borderRadius: 4,
+          padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto' as const,
+          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+        }}>
+          <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.05em', color: '#888', flexShrink: 0, whiteSpace: 'nowrap' as const }}>
+            making picks for
+          </span>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <button type="button" onClick={() => switchEntry(userId)}
+              style={{
+                padding: '4px 10px', fontSize: '12px', border: '1px solid', borderRadius: 3, fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap' as const,
+                borderColor: activeEntryId === userId ? '#C8102E' : '#ddd',
+                background: activeEntryId === userId ? '#C8102E' : 'white',
+                color: activeEntryId === userId ? 'white' : '#555', fontWeight: activeEntryId === userId ? 700 : 400,
+              }}>
+              you
+            </button>
+            {ghostEntries.map(g => (
+              <button type="button" key={g.id} onClick={() => switchEntry(g.id)}
+                style={{
+                  padding: '4px 10px', fontSize: '12px', border: '1px solid', borderRadius: 3, fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap' as const,
+                  borderColor: activeEntryId === g.id ? '#C8102E' : '#ddd',
+                  background: activeEntryId === g.id ? '#C8102E' : 'white',
+                  color: activeEntryId === g.id ? 'white' : '#555', fontWeight: activeEntryId === g.id ? 700 : 400,
+                }}>
+                {g.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* GP Navigator */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
         <button type="button" onClick={() => setGpIndex(i => Math.max(0, i - 1))} disabled={safeIdx === 0}
