@@ -159,6 +159,11 @@ export default function PoolPage({ params }: { params: { id: string } }) {
   const [inviteUrl, setInviteUrl] = useState('')
   const [isMobile, setIsMobile] = useState(false)
   const [mobilePanel, setMobilePanel] = useState<'picks' | 'leaderboard' | 'chat' | 'settings'>('picks')
+  // Lives up here rather than inside ScopedLeaderboard — that's a function defined fresh
+  // on every PoolPage render, so a useState declared inside it gets a new component
+  // identity (and its state silently reset) on every re-render; hooks in PoolPage's own
+  // body don't have that problem, and ScopedLeaderboard already closes over this scope.
+  const [leaderboardExpanded, setLeaderboardExpanded] = useState(false)
   const mobilePanelRef = useRef<HTMLDivElement>(null)
 
   function switchMobilePanel(panel: 'picks' | 'leaderboard' | 'chat' | 'settings') {
@@ -681,7 +686,17 @@ export default function PoolPage({ params }: { params: { id: string } }) {
                 {isUnrestrictedOverall && pool.deadline_type === 'before_tournament' && <span style={{width: 40, textAlign: 'center' as const, flexShrink: 0}}>max</span>}
               </div>
             </div>
-            {rows.map((member, i) => renderRow(member, i))}
+            {(leaderboardExpanded ? rows : rows.slice(0, 5)).map((member, i) => renderRow(member, i))}
+            {rows.length > 5 && (
+              <button type="button" onClick={() => setLeaderboardExpanded(e => !e)}
+                style={{
+                  display: 'block', width: '100%', marginTop: 6, padding: '6px 0', background: 'none',
+                  border: 'none', borderTop: '1px solid #f0f0f0', color: '#888', fontSize: '11px',
+                  fontFamily: 'inherit', cursor: 'pointer',
+                }}>
+                {leaderboardExpanded ? 'show top 5' : `show all ${rows.length}`}
+              </button>
+            )}
           </>
         )}
 
