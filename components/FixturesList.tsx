@@ -888,6 +888,24 @@ export default function FixturesList({
   // Nudge shown right after a ghost is added — ghosts are (so far) always YouTubers, so
   // the natural next step is filling in their channel info on their own profile page.
   const [justCreatedGhost, setJustCreatedGhost] = useState<{ id: string; name: string } | null>(null)
+
+  // Floating switcher — only shown once the real "making picks for" box has scrolled out
+  // of view, so it never just sits there duplicating what's already on screen. An
+  // IntersectionObserver on the real box is what drives this, not scroll-position math —
+  // this page nests FixturesList inside its own overflow:auto scroll container (mobile
+  // panel / desktop predictions column, see app/pool/[id]/page.tsx), and position:sticky
+  // computed relative to the wrong ancestor there was the bug in the first version of
+  // this feature; visibility tracking sidesteps the whole "which ancestor scrolls"
+  // question, and position:fixed (viewport-relative) is what actually travels with you.
+  const ghostBoxRef = useRef<HTMLDivElement>(null)
+  const [showFloatingSwitcher, setShowFloatingSwitcher] = useState(false)
+  useEffect(() => {
+    const el = ghostBoxRef.current
+    if (!el) { setShowFloatingSwitcher(false); return }
+    const observer = new IntersectionObserver(([entry]) => setShowFloatingSwitcher(!entry.isIntersecting), { threshold: 0 })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [isAdmin, canManageGhosts])
   const [ghostBoxCollapsed, setGhostBoxCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     try { return localStorage.getItem(`ghost_box_collapsed_${poolId}`) === '1' } catch { return false }
@@ -2313,7 +2331,7 @@ export default function FixturesList({
 
       {/* Ghost entry switcher — admin or a member granted ghost-management access */}
       {(isAdmin || canManageGhosts) && (
-        <div style={{ padding: '10px 12px', background: '#f9f9f9', border: '1px solid #e0e0db' }}>
+        <div ref={ghostBoxRef} style={{ padding: '10px 12px', background: '#f9f9f9', border: '1px solid #e0e0db' }}>
           <div style={{ fontSize: '10px', fontWeight: 600, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 8 }}>making picks for</div>
           <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 6, marginBottom: addingGhost ? 8 : 0 }}>
             <button type="button" onClick={() => switchEntry(userId)}
@@ -2374,17 +2392,16 @@ export default function FixturesList({
         </div>
       )}
 
-      {/* Sticky switcher — the ghost-entry box above scrolls out of view on a long
-          fixtures list, and re-scrolling up every time to switch who you're entering
-          picks for was the actual complaint. This is a compact duplicate that stays
-          pinned near the top of the viewport as you scroll, so switching is possible
-          from anywhere in the list. top:41 matches the pool page's own sticky header
-          height (see app/pool/[id]/page.tsx) so it docks directly under it, not over it. */}
-      {(isAdmin || canManageGhosts) && ghostEntries.length > 0 && (
+      {/* Floating switcher — appears only once the real box above has scrolled out of
+          view (see the IntersectionObserver + comment near ghostBoxRef), so re-scrolling
+          up to switch who you're entering picks for is never necessary. position:fixed,
+          not sticky — see that same comment for why. */}
+      {showFloatingSwitcher && (isAdmin || canManageGhosts) && ghostEntries.length > 0 && (
         <div style={{
-          position: 'sticky', top: 41, zIndex: 40, background: 'white', border: '1px solid #ddd', borderRadius: 4,
-          padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto' as const,
-          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+          position: 'fixed', top: 50, left: '50%', transform: 'translateX(-50%)', zIndex: 60,
+          background: 'white', border: '1px solid #ddd', borderRadius: 20,
+          padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto' as const, maxWidth: '92vw',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
         }}>
           <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.05em', color: '#888', flexShrink: 0, whiteSpace: 'nowrap' as const }}>
             making picks for

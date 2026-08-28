@@ -342,6 +342,18 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
   // Nudge shown right after a ghost is added — ghosts are (so far) always YouTubers, so
   // the natural next step is filling in their channel info on their own profile page.
   const [justCreatedGhost, setJustCreatedGhost] = useState<{ id: string; name: string } | null>(null)
+
+  // Floating switcher — see the fuller comment in components/FixturesList.tsx. Only
+  // shown once the real "making picks for" box has scrolled out of view.
+  const ghostBoxRef = useRef<HTMLDivElement>(null)
+  const [showFloatingSwitcher, setShowFloatingSwitcher] = useState(false)
+  useEffect(() => {
+    const el = ghostBoxRef.current
+    if (!el) { setShowFloatingSwitcher(false); return }
+    const observer = new IntersectionObserver(([entry]) => setShowFloatingSwitcher(!entry.isIntersecting), { threshold: 0 })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [isAdmin, canManageGhosts])
   const [ghostBoxCollapsed, setGhostBoxCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     try { return localStorage.getItem(`ghost_box_collapsed_${poolId}`) === '1' } catch { return false }
@@ -646,7 +658,7 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
     <div>
       {/* Entry switcher — admin or a member granted ghost-management access can pick on behalf of ghost entries */}
       {(isAdmin || canManageGhosts) && (
-        <div style={{ marginBottom: 16, padding: '10px 12px', background: '#f9f9f9', border: '1px solid #e0e0db' }}>
+        <div ref={ghostBoxRef} style={{ marginBottom: 16, padding: '10px 12px', background: '#f9f9f9', border: '1px solid #e0e0db' }}>
           <div onClick={toggleGhostBox}
             style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: ghostBoxCollapsed ? 0 : 8 }}>
             <span style={{ fontSize: '10px', fontWeight: 600, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.06em' }}>making picks for</span>
@@ -718,14 +730,14 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
         </div>
       )}
 
-      {/* Sticky switcher — see components/FixturesList.tsx for the fuller comment. Stays
-          pinned near the top of the viewport as you scroll a long prediction list, so
-          switching who you're entering picks for doesn't require scrolling back up. */}
-      {(isAdmin || canManageGhosts) && ghostEntries.length > 0 && (
+      {/* Floating switcher — see the fuller comment in components/FixturesList.tsx. Only
+          shown once the real box above has scrolled out of view. */}
+      {showFloatingSwitcher && (isAdmin || canManageGhosts) && ghostEntries.length > 0 && (
         <div style={{
-          position: 'sticky', top: 41, zIndex: 40, background: 'white', border: '1px solid #ddd', borderRadius: 4,
-          padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto' as const,
-          boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+          position: 'fixed', top: 50, left: '50%', transform: 'translateX(-50%)', zIndex: 60,
+          background: 'white', border: '1px solid #ddd', borderRadius: 20,
+          padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto' as const, maxWidth: '92vw',
+          boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
         }}>
           <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.05em', color: '#888', flexShrink: 0, whiteSpace: 'nowrap' as const }}>
             making picks for
