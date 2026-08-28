@@ -219,6 +219,30 @@ function PicksExplorer({ people, defaultColumns, competitions }: {
     return () => { cancelled = true }
   }, [competitionId])
 
+  // Current real standings — rank, points, goals for/against — not predictions, and only
+  // available for pl_2026: it's the only tournament with a synced real-table source
+  // (pl_teams, refreshed daily by app/api/pl/standings/route.ts from the actual
+  // API-Football table). No equivalent table exists for the World Cup or NFL, so this
+  // stays empty (and unrendered) for any other competition.
+  const [teamStandings, setTeamStandings] = useState<Map<string, { position: number; points: number; goalsFor: number; goalsAgainst: number }>>(new Map())
+  useEffect(() => {
+    if (competitionId !== 'pl_2026') { setTeamStandings(new Map()); return }
+    let cancelled = false
+    async function loadStandings() {
+      const supabase = createClient()
+      const { data } = await supabase.from('pl_teams').select('name, position, points, goals_for, goals_against')
+      if (cancelled) return
+      const map = new Map<string, { position: number; points: number; goalsFor: number; goalsAgainst: number }>()
+      for (const t of data || []) {
+        if (t.position == null) continue
+        map.set(t.name, { position: t.position, points: t.points ?? 0, goalsFor: t.goals_for ?? 0, goalsAgainst: t.goals_against ?? 0 })
+      }
+      setTeamStandings(map)
+    }
+    loadStandings()
+    return () => { cancelled = true }
+  }, [competitionId])
+
   function statsFor(rows: WldPick[]) {
     const hits = rows.filter(p => p.isCorrect).length
     return { hits, total: rows.length, pct: rows.length > 0 ? Math.round((hits / rows.length) * 100) : null }
@@ -350,16 +374,24 @@ function PicksExplorer({ people, defaultColumns, competitions }: {
               return (
                 <tr key={team}>
                   <td onClick={() => setSelection(rowActive ? { kind: 'all' } : { kind: 'team', team })}
-                    style={{ padding: '3px 8px', cursor: 'pointer', color: rowActive ? '#111' : '#333', fontWeight: rowActive ? 700 : 500 }}>
+                    style={{ padding: '5px 8px', cursor: 'pointer', color: rowActive ? '#111' : '#333', fontWeight: rowActive ? 700 : 500 }}>
                     <div style={{ whiteSpace: 'nowrap' as const, textDecoration: rowActive ? 'underline' : 'none' }}>{team}</div>
+                    {teamStandings.get(team) && (() => {
+                      const st = teamStandings.get(team)!
+                      return (
+                        <div style={{ fontSize: '10px', color: '#999', fontWeight: 400, whiteSpace: 'nowrap' as const, marginTop: 1 }}>
+                          #{st.position} · {st.points}pts · GF-GA {st.goalsFor}-{st.goalsAgainst}
+                        </div>
+                      )
+                    })()}
                     {(teamForm.get(team)?.length ?? 0) > 0 && (
-                      <div style={{ display: 'flex', gap: 2, marginTop: 3 }}>
+                      <div style={{ display: 'flex', gap: 2, marginTop: 4 }}>
                         {teamForm.get(team)!.map((f, i) => {
                           const c = f.result === 'W' ? { bg: '#2d7a2d', text: 'white' } : f.result === 'L' ? { bg: '#C8102E', text: 'white' } : { bg: '#ccc', text: '#444' }
                           const word = f.result === 'W' ? 'won' : f.result === 'L' ? 'lost' : 'drew'
                           return (
                             <span key={i} title={`${word} vs ${f.opponent} (${f.scoreLabel})`}
-                              style={{ width: 14, height: 14, borderRadius: 2, background: c.bg, color: c.text, fontSize: '9px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default' }}>
+                              style={{ width: 16, height: 16, borderRadius: 2, background: c.bg, color: c.text, fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default' }}>
                               {f.result}
                             </span>
                           )
