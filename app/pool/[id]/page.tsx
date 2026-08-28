@@ -432,10 +432,68 @@ export default function PoolPage({ params }: { params: { id: string } }) {
       })
       .subscribe()
 
+    // Leaderboard points otherwise only ever load once — nothing was watching
+    // predictions_v2 itself, so a fixture's points_earned changing after the fact (a
+    // cron finishing scoring, or a ghost pick edited post-lock/post-finish — see
+    // FixturesList.tsx) never showed up here until a manual page reload. Re-pulls the
+    // same pointsMap/leaderboard/allPredsCached computation `load()` does above, scoped
+    // down to just that recomputation rather than the whole page load.
+    let predictionsChannel: ReturnType<typeof supabase.channel> | null = null
+    async function refreshPoints() {
+      const { data: freshPool } = await supabase.from('pools').select('id, tournament_id, deadline_type, package_id, sport').eq('id', params.id).maybeSingle()
+      if (!freshPool) return
+
+      const pointsMap: Record<string, number> = {}
+      const maxPossibleMap: Record<string, number> = {}
+      if (freshPool.deadline_type === 'before_tournament' && freshPool.sport !== 'mma') {
+        const { data: bracketScores } = await supabase.from('bracket_picks').select('user_id, bracket_scores').eq('pool_id', freshPool.id)
+        bracketScores?.forEach((b: any) => {
+          const scores = b.bracket_scores as { total?: number; max_possible?: number } | null
+          if (scores?.total) pointsMap[b.user_id] = scores.total
+          if (scores?.max_possible != null) maxPossibleMap[b.user_id] = scores.max_possible
+        })
+      } else if (freshPool.package_id === 'CUSTOM') {
+        const { data: scores } = await supabase.from('predictions_v2').select('user_id, points_earned').eq('pool_id', freshPool.id)
+        scores?.forEach((s: any) => { if (s.points_earned) pointsMap[s.user_id] = (pointsMap[s.user_id] || 0) + s.points_earned })
+      } else {
+        const { data: scores } = await supabase.from('predictions').select('user_id, points_earned').eq('pool_id', freshPool.id)
+        scores?.forEach((s: any) => { if (s.points_earned) pointsMap[s.user_id] = (pointsMap[s.user_id] || 0) + s.points_earned })
+      }
+
+      const [{ data: members }, { data: ghosts }] = await Promise.all([
+        supabase.from('pool_members').select('*').eq('pool_id', freshPool.id),
+        supabase.from('ghost_entries').select('id, name, is_paid').eq('pool_id', freshPool.id),
+      ])
+      const ghostMembers = (ghosts || []).map((g: any) => ({ id: g.id, user_id: g.id, display_name: g.name, is_paid: !!g.is_paid, is_ghost: true }))
+      const allMembers = [...(members || []), ...ghostMembers]
+      setLeaderboard(allMembers.map((m: any) => ({ ...m, points: pointsMap[m.user_id] || 0, maxPossible: maxPossibleMap[m.user_id] })).sort((a: any, b: any) => b.points - a.points))
+
+      if (freshPool.package_id === 'CUSTOM' && freshPool.deadline_type !== 'before_tournament') {
+        const { data: allPreds } = await supabase.from('predictions_v2')
+          .select('user_id, fixture_id, points_earned, value_wld, value_text, value_ou, value_yesno, value_number')
+          .eq('pool_id', freshPool.id)
+        setAllPredsCached(allPreds || [])
+      }
+    }
+    // Debounced — a scoring cron updates one row per prediction on a fixture (could be
+    // a dozen-plus members at once), which would otherwise fire refreshPoints() once per
+    // row in a tight burst for what's really one logical event.
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null
+    function scheduleRefresh() {
+      if (refreshTimer) clearTimeout(refreshTimer)
+      refreshTimer = setTimeout(refreshPoints, 500)
+    }
+    predictionsChannel = supabase
+      .channel('pool-predictions-scoring')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'predictions_v2', filter: `pool_id=eq.${params.id}` }, scheduleRefresh)
+      .subscribe()
+
     return () => {
       cancelled = true
+      if (refreshTimer) clearTimeout(refreshTimer)
       if (fixturesChannel) supabase.removeChannel(fixturesChannel)
       supabase.removeChannel(ghostChannel)
+      if (predictionsChannel) supabase.removeChannel(predictionsChannel)
     }
   }, [params.id])
 
