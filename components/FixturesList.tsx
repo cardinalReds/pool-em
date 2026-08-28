@@ -966,8 +966,9 @@ export default function FixturesList({
     return (
       <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 2, marginTop: 2 }}>
         {st && (
-          <span style={{ fontSize: '9px', color: '#999', whiteSpace: 'nowrap' as const }}>
-            #{st.position} · {st.points}pts · {st.goalsFor}-{st.goalsAgainst}
+          <span title={`${st.position}${st.position === 1 ? 'st' : st.position === 2 ? 'nd' : st.position === 3 ? 'rd' : 'th'} place, ${st.points} points, ${st.goalsFor} goals scored, ${st.goalsAgainst} goals conceded`}
+            style={{ fontSize: '9px', color: '#999', whiteSpace: 'nowrap' as const, textAlign: 'center' as const, lineHeight: 1.3 }}>
+            #{st.position} · {st.points}pts<br />GF {st.goalsFor} · GA {st.goalsAgainst}
           </span>
         )}
         {form.length > 0 && (

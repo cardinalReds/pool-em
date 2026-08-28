@@ -379,8 +379,9 @@ function PicksExplorer({ people, defaultColumns, competitions }: {
                     {teamStandings.get(team) && (() => {
                       const st = teamStandings.get(team)!
                       return (
-                        <div style={{ fontSize: '10px', color: '#999', fontWeight: 400, whiteSpace: 'nowrap' as const, marginTop: 1 }}>
-                          #{st.position} · {st.points}pts · GF-GA {st.goalsFor}-{st.goalsAgainst}
+                        <div title={`${st.position}${st.position === 1 ? 'st' : st.position === 2 ? 'nd' : st.position === 3 ? 'rd' : 'th'} place, ${st.points} points, ${st.goalsFor} goals scored, ${st.goalsAgainst} goals conceded`}
+                          style={{ fontSize: '10px', color: '#999', fontWeight: 400, whiteSpace: 'nowrap' as const, marginTop: 1 }}>
+                          #{st.position} · {st.points}pts · GF {st.goalsFor} · GA {st.goalsAgainst}
                         </div>
                       )
                     })()}
