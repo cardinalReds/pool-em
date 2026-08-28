@@ -181,6 +181,44 @@ function PicksExplorer({ people, defaultColumns, competitions }: {
   const scoped = people.map(p => ({ ...p, scoped: p.picks.filter(x => x.tournamentId === competitionId) }))
   const teams = [...new Set(scoped.flatMap(p => p.scoped.flatMap(x => [x.homeTeam, x.awayTeam])))].sort()
 
+  // Real recent form (not predictions) — last 5 finished results for every team
+  // currently shown as a row, independent of who's being compared or what they picked.
+  // Fetched fresh per competition rather than derived from `people`'s picks, since a
+  // person's own picks are a partial, possibly-sparse subset of a team's actual games.
+  const [teamForm, setTeamForm] = useState<Map<string, { opponent: string; result: 'W' | 'D' | 'L'; scoreLabel: string }[]>>(new Map())
+  useEffect(() => {
+    if (!competitionId) { setTeamForm(new Map()); return }
+    let cancelled = false
+    async function loadForm() {
+      const supabase = createClient()
+      const { data } = await supabase.from('fixtures')
+        .select('home_team, away_team, home_score, away_score, date')
+        .eq('tournament_id', competitionId)
+        .eq('status', 'FT')
+        .order('date', { ascending: false })
+      if (cancelled) return
+      const byTeam = new Map<string, { opponent: string; result: 'W' | 'D' | 'L'; scoreLabel: string }[]>()
+      for (const f of data || []) {
+        if (f.home_score == null || f.away_score == null) continue
+        const homeResult: 'W' | 'D' | 'L' = f.home_score > f.away_score ? 'W' : f.home_score < f.away_score ? 'L' : 'D'
+        const awayResult: 'W' | 'D' | 'L' = homeResult === 'W' ? 'L' : homeResult === 'L' ? 'W' : 'D'
+        const scoreLabel = `${f.home_score}-${f.away_score}`
+        const entries: [string, string, 'W' | 'D' | 'L'][] = [[f.home_team, f.away_team, homeResult], [f.away_team, f.home_team, awayResult]]
+        for (const [team, opponent, result] of entries) {
+          const list = byTeam.get(team) || []
+          if (list.length < 5) list.push({ opponent, result, scoreLabel })
+          byTeam.set(team, list)
+        }
+      }
+      // Rows above were built newest-first (most recent 5 kept); reverse each team's list
+      // to chronological order so the form bar reads oldest-to-newest, left to right.
+      for (const [team, list] of byTeam) byTeam.set(team, [...list].reverse())
+      setTeamForm(byTeam)
+    }
+    loadForm()
+    return () => { cancelled = true }
+  }, [competitionId])
+
   function statsFor(rows: WldPick[]) {
     const hits = rows.filter(p => p.isCorrect).length
     return { hits, total: rows.length, pct: rows.length > 0 ? Math.round((hits / rows.length) * 100) : null }
@@ -312,8 +350,22 @@ function PicksExplorer({ people, defaultColumns, competitions }: {
               return (
                 <tr key={team}>
                   <td onClick={() => setSelection(rowActive ? { kind: 'all' } : { kind: 'team', team })}
-                    style={{ padding: '3px 8px', cursor: 'pointer', color: rowActive ? '#111' : '#333', fontWeight: rowActive ? 700 : 500, textDecoration: rowActive ? 'underline' : 'none', whiteSpace: 'nowrap' as const }}>
-                    {team}
+                    style={{ padding: '3px 8px', cursor: 'pointer', color: rowActive ? '#111' : '#333', fontWeight: rowActive ? 700 : 500 }}>
+                    <div style={{ whiteSpace: 'nowrap' as const, textDecoration: rowActive ? 'underline' : 'none' }}>{team}</div>
+                    {(teamForm.get(team)?.length ?? 0) > 0 && (
+                      <div style={{ display: 'flex', gap: 2, marginTop: 3 }}>
+                        {teamForm.get(team)!.map((f, i) => {
+                          const c = f.result === 'W' ? { bg: '#2d7a2d', text: 'white' } : f.result === 'L' ? { bg: '#C8102E', text: 'white' } : { bg: '#ccc', text: '#444' }
+                          const word = f.result === 'W' ? 'won' : f.result === 'L' ? 'lost' : 'drew'
+                          return (
+                            <span key={i} title={`${word} vs ${f.opponent} (${f.scoreLabel})`}
+                              style={{ width: 14, height: 14, borderRadius: 2, background: c.bg, color: c.text, fontSize: '9px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default' }}>
+                              {f.result}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )}
                   </td>
                   {scoped.map((p, pi) => {
                     const personTeamPicks = p.scoped.filter(x => x.homeTeam === team || x.awayTeam === team)
