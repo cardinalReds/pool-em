@@ -890,22 +890,33 @@ export default function FixturesList({
   const [justCreatedGhost, setJustCreatedGhost] = useState<{ id: string; name: string } | null>(null)
 
   // Floating switcher — only shown once the real "making picks for" box has scrolled out
-  // of view, so it never just sits there duplicating what's already on screen. An
-  // IntersectionObserver on the real box is what drives this, not scroll-position math —
-  // this page nests FixturesList inside its own overflow:auto scroll container (mobile
-  // panel / desktop predictions column, see app/pool/[id]/page.tsx), and position:sticky
-  // computed relative to the wrong ancestor there was the bug in the first version of
-  // this feature; visibility tracking sidesteps the whole "which ancestor scrolls"
-  // question, and position:fixed (viewport-relative) is what actually travels with you.
+  // of view, so it never just sits there duplicating what's already on screen. Checked
+  // directly via getBoundingClientRect() on a scroll listener rather than
+  // IntersectionObserver — this page nests FixturesList inside its own overflow:auto
+  // scroll container (mobile panel / desktop predictions column, see
+  // app/pool/[id]/page.tsx) rather than the main window, and a first IntersectionObserver
+  // attempt here didn't reliably fire in that setup. The listener is attached to
+  // `window` with capture:true specifically because scroll events don't bubble — capture
+  // is what lets a single window-level listener see a scroll happening on any nested
+  // scrollable ancestor, not just the window itself. position:fixed (viewport-relative)
+  // is what actually makes the bar travel with you once shown.
   const ghostBoxRef = useRef<HTMLDivElement>(null)
   const [showFloatingSwitcher, setShowFloatingSwitcher] = useState(false)
   useEffect(() => {
-    const el = ghostBoxRef.current
-    if (!el) { setShowFloatingSwitcher(false); return }
-    const observer = new IntersectionObserver(([entry]) => setShowFloatingSwitcher(!entry.isIntersecting), { threshold: 0 })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [isAdmin, canManageGhosts])
+    function checkVisibility() {
+      const el = ghostBoxRef.current
+      if (!el) { setShowFloatingSwitcher(false); return }
+      const rect = el.getBoundingClientRect()
+      setShowFloatingSwitcher(rect.bottom < 0 || rect.top > window.innerHeight)
+    }
+    checkVisibility()
+    window.addEventListener('scroll', checkVisibility, true)
+    window.addEventListener('resize', checkVisibility)
+    return () => {
+      window.removeEventListener('scroll', checkVisibility, true)
+      window.removeEventListener('resize', checkVisibility)
+    }
+  }, [isAdmin, canManageGhosts, ghostEntries.length])
   const [ghostBoxCollapsed, setGhostBoxCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     try { return localStorage.getItem(`ghost_box_collapsed_${poolId}`) === '1' } catch { return false }

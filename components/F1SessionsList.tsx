@@ -344,16 +344,26 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
   const [justCreatedGhost, setJustCreatedGhost] = useState<{ id: string; name: string } | null>(null)
 
   // Floating switcher — see the fuller comment in components/FixturesList.tsx. Only
-  // shown once the real "making picks for" box has scrolled out of view.
+  // shown once the real "making picks for" box has scrolled out of view. Checked via
+  // getBoundingClientRect() on a capturing window scroll listener, not
+  // IntersectionObserver — see that file's comment for why.
   const ghostBoxRef = useRef<HTMLDivElement>(null)
   const [showFloatingSwitcher, setShowFloatingSwitcher] = useState(false)
   useEffect(() => {
-    const el = ghostBoxRef.current
-    if (!el) { setShowFloatingSwitcher(false); return }
-    const observer = new IntersectionObserver(([entry]) => setShowFloatingSwitcher(!entry.isIntersecting), { threshold: 0 })
-    observer.observe(el)
-    return () => observer.disconnect()
-  }, [isAdmin, canManageGhosts])
+    function checkVisibility() {
+      const el = ghostBoxRef.current
+      if (!el) { setShowFloatingSwitcher(false); return }
+      const rect = el.getBoundingClientRect()
+      setShowFloatingSwitcher(rect.bottom < 0 || rect.top > window.innerHeight)
+    }
+    checkVisibility()
+    window.addEventListener('scroll', checkVisibility, true)
+    window.addEventListener('resize', checkVisibility)
+    return () => {
+      window.removeEventListener('scroll', checkVisibility, true)
+      window.removeEventListener('resize', checkVisibility)
+    }
+  }, [isAdmin, canManageGhosts, ghostEntries.length])
   const [ghostBoxCollapsed, setGhostBoxCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     try { return localStorage.getItem(`ghost_box_collapsed_${poolId}`) === '1' } catch { return false }
