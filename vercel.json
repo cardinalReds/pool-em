@@ -17,9 +17,11 @@
     { "path": "/api/nfl/fixtures", "schedule": "0 8 * * *" },
     { "path": "/api/nfl/score", "schedule": "* * * * *" },
     { "path": "/api/nfl/odds", "schedule": "0 */6 * * *" },
+    { "path": "/api/oddsapi/nfl", "schedule": "0 */6 * * *" },
     { "path": "/api/ncaaf/fixtures", "schedule": "0 8 * * *" },
     { "path": "/api/ncaaf/score", "schedule": "* * * * *" },
     { "path": "/api/ncaaf/odds", "schedule": "0 */6 * * *" },
+    { "path": "/api/oddsapi/ncaaf", "schedule": "0 */6 * * *" },
     { "path": "/api/tournaments/notify", "schedule": "0 8 * * *" },
     { "path": "/api/mma/seed", "schedule": "0 */12 * * *" },
     { "path": "/api/mma/odds", "schedule": "0 */6 * * *" }
