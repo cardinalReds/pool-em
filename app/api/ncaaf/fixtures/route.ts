@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
         api_fixture_id: g.game.id,
         status: g.game.status.short,
         venue: g.game.venue?.name || g.game.venue?.city || 'TBD',
-        city: g.game.venue?.city || null,
+        city: g.game.venue?.city || 'TBD', // fixtures.city is NOT NULL — many smaller-program venues omit city
         home_score: g.scores?.home?.total ?? null,
         away_score: g.scores?.away?.total ?? null,
         ht_home_score: htHomeScore,
