@@ -63,6 +63,19 @@ const CATEGORY_ORDER = [
   'nfl_ht_result', 'nfl_ht_spread', 'nfl_ht_total_points_ou',
 ]
 
+function formatMemberPick(pred: Pred | undefined, rule: PoolRule, game: NFLFixture): string {
+  if (!pred) return '—'
+  if (rule.input_type === 'ou') {
+    if (pred.value_ou === 'over') return 'over'
+    if (pred.value_ou === 'under') return 'under'
+    return '—'
+  }
+  if (pred.value_wld === 'home') return game.home_team
+  if (pred.value_wld === 'away') return game.away_team
+  if (pred.value_wld === 'draw') return rule.category_id.includes('spread') ? 'push' : 'tie'
+  return '—'
+}
+
 export default function NFLGamesList({ poolId, userId, tournamentId, deadlineType = 'before_each_game', isAdmin = false, canManageGhosts = false, cfbGameMode = null, cfbBest10AdminOverride = false }: {
   poolId: string; userId: string; tournamentId: string; deadlineType?: string; isAdmin?: boolean; canManageGhosts?: boolean
   cfbGameMode?: string | null; cfbBest10AdminOverride?: boolean
@@ -74,6 +87,10 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
   const [weekIndex, setWeekIndex] = useState(0)
   const [ghostEntries, setGhostEntries] = useState<{ id: string; name: string }[]>([])
   const [activeEntryId, setActiveEntryId] = useState<string>(userId)
+  // "Everyone's picks" — see components/FixturesList.tsx for the same pattern on soccer.
+  const [members, setMembers] = useState<Record<string, string>>({})
+  const [memberPreds, setMemberPreds] = useState<Record<string, Pred>>({})
+  const [showMemberPicksFor, setShowMemberPicksFor] = useState<Set<number>>(new Set())
   const [newGhostName, setNewGhostName] = useState('')
   const [addingGhost, setAddingGhost] = useState(false)
   // Nudge shown right after a ghost is added — ghosts are (so far) always YouTubers, so
@@ -142,11 +159,13 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
 
   async function load() {
     const supabase = createClient()
-    const [gamesRes, rulesRes, predsRes, ghostRes] = await Promise.all([
+    const [gamesRes, rulesRes, predsRes, ghostRes, memberRowsRes, allPredsRes] = await Promise.all([
       supabase.from('fixtures').select('*').eq('tournament_id', tournamentId).order('date'),
       supabase.from('pool_rules').select('category_id, points, bonus_points, ruleset_categories(name, input_type)').eq('pool_id', poolId),
       supabase.from('predictions_v2').select('*').eq('pool_id', poolId).eq('user_id', userId),
       supabase.from('ghost_entries').select('id, name').eq('pool_id', poolId),
+      supabase.from('pool_members').select('user_id, display_name').eq('pool_id', poolId),
+      supabase.from('predictions_v2').select('*').eq('pool_id', poolId).limit(10000),
     ])
 
     setGames(gamesRes.data || [])
@@ -156,6 +175,19 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
       input_type: r.ruleset_categories?.input_type || 'wld',
     })))
     setGhostEntries(ghostRes.data || [])
+
+    // "Everyone's picks" — display names for members + ghosts, and every pool member's
+    // predictions (not just the active entry's), so a locked/live/finished game can show
+    // what everyone picked.
+    const memberMap: Record<string, string> = {}
+    ;(memberRowsRes.data || []).forEach((m: any) => { memberMap[m.user_id] = m.display_name })
+    ;(ghostRes.data || []).forEach((g: any) => { memberMap[g.id] = g.name })
+    setMembers(memberMap)
+    const allPredMap: Record<string, Pred> = {}
+    ;(allPredsRes.data || []).forEach((p: any) => {
+      if (p.fixture_id) allPredMap[`${p.user_id}:${p.fixture_id}:${p.category_id}`] = p
+    })
+    setMemberPreds(allPredMap)
 
     // best10 pools: fetch whatever's already selected, then compute-and-store any week
     // that hasn't been picked yet — same flow as FixturesList's PL best5 wiring.
@@ -640,6 +672,90 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
                   </div>
                 )
               })}
+
+              {/* Everyone's picks — visible once locked or live, same pattern as soccer's
+                  FixturesList. isLive is always false for NFL/NCAAF today (no live-status
+                  poller exists yet for this API product), so this is gated on locked/finished
+                  in practice, but the isLive branch is kept for when that lands. */}
+              {(locked || finished || isLive) && Object.keys(members).length > 0 && (() => {
+                const relevantRules = enabledRules.filter(r =>
+                  members && Object.keys(members).some(memberId => {
+                    const p = memberPreds[`${memberId}:${game.id}:${r.category_id}`]
+                    return p && (p.value_wld || p.value_ou)
+                  })
+                )
+                if (relevantRules.length === 0) return null
+                const shown = showMemberPicksFor.has(game.id)
+                return (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f0f0f0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb' }}>
+                        everyone's picks
+                      </div>
+                      {isLive && (
+                        <button type="button" onClick={() => setShowMemberPicksFor(prev => {
+                          const next = new Set(prev)
+                          if (next.has(game.id)) next.delete(game.id); else next.add(game.id)
+                          return next
+                        })}
+                          style={{ fontSize: '10px', color: '#888', background: 'none', border: '1px solid #ddd', padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                          {shown ? 'hide' : 'show'}
+                        </button>
+                      )}
+                    </div>
+                    {(!isLive || shown) && (
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                          <thead>
+                            <tr>
+                              <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const }}></td>
+                              {relevantRules.map(rule => (
+                                <td key={rule.category_id} style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const, textAlign: 'center' as const }}>{rule.name}</td>
+                              ))}
+                              {finished && <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>pts</td>}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Object.entries(members)
+                              .filter(([memberId]) => relevantRules.some(rule => {
+                                const p = memberPreds[`${memberId}:${game.id}:${rule.category_id}`]
+                                return p && (p.value_wld || p.value_ou)
+                              }))
+                              .map(([memberId, displayName]) => {
+                                const memberTotalPts = relevantRules.reduce((sum, rule) => {
+                                  const p = memberPreds[`${memberId}:${game.id}:${rule.category_id}`]
+                                  return sum + (p?.points_earned ?? 0)
+                                }, 0)
+                                return { memberId, displayName, memberTotalPts }
+                              })
+                              .sort((a, b) => b.memberTotalPts - a.memberTotalPts)
+                              .map(({ memberId, displayName, memberTotalPts }) => {
+                                const isMe = memberId === userId
+                                return (
+                                  <tr key={memberId} style={{ background: isMe ? '#fff5f5' : 'transparent' }}>
+                                    <td style={{ padding: '4px 6px', fontWeight: isMe ? 700 : 400, color: isMe ? '#C8102E' : '#555', whiteSpace: 'nowrap' as const, borderTop: '1px solid #f5f5f5' }}>
+                                      {displayName}{isMe ? ' (you)' : ''}
+                                    </td>
+                                    {relevantRules.map(rule => (
+                                      <td key={rule.category_id} style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', color: '#555' }}>
+                                        {formatMemberPick(memberPreds[`${memberId}:${game.id}:${rule.category_id}`], rule, game)}
+                                      </td>
+                                    ))}
+                                    {finished && (
+                                      <td style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', fontWeight: 600, color: memberTotalPts > 0 ? '#2d7a2d' : '#aaa' }}>
+                                        {memberTotalPts}
+                                      </td>
+                                    )}
+                                  </tr>
+                                )
+                              })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
           </div>
         )

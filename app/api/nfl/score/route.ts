@@ -40,7 +40,11 @@ export async function POST(request: NextRequest) {
         .from('fixtures')
         .select('id')
         .eq('tournament_id', TOURNAMENT_ID)
-        .or('status.eq.live,and(status.eq.FT,scored.eq.false)')
+        // status.eq.NS,date.lte.now catches a game that just kicked off — without it this
+        // guard never fires the first time (nothing is 'live' yet since that transition
+        // only happens inside the fetch below), so the game silently sits at 'NS' until the
+        // once-daily fixtures sync happens to catch up.
+        .or(`status.eq.live,and(status.eq.FT,scored.eq.false),and(status.eq.NS,date.lte.${new Date().toISOString()})`)
         .limit(1),
       nflPoolIds.length
         ? supabase.from('predictions_v2').select('fixture_id').in('pool_id', nflPoolIds).is('points_earned', null).not('fixture_id', 'is', null)
