@@ -689,12 +689,16 @@ export default function F1SessionsList({ poolId, userId, deadlineType, tournamen
                 {ghostEntries.map(g => (
                   <div key={g.id} style={{ display: 'flex' }}>
                     <button type="button" onClick={() => switchEntry(g.id)}
-                      style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', borderRight: isAdmin ? 'none' : undefined, fontFamily: 'inherit', cursor: 'pointer',
+                      style={{ padding: '5px 10px', fontSize: '12px', border: '1px solid', borderRight: 'none', fontFamily: 'inherit', cursor: 'pointer',
                         borderColor: activeEntryId === g.id ? '#C8102E' : '#ddd',
                         background: activeEntryId === g.id ? '#C8102E' : 'white',
                         color: activeEntryId === g.id ? 'white' : '#555', fontWeight: activeEntryId === g.id ? 700 : 400 }}>
                       {g.name}
                     </button>
+                    <a href={`/dashboard/g/${g.id}`} title={`manage ${g.name}'s profile`}
+                      style={{ padding: '5px 8px', fontSize: '12px', border: '1px solid #ddd', borderRight: isAdmin ? 'none' : undefined, background: 'white', color: '#888', textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
+                      ✎
+                    </a>
                     {isAdmin && (
                       <button type="button" title={`delete ${g.name}`} onClick={() => deleteGhost(g)}
                         style={{ padding: '5px 8px', fontSize: '12px', border: '1px solid #ddd', background: 'white', color: '#C8102E', cursor: 'pointer', fontFamily: 'inherit' }}>
