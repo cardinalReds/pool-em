@@ -11,6 +11,19 @@ const LEAGUE = 2 // NCAA (college football) — same product as NFL (league 1), 
 const SEASON = 2026
 const TOURNAMENT_ID = 'ncaaf_2026'
 
+// The vendor's own `week` field is far coarser than a real college-football week — confirmed
+// it lumped Sat Aug 29 through the following Mon Sep 7 (two full weekends, 9 days) under a
+// single week=1, which fed the best10 selector games 8 days apart as if they were the same
+// pickable "week." Bucket by actual calendar week instead (Tue 00:00 UTC through the
+// following Mon 23:59 UTC — the standard CFB week boundary) and number the buckets
+// sequentially ourselves, from the full season's game list, so the numbering is stable
+// across syncs.
+function weekBucketKey(dateStr: string): number {
+  const anchor = Date.UTC(2024, 0, 2) // an arbitrary Tuesday — only used to align 7-day buckets
+  const diffDays = Math.floor((new Date(dateStr).getTime() - anchor) / (24 * 60 * 60 * 1000))
+  return Math.floor(diffDays / 7)
+}
+
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   const { searchParams } = new URL(request.url)
@@ -26,15 +39,23 @@ export async function GET(request: NextRequest) {
     )
     if (!res.ok) throw new Error(`API error: ${res.status}`)
     const data = await res.json()
-    const games = data.response || []
+    const allGames = data.response || []
+
+    // FBS (Division I-A) only — the other divisions (FCS, DII, DIII) aren't what anyone
+    // means by "college football" for a pool, and would dwarf the best10 candidate pool.
+    const games = allGames.filter((g: any) => g.game.stage === 'FBS (Division I-A)')
+    const skipped = allGames.length - games.length
+
+    const bucketKeys = [...new Set(games.map((g: any) =>
+      weekBucketKey(`${g.game.date.date}T${g.game.date.time}:00Z`)
+    ))].sort((a, b) => (a as number) - (b as number))
+    const weekNumberByBucket = new Map(bucketKeys.map((k, i) => [k, i + 1]))
 
     let upserted = 0
-    let skipped = 0
     const failures: { id: number; error: string }[] = []
     for (const g of games) {
-      // FBS (Division I-A) only — the other divisions (FCS, DII, DIII) aren't what anyone
-      // means by "college football" for a pool, and would dwarf the best10 candidate pool.
-      if (g.game.stage !== 'FBS (Division I-A)') { skipped++; continue }
+      const dateIso = `${g.game.date.date}T${g.game.date.time}:00Z`
+      const weekNumber = weekNumberByBucket.get(weekBucketKey(dateIso))
 
       const homeQ1 = g.scores?.home?.quarter_1
       const homeQ2 = g.scores?.home?.quarter_2
@@ -46,12 +67,12 @@ export async function GET(request: NextRequest) {
       const { error } = await supabase.from('fixtures').upsert({
         id: g.game.id,
         tournament_id: TOURNAMENT_ID,
-        round: `Week ${g.game.week}`, // matches NFL's "Week N" shape used by NFLGamesList's grouping
+        round: `Week ${weekNumber}`, // matches NFL's "Week N" shape used by NFLGamesList's grouping
         home_team: g.teams.home.name,
         away_team: g.teams.away.name,
         home_logo: g.teams.home.logo || null,
         away_logo: g.teams.away.logo || null,
-        date: `${g.game.date.date}T${g.game.date.time}:00Z`,
+        date: dateIso,
         api_fixture_id: g.game.id,
         status: g.game.status.short,
         venue: g.game.venue?.name || g.game.venue?.city || 'TBD',
