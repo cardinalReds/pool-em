@@ -313,10 +313,17 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
 
   const safeIdx = Math.min(Math.max(weekIndex, 0), weeks.length - 1)
   const currentWeek = weeks[safeIdx]
-  const allWeekGames = games.filter(g => g.round === currentWeek).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  // Live games get their own section above (see "live now" below) and are sorted out of
+  // this list — the rest orders NS before FT, same as components/FixturesList.tsx.
+  const statusOrder = (g: NFLFixture) => g.status === 'NS' ? 0 : g.status === 'FT' ? 1 : 2
+  const allWeekGames = games.filter(g => g.round === currentWeek && g.status !== 'live').sort((a, b) => {
+    if (statusOrder(a) !== statusOrder(b)) return statusOrder(a) - statusOrder(b)
+    return new Date(a.date).getTime() - new Date(b.date).getTime()
+  })
   const weekGames = isBest10Active
     ? allWeekGames.filter(g => !best10Selections[currentWeek] || best10Selections[currentWeek].includes(g.id))
     : allWeekGames
+  const liveGames = games.filter(g => g.status === 'live')
   const enabledRules = CATEGORY_ORDER.map(id => poolRules.find(r => r.category_id === id)).filter(Boolean) as PoolRule[]
 
   // 'before_weekend' pools lock the whole gameweek at the first kickoff of that week,
@@ -331,6 +338,273 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
       return Date.now() >= weekLockTime(game.round)
     }
     return new Date(game.date) <= new Date()
+  }
+
+  function renderGame(game: NFLFixture) {
+    // Ghost entries stay editable past the normal lock — activeEntryId can only ever
+    // be `userId` or one of ghostEntries' ids, so this only bypasses lock while an
+    // authorized admin/manager is actively picking on a ghost's behalf.
+    const locked = activeEntryId === userId && isGameLocked(game)
+    const finished = game.status === 'FT'
+    const isLive = game.status === 'live'
+    const hasAnyPick = enabledRules.some(r => {
+      const p = preds[`${game.id}:${r.category_id}`]
+      return p?.value_wld || p?.value_ou
+    })
+    const btnStyle = (active: boolean): React.CSSProperties => ({
+      flex: 1, padding: '8px 4px', fontSize: '11px', border: '1px solid',
+      cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit',
+      borderColor: active ? '#C8102E' : '#ddd',
+      background: active ? '#C8102E' : locked ? '#fafafa' : 'white',
+      color: active ? 'white' : '#555',
+    })
+    const hasOdds = game.odds_home != null || game.odds_away != null
+    const oddsRevealed = revealedOddsIds.has(game.id)
+    const revealed = !!oddsAlwaysVisible || !!oddsRevealed
+    const toggleOdds = (e: React.MouseEvent) => {
+      e.stopPropagation()
+      setRevealedOddsIds(prev => {
+        const next = new Set(prev)
+        if (next.has(game.id)) next.delete(game.id); else next.add(game.id)
+        return next
+      })
+    }
+    const oddsLine = (value: number | null) => hasOdds && (
+      <span style={{
+        display: 'block', fontSize: '10px', marginTop: 2,
+        filter: revealed ? 'none' : 'blur(3px)', transition: 'filter 0.15s',
+      }}>
+        {value != null ? formatOdds(value, oddsFormat || 'decimal') : '—'}
+      </span>
+    )
+
+    return (
+      <div key={game.id} style={{
+        marginBottom: 12,
+        background: 'white',
+        border: isLive ? '2px solid #2d7a2d' : '1px solid #e0e0db',
+        borderLeft: isLive ? '4px solid #2d7a2d' : hasAnyPick ? '3px solid #C8102E' : '1px solid #e0e0db',
+      }}>
+        {/* Meta row */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 10px', borderBottom: '1px solid #f0f0f0', fontSize: '10px', color: '#aaa' }}>
+          <span>{fmt(game.date)}</span>
+          {game.city && <span>{game.city}</span>}
+          {isLive
+            ? <span style={{ color: '#2d7a2d', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2d7a2d', display: 'inline-block' }} /> LIVE
+              </span>
+            : locked && !finished ? <span>locked</span>
+            : !finished ? (
+                <span style={{ color: '#bbb' }}>
+                  {deadlineType === 'before_weekend'
+                    ? `locks ${fmt(new Date(weekLockTime(game.round)).toISOString())}`
+                    : `locks at kickoff · ${fmt(game.date)}`}
+                </span>
+              ) : null}
+        </div>
+
+        {/* Team header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 10px', gap: 4 }}>
+          <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', flex: 1, gap: 4 }}>
+            {game.away_logo
+              ? <img src={game.away_logo} alt={game.away_team} style={{ width: 44, height: 44, objectFit: 'contain' as const }} />
+              : <span style={{ fontSize: '28px' }}>🏈</span>}
+            <span style={{ fontWeight: 700, fontSize: '11px', textAlign: 'center' as const, lineHeight: 1.2 }}>{game.away_team}</span>
+          </div>
+          {(finished || isLive)
+            ? <span style={{ fontWeight: 700, fontSize: isLive ? '22px' : '18px', color: isLive ? '#2d7a2d' : '#111', flexShrink: 0, padding: '0 8px' }}>{game.away_score} – {game.home_score}</span>
+            : <span style={{ fontSize: '12px', color: '#ccc', flexShrink: 0, padding: '0 8px' }}>@</span>}
+          <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', flex: 1, gap: 4 }}>
+            {game.home_logo
+              ? <img src={game.home_logo} alt={game.home_team} style={{ width: 44, height: 44, objectFit: 'contain' as const }} />
+              : <span style={{ fontSize: '28px' }}>🏈</span>}
+            <span style={{ fontWeight: 700, fontSize: '11px', textAlign: 'center' as const, lineHeight: 1.2 }}>{game.home_team}</span>
+          </div>
+        </div>
+
+        <div style={{ padding: '10px 12px', borderTop: '1px solid #f5f5f5' }}>
+          {enabledRules.length === 0 && (
+            <div style={{ fontSize: '11px', color: '#aaa', textAlign: 'center' as const, padding: 8 }}>no predictions configured for this pool</div>
+          )}
+          {enabledRules.map(rule => {
+            const key = `${game.id}:${rule.category_id}`
+            const pick = preds[key]
+            const isHt = rule.category_id.startsWith('nfl_ht_')
+            const spreadLine = isHt ? game.line_ht_asian_handicap_home : game.line_asian_handicap_home
+            const totalLine = isHt ? game.line_ht_total_points : game.line_total_goals
+
+            return (
+              <div key={rule.category_id} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #f0f0f0' }}>
+                <div style={{ fontSize: '10px', fontWeight: 600, color: '#555', marginBottom: 5, display: 'flex', justifyContent: 'space-between' }}>
+                  <span>{rule.name}</span>
+                  <span style={{ color: '#C8102E' }}>{rule.points} pt{rule.points > 1 ? 's' : ''}</span>
+                </div>
+
+                {rule.input_type === 'wld' && (rule.category_id === 'nfl_spread' || rule.category_id === 'nfl_ht_spread') && (() => {
+                  // A push is only possible when the line is a whole number — half-point
+                  // spreads (the vast majority) can never tie, so don't offer that option.
+                  const canPush = spreadLine != null && Number.isInteger(spreadLine)
+                  return (
+                    <div style={{ display: 'flex', gap: 0 }}>
+                      <button style={{ ...btnStyle(pick?.value_wld === 'away'), borderRight: 'none' }} disabled={locked}
+                        onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'away' })}>
+                        {game.away_team}{spreadLine != null ? ` (${spreadLine > 0 ? '+' : ''}${-spreadLine})` : ''}
+                      </button>
+                      {canPush && (
+                        <button style={{ ...btnStyle(pick?.value_wld === 'draw'), borderRight: 'none' }} disabled={locked}
+                          onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'draw' })}>
+                          push
+                        </button>
+                      )}
+                      <button style={btnStyle(pick?.value_wld === 'home')} disabled={locked}
+                        onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'home' })}>
+                        {game.home_team}{spreadLine != null ? ` (${spreadLine > 0 ? '+' : ''}${spreadLine})` : ''}
+                      </button>
+                    </div>
+                  )
+                })()}
+
+                {rule.input_type === 'wld' && rule.category_id !== 'nfl_spread' && rule.category_id !== 'nfl_ht_spread' && (() => {
+                  const showOdds = rule.category_id === 'nfl_result' && hasOdds
+                  return (
+                    <div>
+                      <div style={{ display: 'flex', gap: 0 }}>
+                        <button style={{ ...btnStyle(pick?.value_wld === 'away'), borderRight: 'none', overflow: 'hidden' }} disabled={locked}
+                          onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'away' })}>
+                          {game.away_team}
+                          {showOdds && oddsLine(game.odds_away)}
+                        </button>
+                        <button style={{ ...btnStyle(pick?.value_wld === 'draw'), borderRight: 'none', flexShrink: 0, flex: '0 0 60px' }} disabled={locked}
+                          onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'draw' })}>
+                          tie
+                        </button>
+                        <button style={{ ...btnStyle(pick?.value_wld === 'home'), overflow: 'hidden' }} disabled={locked}
+                          onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'home' })}>
+                          {game.home_team}
+                          {showOdds && oddsLine(game.odds_home)}
+                        </button>
+                      </div>
+                      {showOdds && (
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                          <span onClick={toggleOdds} style={{ fontSize: '10px', color: '#888', cursor: 'pointer', textDecoration: 'underline' }}>
+                            {revealed ? 'tap to hide odds' : 'tap to reveal odds'}
+                          </span>
+                          <span style={{ color: '#ddd', fontSize: '10px' }}>·</span>
+                          <span onClick={toggleOddsAlwaysVisible} style={{ fontSize: '10px', color: '#888', cursor: 'pointer', textDecoration: 'underline' }}>
+                            {oddsAlwaysVisible ? 'stop always showing odds' : 'keep odds visible'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+
+                {rule.input_type === 'ou' && (
+                  <div style={{ display: 'flex', gap: 0 }}>
+                    <button style={{ ...btnStyle(pick?.value_ou === 'over'), borderRight: 'none' }} disabled={locked}
+                      onClick={() => !locked && savePred(game.id, rule.category_id, { value_ou: 'over' })}>
+                      over {totalLine ?? '(line TBD)'}
+                    </button>
+                    <button style={btnStyle(pick?.value_ou === 'under')} disabled={locked}
+                      onClick={() => !locked && savePred(game.id, rule.category_id, { value_ou: 'under' })}>
+                      under {totalLine ?? '(line TBD)'}
+                    </button>
+                  </div>
+                )}
+
+                {pick?.points_earned != null && game.status === 'FT' && (
+                  <div style={{ fontSize: '10px', marginTop: 4, color: pick.points_earned > 0 ? '#2d7a2d' : '#aaa' }}>
+                    {pick.points_earned > 0 ? `✓ +${pick.points_earned} pts` : '✗ no points'}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {/* Everyone's picks — visible once locked, live, or finished, same pattern as
+              components/FixturesList.tsx. */}
+          {(locked || finished || isLive) && Object.keys(members).length > 0 && (() => {
+            const relevantRules = enabledRules.filter(r =>
+              members && Object.keys(members).some(memberId => {
+                const p = memberPreds[`${memberId}:${game.id}:${r.category_id}`]
+                return p && (p.value_wld || p.value_ou)
+              })
+            )
+            if (relevantRules.length === 0) return null
+            const shown = showMemberPicksFor.has(game.id)
+            return (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f0f0f0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb' }}>
+                    everyone's picks
+                  </div>
+                  {isLive && (
+                    <button type="button" onClick={() => setShowMemberPicksFor(prev => {
+                      const next = new Set(prev)
+                      if (next.has(game.id)) next.delete(game.id); else next.add(game.id)
+                      return next
+                    })}
+                      style={{ fontSize: '10px', color: '#888', background: 'none', border: '1px solid #ddd', padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      {shown ? 'hide' : 'show'}
+                    </button>
+                  )}
+                </div>
+                {(!isLive || shown) && (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                      <thead>
+                        <tr>
+                          <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const }}></td>
+                          {relevantRules.map(rule => (
+                            <td key={rule.category_id} style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const, textAlign: 'center' as const }}>{rule.name}</td>
+                          ))}
+                          {(finished || isLive) && <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>pts</td>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(members)
+                          .filter(([memberId]) => relevantRules.some(rule => {
+                            const p = memberPreds[`${memberId}:${game.id}:${rule.category_id}`]
+                            return p && (p.value_wld || p.value_ou)
+                          }))
+                          .map(([memberId, displayName]) => {
+                            const memberTotalPts = relevantRules.reduce((sum, rule) => {
+                              const p = memberPreds[`${memberId}:${game.id}:${rule.category_id}`]
+                              return sum + (p?.points_earned ?? 0)
+                            }, 0)
+                            return { memberId, displayName, memberTotalPts }
+                          })
+                          .sort((a, b) => b.memberTotalPts - a.memberTotalPts)
+                          .map(({ memberId, displayName, memberTotalPts }) => {
+                            const isMe = memberId === userId
+                            return (
+                              <tr key={memberId} style={{ background: isMe ? '#fff5f5' : 'transparent' }}>
+                                <td style={{ padding: '4px 6px', fontWeight: isMe ? 700 : 400, color: isMe ? '#C8102E' : '#555', whiteSpace: 'nowrap' as const, borderTop: '1px solid #f5f5f5' }}>
+                                  {displayName}{isMe ? ' (you)' : ''}
+                                </td>
+                                {relevantRules.map(rule => (
+                                  <td key={rule.category_id} style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', color: '#555' }}>
+                                    {formatMemberPick(memberPreds[`${memberId}:${game.id}:${rule.category_id}`], rule, game)}
+                                  </td>
+                                ))}
+                                {(finished || isLive) && (
+                                  <td style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', fontWeight: 600, color: memberTotalPts > 0 ? '#2d7a2d' : '#aaa' }}>
+                                    {memberTotalPts}
+                                  </td>
+                                )}
+                              </tr>
+                            )
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -491,275 +765,19 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
         )
       })()}
 
-      {/* Games for this week */}
-      {weekGames.map(game => {
-        // Ghost entries stay editable past the normal lock — activeEntryId can only ever
-        // be `userId` or one of ghostEntries' ids, so this only bypasses lock while an
-        // authorized admin/manager is actively picking on a ghost's behalf.
-        const locked = activeEntryId === userId && isGameLocked(game)
-        const finished = game.status === 'FT'
-        const isLive = game.status === 'live'
-        const hasAnyPick = enabledRules.some(r => {
-          const p = preds[`${game.id}:${r.category_id}`]
-          return p?.value_wld || p?.value_ou
-        })
-        const btnStyle = (active: boolean): React.CSSProperties => ({
-          flex: 1, padding: '8px 4px', fontSize: '11px', border: '1px solid',
-          cursor: locked ? 'default' : 'pointer', fontFamily: 'inherit',
-          borderColor: active ? '#C8102E' : '#ddd',
-          background: active ? '#C8102E' : locked ? '#fafafa' : 'white',
-          color: active ? 'white' : '#555',
-        })
-        const hasOdds = game.odds_home != null || game.odds_away != null
-        const oddsRevealed = revealedOddsIds.has(game.id)
-        const revealed = !!oddsAlwaysVisible || !!oddsRevealed
-        const toggleOdds = (e: React.MouseEvent) => {
-          e.stopPropagation()
-          setRevealedOddsIds(prev => {
-            const next = new Set(prev)
-            if (next.has(game.id)) next.delete(game.id); else next.add(game.id)
-            return next
-          })
-        }
-        const oddsLine = (value: number | null) => hasOdds && (
-          <span style={{
-            display: 'block', fontSize: '10px', marginTop: 2,
-            filter: revealed ? 'none' : 'blur(3px)', transition: 'filter 0.15s',
-          }}>
-            {value != null ? formatOdds(value, oddsFormat || 'decimal') : '—'}
-          </span>
-        )
-
-        return (
-          <div key={game.id} style={{
-            marginBottom: 12,
-            background: 'white',
-            border: isLive ? '2px solid #2d7a2d' : '1px solid #e0e0db',
-            borderLeft: isLive ? '4px solid #2d7a2d' : hasAnyPick ? '3px solid #C8102E' : '1px solid #e0e0db',
-          }}>
-            {/* Meta row */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 10px', borderBottom: '1px solid #f0f0f0', fontSize: '10px', color: '#aaa' }}>
-              <span>{fmt(game.date)}</span>
-              {game.city && <span>{game.city}</span>}
-              {isLive
-                ? <span style={{ color: '#2d7a2d', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2d7a2d', display: 'inline-block' }} /> LIVE
-                  </span>
-                : locked && !finished ? <span>locked</span>
-                : !finished ? (
-                    <span style={{ color: '#bbb' }}>
-                      {deadlineType === 'before_weekend'
-                        ? `locks ${fmt(new Date(weekLockTime(game.round)).toISOString())}`
-                        : `locks at kickoff · ${fmt(game.date)}`}
-                    </span>
-                  ) : null}
-            </div>
-
-            {/* Team header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 10px', gap: 4 }}>
-              <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', flex: 1, gap: 4 }}>
-                {game.away_logo
-                  ? <img src={game.away_logo} alt={game.away_team} style={{ width: 44, height: 44, objectFit: 'contain' as const }} />
-                  : <span style={{ fontSize: '28px' }}>🏈</span>}
-                <span style={{ fontWeight: 700, fontSize: '11px', textAlign: 'center' as const, lineHeight: 1.2 }}>{game.away_team}</span>
-              </div>
-              {(finished || isLive)
-                ? <span style={{ fontWeight: 700, fontSize: isLive ? '22px' : '18px', color: isLive ? '#2d7a2d' : '#111', flexShrink: 0, padding: '0 8px' }}>{game.away_score} – {game.home_score}</span>
-                : <span style={{ fontSize: '12px', color: '#ccc', flexShrink: 0, padding: '0 8px' }}>@</span>}
-              <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', flex: 1, gap: 4 }}>
-                {game.home_logo
-                  ? <img src={game.home_logo} alt={game.home_team} style={{ width: 44, height: 44, objectFit: 'contain' as const }} />
-                  : <span style={{ fontSize: '28px' }}>🏈</span>}
-                <span style={{ fontWeight: 700, fontSize: '11px', textAlign: 'center' as const, lineHeight: 1.2 }}>{game.home_team}</span>
-              </div>
-            </div>
-
-            <div style={{ padding: '10px 12px', borderTop: '1px solid #f5f5f5' }}>
-              {enabledRules.length === 0 && (
-                <div style={{ fontSize: '11px', color: '#aaa', textAlign: 'center' as const, padding: 8 }}>no predictions configured for this pool</div>
-              )}
-              {enabledRules.map(rule => {
-                const key = `${game.id}:${rule.category_id}`
-                const pick = preds[key]
-                const isHt = rule.category_id.startsWith('nfl_ht_')
-                const spreadLine = isHt ? game.line_ht_asian_handicap_home : game.line_asian_handicap_home
-                const totalLine = isHt ? game.line_ht_total_points : game.line_total_goals
-
-                return (
-                  <div key={rule.category_id} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px solid #f0f0f0' }}>
-                    <div style={{ fontSize: '10px', fontWeight: 600, color: '#555', marginBottom: 5, display: 'flex', justifyContent: 'space-between' }}>
-                      <span>{rule.name}</span>
-                      <span style={{ color: '#C8102E' }}>{rule.points} pt{rule.points > 1 ? 's' : ''}</span>
-                    </div>
-
-                    {rule.input_type === 'wld' && (rule.category_id === 'nfl_spread' || rule.category_id === 'nfl_ht_spread') && (() => {
-                      // A push is only possible when the line is a whole number — half-point
-                      // spreads (the vast majority) can never tie, so don't offer that option.
-                      const canPush = spreadLine != null && Number.isInteger(spreadLine)
-                      return (
-                        <div style={{ display: 'flex', gap: 0 }}>
-                          <button style={{ ...btnStyle(pick?.value_wld === 'away'), borderRight: 'none' }} disabled={locked}
-                            onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'away' })}>
-                            {game.away_team}{spreadLine != null ? ` (${spreadLine > 0 ? '+' : ''}${-spreadLine})` : ''}
-                          </button>
-                          {canPush && (
-                            <button style={{ ...btnStyle(pick?.value_wld === 'draw'), borderRight: 'none' }} disabled={locked}
-                              onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'draw' })}>
-                              push
-                            </button>
-                          )}
-                          <button style={btnStyle(pick?.value_wld === 'home')} disabled={locked}
-                            onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'home' })}>
-                            {game.home_team}{spreadLine != null ? ` (${spreadLine > 0 ? '+' : ''}${spreadLine})` : ''}
-                          </button>
-                        </div>
-                      )
-                    })()}
-
-                    {rule.input_type === 'wld' && rule.category_id !== 'nfl_spread' && rule.category_id !== 'nfl_ht_spread' && (() => {
-                      const showOdds = rule.category_id === 'nfl_result' && hasOdds
-                      return (
-                        <div>
-                          <div style={{ display: 'flex', gap: 0 }}>
-                            <button style={{ ...btnStyle(pick?.value_wld === 'away'), borderRight: 'none', overflow: 'hidden' }} disabled={locked}
-                              onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'away' })}>
-                              {game.away_team}
-                              {showOdds && oddsLine(game.odds_away)}
-                            </button>
-                            <button style={{ ...btnStyle(pick?.value_wld === 'draw'), borderRight: 'none', flexShrink: 0, flex: '0 0 60px' }} disabled={locked}
-                              onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'draw' })}>
-                              tie
-                            </button>
-                            <button style={{ ...btnStyle(pick?.value_wld === 'home'), overflow: 'hidden' }} disabled={locked}
-                              onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'home' })}>
-                              {game.home_team}
-                              {showOdds && oddsLine(game.odds_home)}
-                            </button>
-                          </div>
-                          {showOdds && (
-                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                              <span onClick={toggleOdds} style={{ fontSize: '10px', color: '#888', cursor: 'pointer', textDecoration: 'underline' }}>
-                                {revealed ? 'tap to hide odds' : 'tap to reveal odds'}
-                              </span>
-                              <span style={{ color: '#ddd', fontSize: '10px' }}>·</span>
-                              <span onClick={toggleOddsAlwaysVisible} style={{ fontSize: '10px', color: '#888', cursor: 'pointer', textDecoration: 'underline' }}>
-                                {oddsAlwaysVisible ? 'stop always showing odds' : 'keep odds visible'}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })()}
-
-                    {rule.input_type === 'ou' && (
-                      <div style={{ display: 'flex', gap: 0 }}>
-                        <button style={{ ...btnStyle(pick?.value_ou === 'over'), borderRight: 'none' }} disabled={locked}
-                          onClick={() => !locked && savePred(game.id, rule.category_id, { value_ou: 'over' })}>
-                          over {totalLine ?? '(line TBD)'}
-                        </button>
-                        <button style={btnStyle(pick?.value_ou === 'under')} disabled={locked}
-                          onClick={() => !locked && savePred(game.id, rule.category_id, { value_ou: 'under' })}>
-                          under {totalLine ?? '(line TBD)'}
-                        </button>
-                      </div>
-                    )}
-
-                    {pick?.points_earned != null && game.status === 'FT' && (
-                      <div style={{ fontSize: '10px', marginTop: 4, color: pick.points_earned > 0 ? '#2d7a2d' : '#aaa' }}>
-                        {pick.points_earned > 0 ? `✓ +${pick.points_earned} pts` : '✗ no points'}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-
-              {/* Everyone's picks — visible once locked or live, same pattern as soccer's
-                  FixturesList. isLive is always false for NFL/NCAAF today (no live-status
-                  poller exists yet for this API product), so this is gated on locked/finished
-                  in practice, but the isLive branch is kept for when that lands. */}
-              {(locked || finished || isLive) && Object.keys(members).length > 0 && (() => {
-                const relevantRules = enabledRules.filter(r =>
-                  members && Object.keys(members).some(memberId => {
-                    const p = memberPreds[`${memberId}:${game.id}:${r.category_id}`]
-                    return p && (p.value_wld || p.value_ou)
-                  })
-                )
-                if (relevantRules.length === 0) return null
-                const shown = showMemberPicksFor.has(game.id)
-                return (
-                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f0f0f0' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <div style={{ fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#bbb' }}>
-                        everyone's picks
-                      </div>
-                      {isLive && (
-                        <button type="button" onClick={() => setShowMemberPicksFor(prev => {
-                          const next = new Set(prev)
-                          if (next.has(game.id)) next.delete(game.id); else next.add(game.id)
-                          return next
-                        })}
-                          style={{ fontSize: '10px', color: '#888', background: 'none', border: '1px solid #ddd', padding: '2px 8px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                          {shown ? 'hide' : 'show'}
-                        </button>
-                      )}
-                    </div>
-                    {(!isLive || shown) && (
-                      <div style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
-                          <thead>
-                            <tr>
-                              <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const }}></td>
-                              {relevantRules.map(rule => (
-                                <td key={rule.category_id} style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const, textAlign: 'center' as const }}>{rule.name}</td>
-                              ))}
-                              {finished && <td style={{ padding: '3px 6px', color: '#aaa', fontWeight: 600, textAlign: 'center' as const }}>pts</td>}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {Object.entries(members)
-                              .filter(([memberId]) => relevantRules.some(rule => {
-                                const p = memberPreds[`${memberId}:${game.id}:${rule.category_id}`]
-                                return p && (p.value_wld || p.value_ou)
-                              }))
-                              .map(([memberId, displayName]) => {
-                                const memberTotalPts = relevantRules.reduce((sum, rule) => {
-                                  const p = memberPreds[`${memberId}:${game.id}:${rule.category_id}`]
-                                  return sum + (p?.points_earned ?? 0)
-                                }, 0)
-                                return { memberId, displayName, memberTotalPts }
-                              })
-                              .sort((a, b) => b.memberTotalPts - a.memberTotalPts)
-                              .map(({ memberId, displayName, memberTotalPts }) => {
-                                const isMe = memberId === userId
-                                return (
-                                  <tr key={memberId} style={{ background: isMe ? '#fff5f5' : 'transparent' }}>
-                                    <td style={{ padding: '4px 6px', fontWeight: isMe ? 700 : 400, color: isMe ? '#C8102E' : '#555', whiteSpace: 'nowrap' as const, borderTop: '1px solid #f5f5f5' }}>
-                                      {displayName}{isMe ? ' (you)' : ''}
-                                    </td>
-                                    {relevantRules.map(rule => (
-                                      <td key={rule.category_id} style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', color: '#555' }}>
-                                        {formatMemberPick(memberPreds[`${memberId}:${game.id}:${rule.category_id}`], rule, game)}
-                                      </td>
-                                    ))}
-                                    {finished && (
-                                      <td style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', fontWeight: 600, color: memberTotalPts > 0 ? '#2d7a2d' : '#aaa' }}>
-                                        {memberTotalPts}
-                                      </td>
-                                    )}
-                                  </tr>
-                                )
-                              })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                )
-              })()}
-            </div>
+      {/* Live games — always shown at top, across all weeks, same as components/FixturesList.tsx */}
+      {liveGames.length > 0 && (
+        <div>
+          <div style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.08em', color: '#2d7a2d', padding: '4px 0', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2d7a2d', display: 'inline-block' }} />
+            live now
           </div>
-        )
-      })}
+          {liveGames.map(renderGame)}
+        </div>
+      )}
+
+      {/* Games for this week */}
+      {weekGames.map(renderGame)}
     </div>
   )
 }
