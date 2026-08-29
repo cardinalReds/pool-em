@@ -41,6 +41,7 @@ interface Pred {
   value_wld?: string | null
   value_ou?: string | null
   points_earned?: number | null
+  is_correct?: boolean | null
 }
 
 const USER_TZ = typeof Intl !== 'undefined'
@@ -65,14 +66,24 @@ const CATEGORY_ORDER = [
 
 function formatMemberPick(pred: Pred | undefined, rule: PoolRule, game: NFLFixture): string {
   if (!pred) return '—'
+  const isSpread = rule.category_id === 'nfl_spread' || rule.category_id === 'nfl_ht_spread'
   if (rule.input_type === 'ou') {
     if (pred.value_ou === 'over') return 'over'
     if (pred.value_ou === 'under') return 'under'
     return '—'
   }
+  if (isSpread) {
+    const isHt = rule.category_id.startsWith('nfl_ht_')
+    const spreadLine = isHt ? game.line_ht_asian_handicap_home : game.line_asian_handicap_home
+    const signed = (n: number) => `${n > 0 ? '+' : ''}${n}`
+    if (pred.value_wld === 'home') return spreadLine != null ? `${game.home_team} (${signed(spreadLine)})` : game.home_team
+    if (pred.value_wld === 'away') return spreadLine != null ? `${game.away_team} (${signed(-spreadLine)})` : game.away_team
+    if (pred.value_wld === 'draw') return 'push'
+    return '—'
+  }
   if (pred.value_wld === 'home') return game.home_team
   if (pred.value_wld === 'away') return game.away_team
-  if (pred.value_wld === 'draw') return rule.category_id.includes('spread') ? 'push' : 'tie'
+  if (pred.value_wld === 'draw') return 'tie'
   return '—'
 }
 
@@ -592,11 +603,20 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
                                 <td style={{ padding: '4px 6px', fontWeight: isMe ? 700 : 400, color: isMe ? '#C8102E' : '#555', whiteSpace: 'nowrap' as const, borderTop: '1px solid #f5f5f5' }}>
                                   {displayName}{isMe ? ' (you)' : ''}
                                 </td>
-                                {relevantRules.map(rule => (
-                                  <td key={rule.category_id} style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', color: '#555' }}>
-                                    {formatMemberPick(memberPreds[`${memberId}:${game.id}:${rule.category_id}`], rule, game)}
-                                  </td>
-                                ))}
+                                {relevantRules.map(rule => {
+                                  const p = memberPreds[`${memberId}:${game.id}:${rule.category_id}`]
+                                  const isCorrect = p?.is_correct
+                                  return (
+                                    <td key={rule.category_id} style={{
+                                      padding: '4px 6px', textAlign: 'center' as const, whiteSpace: 'nowrap' as const,
+                                      borderTop: '1px solid #f5f5f5',
+                                      color: (finished || isLive) ? (isCorrect ? '#2d7a2d' : isCorrect === false ? '#aaa' : '#555') : '#555',
+                                    }}>
+                                      {formatMemberPick(p, rule, game)}
+                                      {(finished || isLive) && isCorrect && <span style={{ marginLeft: 3 }}>✓</span>}
+                                    </td>
+                                  )
+                                })}
                                 {(finished || isLive) && (
                                   <td style={{ padding: '4px 6px', textAlign: 'center' as const, borderTop: '1px solid #f5f5f5', fontWeight: 600, color: memberTotalPts > 0 ? '#2d7a2d' : '#aaa' }}>
                                     {memberTotalPts}
