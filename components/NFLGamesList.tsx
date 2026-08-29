@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import GhostAccessManager from '@/components/GhostAccessManager'
 import Best5Selector from '@/components/Best5Selector'
+import { formatOdds, type OddsFormat } from '@/lib/oddsFormat'
 
 interface NFLFixture {
   id: number
@@ -112,6 +113,26 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
     })
   }
   const [revealedOddsIds, setRevealedOddsIds] = useState<Set<number>>(new Set())
+  const [oddsFormat, setOddsFormat] = useState<OddsFormat>('decimal')
+  const [oddsAlwaysVisible, setOddsAlwaysVisible] = useState(false)
+
+  // Odds display preference — same pattern as components/FixturesList.tsx, shared across
+  // sports via the same profiles columns.
+  useEffect(() => {
+    if (!userId) return
+    createClient().from('profiles').select('odds_format, odds_always_visible').eq('id', userId).maybeSingle()
+      .then(({ data }) => {
+        if (data?.odds_format) setOddsFormat(data.odds_format as OddsFormat)
+        if (data) setOddsAlwaysVisible(data.odds_always_visible)
+      })
+  }, [userId])
+
+  async function toggleOddsAlwaysVisible() {
+    if (!userId) return
+    const next = !oddsAlwaysVisible
+    setOddsAlwaysVisible(next)
+    await createClient().from('profiles').update({ odds_always_visible: next }).eq('id', userId)
+  }
   const [best10Selections, setBest10Selections] = useState<Record<string, number[]>>({})
   const activeEntryIdRef = useRef(activeEntryId)
   useEffect(() => { activeEntryIdRef.current = activeEntryId }, [activeEntryId])
@@ -453,6 +474,7 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
         })
         const hasOdds = game.odds_home != null || game.odds_away != null
         const oddsRevealed = revealedOddsIds.has(game.id)
+        const revealed = !!oddsAlwaysVisible || !!oddsRevealed
         const toggleOdds = (e: React.MouseEvent) => {
           e.stopPropagation()
           setRevealedOddsIds(prev => {
@@ -461,6 +483,14 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
             return next
           })
         }
+        const oddsLine = (value: number | null) => hasOdds && (
+          <span style={{
+            display: 'block', fontSize: '10px', marginTop: 2,
+            filter: revealed ? 'none' : 'blur(3px)', transition: 'filter 0.15s',
+          }}>
+            {value != null ? formatOdds(value, oddsFormat || 'decimal') : '—'}
+          </span>
+        )
 
         return (
           <div key={game.id} style={{
@@ -473,17 +503,6 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 10px', borderBottom: '1px solid #f0f0f0', fontSize: '10px', color: '#aaa' }}>
               <span>{fmt(game.date)}</span>
               {game.city && <span>{game.city}</span>}
-              {hasOdds && (
-                <span
-                  onClick={toggleOdds}
-                  title={oddsRevealed ? 'tap to hide odds' : 'tap to reveal odds'}
-                  style={{
-                    cursor: 'pointer', userSelect: 'none' as const, color: '#888',
-                    filter: oddsRevealed ? 'none' : 'blur(4px)', transition: 'filter 0.15s',
-                  }}>
-                  {game.odds_away != null ? game.odds_away.toFixed(2) : '—'} / {game.odds_home != null ? game.odds_home.toFixed(2) : '—'}
-                </span>
-              )}
               {isLive
                 ? <span style={{ color: '#2d7a2d', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2d7a2d', display: 'inline-block' }} /> LIVE
@@ -552,22 +571,40 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
                       )
                     })()}
 
-                    {rule.input_type === 'wld' && rule.category_id !== 'nfl_spread' && rule.category_id !== 'nfl_ht_spread' && (
-                      <div style={{ display: 'flex', gap: 0 }}>
-                        <button style={{ ...btnStyle(pick?.value_wld === 'away'), borderRight: 'none' }} disabled={locked}
-                          onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'away' })}>
-                          {game.away_team}
-                        </button>
-                        <button style={{ ...btnStyle(pick?.value_wld === 'draw'), borderRight: 'none' }} disabled={locked}
-                          onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'draw' })}>
-                          tie
-                        </button>
-                        <button style={btnStyle(pick?.value_wld === 'home')} disabled={locked}
-                          onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'home' })}>
-                          {game.home_team}
-                        </button>
-                      </div>
-                    )}
+                    {rule.input_type === 'wld' && rule.category_id !== 'nfl_spread' && rule.category_id !== 'nfl_ht_spread' && (() => {
+                      const showOdds = rule.category_id === 'nfl_result' && hasOdds
+                      return (
+                        <div>
+                          <div style={{ display: 'flex', gap: 0 }}>
+                            <button style={{ ...btnStyle(pick?.value_wld === 'away'), borderRight: 'none', overflow: 'hidden' }} disabled={locked}
+                              onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'away' })}>
+                              {game.away_team}
+                              {showOdds && oddsLine(game.odds_away)}
+                            </button>
+                            <button style={{ ...btnStyle(pick?.value_wld === 'draw'), borderRight: 'none', flexShrink: 0, flex: '0 0 60px' }} disabled={locked}
+                              onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'draw' })}>
+                              tie
+                            </button>
+                            <button style={{ ...btnStyle(pick?.value_wld === 'home'), overflow: 'hidden' }} disabled={locked}
+                              onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'home' })}>
+                              {game.home_team}
+                              {showOdds && oddsLine(game.odds_home)}
+                            </button>
+                          </div>
+                          {showOdds && (
+                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                              <span onClick={toggleOdds} style={{ fontSize: '10px', color: '#888', cursor: 'pointer', textDecoration: 'underline' }}>
+                                {revealed ? 'tap to hide odds' : 'tap to reveal odds'}
+                              </span>
+                              <span style={{ color: '#ddd', fontSize: '10px' }}>·</span>
+                              <span onClick={toggleOddsAlwaysVisible} style={{ fontSize: '10px', color: '#888', cursor: 'pointer', textDecoration: 'underline' }}>
+                                {oddsAlwaysVisible ? 'stop always showing odds' : 'keep odds visible'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
 
                     {rule.input_type === 'ou' && (
                       <div style={{ display: 'flex', gap: 0 }}>
