@@ -290,11 +290,13 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
   // 'before_weekend' pools lock the whole gameweek at the first kickoff of that week,
   // rather than each game locking individually at its own kickoff — mirrors FixturesList's
   // isLocked/matchdayLockTime for PL's "before each match week" option.
+  function weekLockTime(round: string): number {
+    const weekGamesAll = games.filter(g => g.round === round)
+    return Math.min(...weekGamesAll.map(g => new Date(g.date).getTime()))
+  }
   function isGameLocked(game: NFLFixture) {
     if (deadlineType === 'before_weekend') {
-      const weekGamesAll = games.filter(g => g.round === game.round)
-      const firstKickoff = Math.min(...weekGamesAll.map(g => new Date(g.date).getTime()))
-      return Date.now() >= firstKickoff
+      return Date.now() >= weekLockTime(game.round)
     }
     return new Date(game.date) <= new Date()
   }
@@ -511,7 +513,14 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
                 ? <span style={{ color: '#2d7a2d', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
                     <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2d7a2d', display: 'inline-block' }} /> LIVE
                   </span>
-                : locked && !finished ? <span>locked</span> : null}
+                : locked && !finished ? <span>locked</span>
+                : !finished ? (
+                    <span style={{ color: '#bbb' }}>
+                      {deadlineType === 'before_weekend'
+                        ? `locks ${fmt(new Date(weekLockTime(game.round)).toISOString())}`
+                        : `locks at kickoff · ${fmt(game.date)}`}
+                    </span>
+                  ) : null}
             </div>
 
             {/* Team header */}
