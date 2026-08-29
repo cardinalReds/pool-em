@@ -49,7 +49,10 @@ export async function GET(request: NextRequest) {
     const bucketKeys = [...new Set(games.map((g: any) =>
       weekBucketKey(`${g.game.date.date}T${g.game.date.time}:00Z`)
     ))].sort((a, b) => (a as number) - (b as number))
-    const weekNumberByBucket = new Map(bucketKeys.map((k, i) => [k, i + 1]))
+    // Numbered from 0, not 1 — ESPN/NCAA.com both call the season's opening slate "Week 0"
+    // (confirmed for 2026: Aug 28-29 is Week 0, Sept 3-7 is the "real" Week 1), so starting
+    // at 1 would put our Week 1 a full week ahead of what it means everywhere else.
+    const weekNumberByBucket = new Map(bucketKeys.map((k, i) => [k, i]))
 
     let upserted = 0
     const failures: { id: number; error: string }[] = []
