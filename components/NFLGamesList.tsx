@@ -325,12 +325,9 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
   const safeIdx = Math.min(Math.max(weekIndex, 0), weeks.length - 1)
   const currentWeek = weeks[safeIdx]
   // Live games get their own section above (see "live now" below) and are sorted out of
-  // this list — the rest orders NS before FT, same as components/FixturesList.tsx.
-  const statusOrder = (g: NFLFixture) => g.status === 'NS' ? 0 : g.status === 'FT' ? 1 : 2
-  const allWeekGames = games.filter(g => g.round === currentWeek && g.status !== 'live').sort((a, b) => {
-    if (statusOrder(a) !== statusOrder(b)) return statusOrder(a) - statusOrder(b)
-    return new Date(a.date).getTime() - new Date(b.date).getTime()
-  })
+  // this list — the rest is plain kickoff-time order.
+  const allWeekGames = games.filter(g => g.round === currentWeek && g.status !== 'live')
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
   const weekGames = isBest10Active
     ? allWeekGames.filter(g => !best10Selections[currentWeek] || best10Selections[currentWeek].includes(g.id))
     : allWeekGames
