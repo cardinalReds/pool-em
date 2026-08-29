@@ -323,7 +323,17 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
   const weekGames = isBest10Active
     ? allWeekGames.filter(g => !best10Selections[currentWeek] || best10Selections[currentWeek].includes(g.id))
     : allWeekGames
-  const liveGames = games.filter(g => g.status === 'live')
+  // best10 pools: a live game only belongs here if it's one of that week's ten selected
+  // games — otherwise a game the pool never picked (and has no picks to show) surfaces
+  // in "live now" regardless of what week is being viewed.
+  const liveGames = games.filter(g => {
+    if (g.status !== 'live') return false
+    if (isBest10Active) {
+      const roundSel = best10Selections[g.round]
+      return !roundSel || roundSel.includes(g.id)
+    }
+    return true
+  })
   const enabledRules = CATEGORY_ORDER.map(id => poolRules.find(r => r.category_id === id)).filter(Boolean) as PoolRule[]
 
   // 'before_weekend' pools lock the whole gameweek at the first kickoff of that week,
