@@ -11,6 +11,16 @@ const LEAGUE = 1 // NFL (2 = NCAA, not synced here)
 const SEASON = 2026
 const TOURNAMENT_ID = 'nfl_2026'
 
+// This sync can run while games are live — the vendor's raw status ("Q2", "1H", etc.) must
+// not be written verbatim, or it stomps the 'live' value the per-minute score cron owns and
+// the UI checks for with a value nothing recognizes as live. See
+// app/api/ncaaf/fixtures/route.ts for the fuller comment (hit there first, fixed here too).
+function normalizeStatus(statusShort: string): string {
+  if (statusShort === 'FT' || statusShort === 'AOT') return 'FT'
+  if (statusShort === 'NS') return 'NS'
+  return 'live'
+}
+
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   const { searchParams } = new URL(request.url)
@@ -53,7 +63,7 @@ export async function GET(request: NextRequest) {
         away_logo: g.teams.away.logo || null,
         date: `${g.game.date.date}T${g.game.date.time}:00Z`,
         api_fixture_id: g.game.id,
-        status: g.game.status.short,
+        status: normalizeStatus(g.game.status.short),
         venue: g.game.venue?.name || g.game.venue?.city || 'TBD',
         city: g.game.venue?.city || 'TBD', // fixtures.city is NOT NULL — same latent gap as app/api/ncaaf/fixtures/route.ts, just never hit for NFL yet
         home_score: g.scores?.home?.total ?? null,

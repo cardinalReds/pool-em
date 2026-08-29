@@ -11,6 +11,17 @@ const LEAGUE = 2 // NCAA (college football) — same product as NFL (league 1), 
 const SEASON = 2026
 const TOURNAMENT_ID = 'ncaaf_2026'
 
+// This sync can run mid-game (it was re-run manually twice today for the week-numbering
+// fix while games were live) — the vendor's raw status ("Q2", "1H", etc.) must not be
+// written verbatim, or it stomps the 'live' value the per-minute score cron owns and the
+// UI checks for with a value nothing recognizes as live. Collapse anything that isn't
+// explicitly NS/FT-family into 'live', same as app/api/ncaaf/score/route.ts's isFinished.
+function normalizeStatus(statusShort: string): string {
+  if (statusShort === 'FT' || statusShort === 'AOT') return 'FT'
+  if (statusShort === 'NS') return 'NS'
+  return 'live'
+}
+
 // The vendor's own `week` field is far coarser than a real college-football week — confirmed
 // it lumped Sat Aug 29 through the following Mon Sep 7 (two full weekends, 9 days) under a
 // single week=1, which fed the best10 selector games 8 days apart as if they were the same
@@ -77,7 +88,7 @@ export async function GET(request: NextRequest) {
         away_logo: g.teams.away.logo || null,
         date: dateIso,
         api_fixture_id: g.game.id,
-        status: g.game.status.short,
+        status: normalizeStatus(g.game.status.short),
         venue: g.game.venue?.name || g.game.venue?.city || 'TBD',
         city: g.game.venue?.city || 'TBD', // fixtures.city is NOT NULL — many smaller-program venues omit city
         home_score: g.scores?.home?.total ?? null,
