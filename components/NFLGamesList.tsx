@@ -466,7 +466,7 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
                     <div style={{ display: 'flex', gap: 0 }}>
                       <button style={{ ...btnStyle(pick?.value_wld === 'away'), borderRight: 'none' }} disabled={locked}
                         onClick={() => !locked && savePred(game.id, rule.category_id, { value_wld: 'away' })}>
-                        {game.away_team}{spreadLine != null ? ` (${spreadLine > 0 ? '+' : ''}${-spreadLine})` : ''}
+                        {game.away_team}{spreadLine != null ? ` (${-spreadLine > 0 ? '+' : ''}${-spreadLine})` : ''}
                       </button>
                       {canPush && (
                         <button style={{ ...btnStyle(pick?.value_wld === 'draw'), borderRight: 'none' }} disabled={locked}
