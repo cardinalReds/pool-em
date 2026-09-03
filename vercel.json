@@ -14,6 +14,8 @@
     { "path": "/api/pl/standings", "schedule": "0 8 * * *" },
     { "path": "/api/pl/score", "schedule": "* * * * *" },
     { "path": "/api/pl/weekly-payouts", "schedule": "0 * * * *" },
+    { "path": "/api/ucl/fixtures", "schedule": "0 7 * * *" },
+    { "path": "/api/ucl/score", "schedule": "* * * * *" },
     { "path": "/api/nfl/fixtures", "schedule": "0 8 * * *" },
     { "path": "/api/nfl/score", "schedule": "* * * * *" },
     { "path": "/api/nfl/odds", "schedule": "0 */6 * * *" },

@@ -15,6 +15,8 @@ export default async function Home() {
   const [
     { data: plStarted }, { data: plEarliest },
     { data: nflStarted }, { data: nflEarliest },
+    { data: ncaafStarted }, { data: ncaafEarliest },
+    { data: uclStarted }, { data: uclEarliest },
     { data: f1Started }, { data: f1Earliest },
     { data: nextMma },
     { data: publicF1Pools },
@@ -23,6 +25,10 @@ export default async function Home() {
     supabase.from('fixtures').select('date').eq('tournament_id', 'pl_2026').order('date', { ascending: true }).limit(1),
     supabase.from('fixtures').select('id').eq('tournament_id', 'nfl_2026').neq('status', 'NS').limit(1),
     supabase.from('fixtures').select('date').eq('tournament_id', 'nfl_2026').order('date', { ascending: true }).limit(1),
+    supabase.from('fixtures').select('id').eq('tournament_id', 'ncaaf_2026').neq('status', 'NS').limit(1),
+    supabase.from('fixtures').select('date').eq('tournament_id', 'ncaaf_2026').order('date', { ascending: true }).limit(1),
+    supabase.from('fixtures').select('id').eq('tournament_id', 'ucl_2026').neq('status', 'NS').limit(1),
+    supabase.from('fixtures').select('date').eq('tournament_id', 'ucl_2026').order('date', { ascending: true }).limit(1),
     supabase.from('f1_sessions').select('id').eq('tournament_id', 'f1_2026').eq('status', 'Completed').limit(1),
     supabase.from('f1_sessions').select('date').eq('tournament_id', 'f1_2026').order('date', { ascending: true }).limit(1),
     supabase.from('tournaments').select('name, event_date').eq('sport', 'mma').eq('status', 'active').gte('event_date', new Date().toISOString()).order('event_date', { ascending: true }).limit(1),
@@ -50,6 +56,8 @@ export default async function Home() {
 
   const plTag = startTag(!!plStarted?.length, plEarliest?.[0]?.date)
   const nflTag = startTag(!!nflStarted?.length, nflEarliest?.[0]?.date)
+  const ncaafTag = startTag(!!ncaafStarted?.length, ncaafEarliest?.[0]?.date)
+  const uclTag = startTag(!!uclStarted?.length, uclEarliest?.[0]?.date)
   const f1Started_ = !!f1Started?.length
 
   function shortDate(iso: string) {
@@ -73,8 +81,10 @@ export default async function Home() {
 
   const competitions = [
     { emoji: '⚽', name: 'Premier League 2026/27', tag: plTag.kind, label: plTag.label },
+    { emoji: '⚽', name: 'Champions League 2026/27', tag: uclTag.kind, label: uclTag.label },
     { emoji: '🥊', name: 'UFC', tag: mmaTag.kind, label: mmaTag.label },
     { emoji: '🏈', name: 'NFL 2026/27', tag: nflTag.kind, label: nflTag.label },
+    { emoji: '🏈', name: 'NCAA Football 2026', tag: ncaafTag.kind, label: ncaafTag.label },
   ]
 
   const paths = [
@@ -149,9 +159,7 @@ export default async function Home() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {[
               { emoji: '⚾', name: 'MLB Playoffs' },
-              { emoji: '🏈', name: 'NCAA Football' },
               { emoji: '🏀', name: 'NBA Playoffs' },
-              { emoji: '⚽', name: 'Champions League 2026/27' },
             ].map(s => (
               <div key={s.name} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <span style={{ fontSize: '1.1rem' }}>{s.emoji}</span>
