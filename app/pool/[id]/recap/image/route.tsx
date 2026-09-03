@@ -9,10 +9,12 @@ import RecapPoster from '@/components/RecapPoster'
 // Anyone hitting this URL directly without that gets a plain 401/403/404, no image.
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   const round = request.nextUrl.searchParams.get('round') || undefined
+  const ghostsOnly = request.nextUrl.searchParams.get('ghostsOnly') === '1'
+  const rankBasis = request.nextUrl.searchParams.get('rankBasis') === 'ghosts' ? 'ghosts' : 'overall'
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.pool-em.com'
 
   const supabase = await createClient()
-  const result = await loadRecap(supabase, params.id, { round, baseUrl })
+  const result = await loadRecap(supabase, params.id, { round, baseUrl, ghostsOnly, rankBasis })
 
   if ('error' in result) {
     const status = result.error === 'unauthorized' ? 401 : result.error === 'forbidden' ? 403 : 404

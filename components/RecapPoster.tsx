@@ -39,10 +39,12 @@ export default function RecapPoster({ data, scale = 1, interactive = false }: { 
         </div>
       ) : (
         <>
-          {/* Leaderboard — overall/season standings, not scoped to just this round */}
+          {/* Leaderboard — overall/season standings, not scoped to just this round. When
+              ghostsOnly is set, this only lists the ghost entries — ranked either among
+              themselves or by their real position in the general table, per rankBasis. */}
           <div style={{ display: 'flex', flexDirection: 'column', marginTop: s(22) }}>
             <div style={{ display: 'flex', fontSize: s(10), fontWeight: 600, color: faint, textTransform: 'uppercase', letterSpacing: 1 }}>
-              overall standings
+              {data.ghostsOnly ? 'ghosts' : 'overall standings'}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', marginTop: s(8) }}>
               {data.leaderboard.map((row, i) => (
@@ -51,7 +53,7 @@ export default function RecapPoster({ data, scale = 1, interactive = false }: { 
                   padding: `${s(7)}px 0`, borderTop: i === 0 ? 'none' : '1px solid #f2f2f0',
                 }}>
                   <span style={{ display: 'flex', fontSize: s(14), fontWeight: i === 0 ? 600 : 400 }}>
-                    {i + 1}. {row.display_name}{row.is_ghost ? '*' : ''}
+                    {row.rank}. {row.display_name}{row.is_ghost ? '*' : ''}
                   </span>
                   <span style={{ display: 'flex', alignItems: 'baseline', fontSize: s(14), fontWeight: 600, color: i === 0 ? red : '#333' }}>
                     {row.points} pts
@@ -64,6 +66,11 @@ export default function RecapPoster({ data, scale = 1, interactive = false }: { 
                 </div>
               ))}
             </div>
+            {data.ghostsOnly && data.rankBasis === 'overall' && data.otherCount != null && (
+              <div style={{ display: 'flex', fontSize: s(10), color: faint, marginTop: s(6) }}>
+                ranked against {data.otherCount} other{data.otherCount === 1 ? '' : 's'} in the general table.
+              </div>
+            )}
             {data.leaderboard.some(row => row.is_ghost) && (
               <div style={{ display: 'flex', fontSize: s(10), color: faint, marginTop: s(6) }}>
                 * predictions are inputted by the admin based on weekly video predictions.

@@ -9,6 +9,7 @@ export type RecapLeaderboardRow = {
   points: number
   games: number | null
   is_ghost?: boolean
+  rank: number
 }
 
 export type RecapItem = {
@@ -29,6 +30,13 @@ export type RecapData = {
   dateLabel: string
   gameUnit: string | null // "game" / "session" / null (MMA omits the count entirely)
   leaderboard: RecapLeaderboardRow[]
+  ghostsOnly: boolean
+  // Only meaningful when ghostsOnly is true — 'ghosts' means each row's rank is its
+  // position among just the ghosts shown; 'overall' means it's the row's real position in
+  // the full general-table leaderboard (not consecutive), and otherCount says how many
+  // non-ghost entries also exist in that same general table.
+  rankBasis: 'overall' | 'ghosts'
+  otherCount?: number
   items: RecapItem[]
   itemsOverflow: number
   empty: boolean
@@ -188,6 +196,8 @@ export function buildRecap(input: {
   poolLink: string
   nextDeadlineIso: string | null
   nextRoundLabel: string | null
+  ghostsOnly: boolean
+  rankBasis: 'overall' | 'ghosts'
 }): RecapData {
   const SEGMENT_ORDER: Record<string, number> = { main_card: 0, prelims: 1, prelim_card: 1, early_prelims: 2 }
   const finishedGames = input.roundGames.filter(g => g.finished).sort((a, b) => {
@@ -203,11 +213,22 @@ export function buildRecap(input: {
 
   const empty = gameIds.size === 0
 
+  // Inactive members don't feature in the recap at all — "active" means they made at
+  // least one pick on a game in THIS round (not lifetime), so someone who stopped
+  // predicting weeks ago drops out even though their season point total is still real.
+  const roundGameIds = new Set(input.roundGames.map(g => g.id))
+  const activeUserIds = new Set(
+    input.preds
+      .filter(p => p.fixture_id != null && roundGameIds.has(p.fixture_id) && pickKey(p) !== null)
+      .map(p => p.user_id)
+  )
+  const activeMembers = input.members.filter(m => activeUserIds.has(m.user_id))
+
   // Global (season/tournament-wide) standings, not scoped to this one round — the same
   // total shown by ScopedLeaderboard's default "all games" view, so a recap doubles as
   // an "and here's where everyone stands overall" artifact, not just this round's tally.
   const allFinishedIds = new Set(input.allFinishedGames.map(g => g.id))
-  const leaderboardFull = input.members.map(m => {
+  const leaderboardFull = activeMembers.map(m => {
     const points = input.preds
       .filter(p => p.user_id === m.user_id)
       .reduce((sum, p) => sum + (p.points_earned || 0), 0)
@@ -219,9 +240,29 @@ export function buildRecap(input: {
       ? new Set([...pickedIds].map(id => input.roundByFixtureId[id]).filter(Boolean)).size
       : pickedIds.size
     return { display_name: m.display_name, points, games, is_ghost: m.is_ghost }
-  }).sort((a, b) => b.points - a.points)
+  })
+    .sort((a, b) => b.points - a.points)
+    .map((row, i): RecapLeaderboardRow => ({ ...row, rank: i + 1 }))
 
-  const leaderboard = input.members.length > 8 ? leaderboardFull.slice(0, LEADERBOARD_CAP) : leaderboardFull
+  // Three shapes, per the general/ghosts-only/ghosts-ranked-overall distinction:
+  //  - not ghostsOnly: the general table, ranks 1..N as computed above.
+  //  - ghostsOnly + rankBasis 'ghosts': just the ghost rows, re-ranked 1..N among themselves.
+  //  - ghostsOnly + rankBasis 'overall': just the ghost rows, keeping their real (non-
+  //    consecutive) rank from the general table, plus how many non-ghosts sit alongside them.
+  let scopedLeaderboard: RecapLeaderboardRow[]
+  let otherCount: number | undefined
+  if (!input.ghostsOnly) {
+    scopedLeaderboard = leaderboardFull
+  } else if (input.rankBasis === 'ghosts') {
+    scopedLeaderboard = leaderboardFull
+      .filter(row => row.is_ghost)
+      .map((row, i) => ({ ...row, rank: i + 1 }))
+  } else {
+    scopedLeaderboard = leaderboardFull.filter(row => row.is_ghost)
+    otherCount = leaderboardFull.length - scopedLeaderboard.length
+  }
+
+  const leaderboard = scopedLeaderboard.length > 8 ? scopedLeaderboard.slice(0, LEADERBOARD_CAP) : scopedLeaderboard
 
   const allItems = empty ? [] : buildItems(finishedGames, input.preds, input.isMma)
   const items = allItems.slice(0, ITEM_CAP)
@@ -242,6 +283,9 @@ export function buildRecap(input: {
     dateLabel: input.roundDate ? shortDate(input.roundDate) : '',
     gameUnit: input.isMma ? null : input.isF1 ? 'round' : 'game',
     leaderboard,
+    ghostsOnly: input.ghostsOnly,
+    rankBasis: input.rankBasis,
+    otherCount,
     items,
     itemsOverflow,
     empty,
@@ -256,7 +300,7 @@ export function buildRecap(input: {
 export async function loadRecap(
   supabase: SupabaseClient<Database>,
   poolId: string,
-  opts: { round?: string; baseUrl: string }
+  opts: { round?: string; baseUrl: string; ghostsOnly?: boolean; rankBasis?: 'overall' | 'ghosts' }
 ): Promise<RecapResult> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'unauthorized' }
@@ -366,6 +410,8 @@ export async function loadRecap(
     poolLink: `${opts.baseUrl}/pool/${pool.id}`,
     nextDeadlineIso,
     nextRoundLabel,
+    ghostsOnly: !!opts.ghostsOnly,
+    rankBasis: opts.rankBasis || 'overall',
   })
 
   return { data: recap, roundsAvailable }
