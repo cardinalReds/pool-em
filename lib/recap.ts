@@ -9,6 +9,7 @@ export type RecapLeaderboardRow = {
   points: number
   games: number | null
   is_ghost?: boolean
+  avatar_url?: string | null
   rank: number
 }
 
@@ -186,7 +187,7 @@ export function buildRecap(input: {
   roundDate: string | null
   isF1: boolean
   isMma: boolean
-  members: { user_id: string; display_name: string; is_ghost?: boolean }[]
+  members: { user_id: string; display_name: string; is_ghost?: boolean; avatar_url?: string | null }[]
   roundGames: RawGame[]
   allFinishedGames: RawGame[] // whole tournament, not just this round — for the global leaderboard
   roundByFixtureId: Record<number, string>
@@ -239,7 +240,7 @@ export function buildRecap(input: {
     const games = input.isF1
       ? new Set([...pickedIds].map(id => input.roundByFixtureId[id]).filter(Boolean)).size
       : pickedIds.size
-    return { display_name: m.display_name, points, games, is_ghost: m.is_ghost }
+    return { display_name: m.display_name, points, games, is_ghost: m.is_ghost, avatar_url: m.avatar_url }
   })
     .sort((a, b) => b.points - a.points)
     .map((row, i): RecapLeaderboardRow => ({ ...row, rank: i + 1 }))
@@ -313,10 +314,10 @@ export async function loadRecap(
   const isMma = pool.sport === 'mma'
 
   const { data: members } = await supabase.from('pool_members').select('user_id, display_name').eq('pool_id', poolId)
-  const { data: ghosts } = await supabase.from('ghost_entries').select('id, name').eq('pool_id', poolId)
+  const { data: ghosts } = await supabase.from('ghost_entries').select('id, name, avatar_url').eq('pool_id', poolId)
   const allMembers = [
     ...(members || []).map(m => ({ user_id: m.user_id, display_name: m.display_name, is_ghost: false })),
-    ...(ghosts || []).map(g => ({ user_id: g.id, display_name: g.name, is_ghost: true })),
+    ...(ghosts || []).map(g => ({ user_id: g.id, display_name: g.name, is_ghost: true, avatar_url: g.avatar_url })),
   ]
 
   const { data: tournament } = await supabase.from('tournaments').select('name, event_date').eq('id', pool.tournament_id).maybeSingle()

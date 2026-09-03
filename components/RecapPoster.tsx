@@ -52,7 +52,20 @@ export default function RecapPoster({ data, scale = 1, interactive = false }: { 
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                   padding: `${s(7)}px 0`, borderTop: i === 0 ? 'none' : '1px solid #f2f2f0',
                 }}>
-                  <span style={{ display: 'flex', fontSize: s(14), fontWeight: i === 0 ? 600 : 400 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', fontSize: s(14), fontWeight: i === 0 ? 600 : 400 }}>
+                    {data.ghostsOnly && (
+                      row.avatar_url ? (
+                        <img src={row.avatar_url} width={s(20)} height={s(20)} style={{ borderRadius: '50%', marginRight: s(7), objectFit: 'cover' }} />
+                      ) : (
+                        <span style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          width: s(20), height: s(20), borderRadius: '50%', background: '#f0f0ed',
+                          fontSize: s(10), fontWeight: 700, color: '#bbb', marginRight: s(7),
+                        }}>
+                          {row.display_name.slice(0, 1).toUpperCase()}
+                        </span>
+                      )
+                    )}
                     {row.rank}. {row.display_name}{row.is_ghost ? '*' : ''}
                   </span>
                   <span style={{ display: 'flex', alignItems: 'baseline', fontSize: s(14), fontWeight: 600, color: i === 0 ? red : '#333' }}>
