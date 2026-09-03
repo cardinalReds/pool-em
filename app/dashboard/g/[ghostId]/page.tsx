@@ -169,6 +169,14 @@ export default function GhostProfilePage() {
                 style={{ fontSize: '0.85rem', padding: '6px 10px', border: '1px solid var(--border)', fontFamily: 'inherit', background: 'white', color: '#111' }} />
               <input value={channelUrl} onChange={e => setChannelUrl(e.target.value)} placeholder="channel url (youtube.com/@...)"
                 style={{ fontSize: '0.85rem', padding: '6px 10px', border: '1px solid var(--border)', fontFamily: 'inherit', background: 'white', color: '#111' }} />
+              {channelUrl.trim() && (
+                <a href={channelUrl.trim()} target="_blank" rel="noopener noreferrer" style={{
+                  alignSelf: 'flex-start', fontSize: '0.78rem', fontWeight: 600, padding: '5px 12px',
+                  border: '1px solid #C8102E', color: '#C8102E', textDecoration: 'none', fontFamily: 'inherit',
+                }}>
+                  ▶ open channel
+                </a>
+              )}
             </div>
             {channelInfoChanged && (
               <button onClick={saveChannelInfo} disabled={saving}
@@ -180,10 +188,13 @@ export default function GhostProfilePage() {
           </>
         ) : canonical.channel_name || canonical.channel_url ? (
           <div>
-            {canonical.channel_name && <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{canonical.channel_name}</div>}
+            {canonical.channel_name && <div style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: canonical.channel_url ? 8 : 0 }}>{canonical.channel_name}</div>}
             {canonical.channel_url && (
-              <a href={canonical.channel_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.8rem', color: '#C8102E' }}>
-                {canonical.channel_url}
+              <a href={canonical.channel_url} target="_blank" rel="noopener noreferrer" style={{
+                display: 'inline-block', fontSize: '0.78rem', fontWeight: 600, padding: '5px 12px',
+                border: '1px solid #C8102E', color: '#C8102E', textDecoration: 'none', fontFamily: 'inherit',
+              }}>
+                ▶ open channel
               </a>
             )}
           </div>
