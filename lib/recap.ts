@@ -240,7 +240,12 @@ export function buildRecap(input: {
   const allFinishedIds = new Set(input.allFinishedGames.map(g => g.id))
   const memberStats = activeMembers.map(m => {
     const ownPreds = input.preds.filter(p => p.user_id === m.user_id)
-    const totalPoints = ownPreds.reduce((sum, p) => sum + (p.points_earned || 0), 0)
+    // Round-special picks (fixture_id null, e.g. soccer_clean_sheet_round) aren't scoped to
+    // the allFinishedIds cutoff below — there's no per-round cutoff data for those here —
+    // so they still count toward the total regardless of which round is being recapped.
+    const totalPoints = ownPreds
+      .filter(p => p.fixture_id == null || allFinishedIds.has(p.fixture_id))
+      .reduce((sum, p) => sum + (p.points_earned || 0), 0)
     const roundPoints = ownPreds
       .filter(p => p.fixture_id != null && roundGameIds.has(p.fixture_id))
       .reduce((sum, p) => sum + (p.points_earned || 0), 0)
@@ -439,7 +444,19 @@ export async function loadRecap(
   }
 
   const roundGames = isMma ? rawGames : rawGames.filter(g => roundOf(g) === roundLabel)
-  const allFinishedGames = rawGames.filter(g => g.finished)
+
+  // "Season total" is scoped to rounds at-or-before the one being recapped, not literally
+  // every game played to date — an admin generating a recap for an earlier week (later
+  // rounds have since been played too) shouldn't have those leak into that week's total.
+  // A round qualifies if its own earliest kickoff is at or before the selected round's.
+  const roundsByEarliestDate: Record<string, number> = {}
+  rawGames.forEach(g => {
+    const t = new Date(g.date).getTime()
+    if (!(g.round in roundsByEarliestDate) || t < roundsByEarliestDate[g.round]) roundsByEarliestDate[g.round] = t
+  })
+  const selectedRoundEarliest = roundsByEarliestDate[roundLabel] ?? Infinity
+  const inScopeRounds = new Set(Object.keys(roundsByEarliestDate).filter(r => roundsByEarliestDate[r] <= selectedRoundEarliest))
+  const allFinishedGames = rawGames.filter(g => g.finished && inScopeRounds.has(g.round))
   const roundByFixtureId: Record<number, string> = {}
   rawGames.forEach(g => { roundByFixtureId[g.id] = g.round })
 
