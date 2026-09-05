@@ -23,6 +23,7 @@ export default function RecapPreviewPage({ params }: { params: { id: string } })
   const [roundsAvailable, setRoundsAvailable] = useState<string[]>([])
   const [error, setError] = useState<'unauthorized' | 'not_found' | 'forbidden' | null>(null)
   const [loading, setLoading] = useState(true)
+  const [shareState, setShareState] = useState<'idle' | 'copied'>('idle')
 
   // RecapPoster renders at a fixed 560px wide — it has to, since the same component also
   // renders through Satori for the PNG export, which can't do responsive units at all. On a
@@ -103,6 +104,34 @@ export default function RecapPreviewPage({ params }: { params: { id: string } })
   if (scope !== 'total') imageParams.set('scope', scope)
   if (showCount !== '5') imageParams.set('show', showCount)
   const imageUrl = `/pool/${params.id}/recap/image?${imageParams.toString()}`
+  const filename = `${data.poolName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-recap.png`
+
+  // Prefers the OS share sheet with the actual image attached (what most people mean by
+  // "share" on a phone) — falls back to sharing just the link if the browser can't share
+  // files, then to copying the link if navigator.share isn't available at all (desktop).
+  async function handleShare() {
+    try {
+      const res = await fetch(imageUrl)
+      const blob = await res.blob()
+      const file = new File([blob], filename, { type: 'image/png' })
+      const nav = navigator as Navigator & { canShare?: (data: any) => boolean; share?: (data: any) => Promise<void> }
+      if (nav.canShare && nav.share && nav.canShare({ files: [file] })) {
+        await nav.share({ files: [file], title: data!.poolName })
+        return
+      }
+      if (nav.share) {
+        await nav.share({ title: data!.poolName, url: window.location.href })
+        return
+      }
+    } catch (err) {
+      if ((err as any)?.name === 'AbortError') return // user dismissed the share sheet
+    }
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      setShareState('copied')
+      setTimeout(() => setShareState('idle'), 2000)
+    } catch {}
+  }
 
   const selectStyle: React.CSSProperties = { fontSize: 12, border: '1px solid #ddd', padding: '4px 8px', fontFamily: 'inherit', color: '#333', background: 'white', borderRadius: 4 }
   const labelStyle: React.CSSProperties = { fontSize: 11, color: '#888', display: 'flex', alignItems: 'center', gap: 6 }
@@ -182,13 +211,23 @@ export default function RecapPreviewPage({ params }: { params: { id: string } })
         </div>
       </div>
 
-      <div className="no-print" style={{ width: 560, maxWidth: '100%', display: 'flex', gap: 8, marginTop: 16 }}>
-        <a href={imageUrl} download={`${data.poolName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-recap.png`} style={{ flex: 1, textDecoration: 'none' }}>
+      <style>{`
+        .recap-actions { width: 560px; max-width: 100%; display: flex; gap: 8px; margin-top: 16px; }
+        .recap-actions > * { min-width: 0; }
+        @media (max-width: 460px) {
+          .recap-actions { flex-direction: column; }
+        }
+      `}</style>
+      <div className="no-print recap-actions">
+        <button onClick={handleShare} style={{ flex: 1, padding: '11px', fontSize: '13px', fontWeight: 600, background: 'white', color: '#C8102E', border: '1px solid #C8102E', cursor: 'pointer', fontFamily: 'inherit', borderRadius: 6 }}>
+          {shareState === 'copied' ? 'link copied ✓' : 'share'}
+        </button>
+        <a href={imageUrl} download={filename} style={{ flex: 1, textDecoration: 'none' }}>
           <button style={{ width: '100%', padding: '11px', fontSize: '13px', fontWeight: 600, background: '#C8102E', color: 'white', border: 'none', cursor: 'pointer', fontFamily: 'inherit', borderRadius: 6 }}>
             download as image
           </button>
         </a>
-        <button onClick={() => window.print()} style={{ padding: '11px 16px', fontSize: '13px', background: 'white', color: '#555', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit', borderRadius: 6 }}>
+        <button onClick={() => window.print()} style={{ flex: 1, padding: '11px', fontSize: '13px', background: 'white', color: '#555', border: '1px solid #ddd', cursor: 'pointer', fontFamily: 'inherit', borderRadius: 6 }}>
           save as pdf
         </button>
       </div>
