@@ -6,11 +6,12 @@ import type { Database } from '@/types/database'
 
 export type RecapLeaderboardRow = {
   display_name: string
-  points: number
+  points: number // primary number for the active scope — season total if scope='total', this-round points if scope='round'
+  secondaryPoints: number // the other number — round delta if scope='total', season total if scope='round'
   games: number | null
   is_ghost?: boolean
   avatar_url?: string | null
-  rank: number
+  rank: number // competition ranking — tied rows (same points AND same tiebreak) share a rank
 }
 
 export type RecapItem = {
@@ -31,6 +32,7 @@ export type RecapData = {
   dateLabel: string
   gameUnit: string | null // "game" / "session" / null (MMA omits the count entirely)
   leaderboard: RecapLeaderboardRow[]
+  scope: 'total' | 'round'
   ghostsOnly: boolean
   // Only meaningful when ghostsOnly is true — 'ghosts' means each row's rank is its
   // position among just the ghosts shown; 'overall' means it's the row's real position in
@@ -48,17 +50,23 @@ export type RecapData = {
 // PNG route can size its canvas to the actual content instead of leaving dead space or
 // clipping a long recap.
 export function estimateHeight(data: RecapData): number {
-  let h = 28 * 2 + 70 // padding + header block
+  let h = 5 // top accent bar
+  h += 24 + 28 // top + bottom content padding
+  h += 20 // pool'em wordmark / date row
+  h += 12 + 28 // pool name margin + line
+  h += 9 + 20 // round pill margin + pill
   if (data.empty) {
     h += 48 * 2 + 20
   } else {
-    h += 22 + 18 + data.leaderboard.length * 30
+    h += 22 + 18 + 8 // "standings" label
+    h += data.leaderboard.length * 44 // each row now carries a secondary points sub-line
+    h += 20 // buffer for the optional otherCount/ghost-disclaimer lines below the table
     if (data.items.length > 0) {
-      h += 22 + 18 + data.items.length * 20 + (data.itemsOverflow > 0 ? 18 : 0)
+      h += 22 + 18 + 8 + data.items.length * 23 + (data.itemsOverflow > 0 ? 18 : 0)
     }
   }
-  h += 22 + 16 + 46 // footer
-  return h + 20
+  h += 24 + 40 + 10 + 16 // footer: margin + CTA button + margin + "made with" line
+  return h
 }
 
 export type RecapResult =
@@ -179,7 +187,6 @@ function buildItems(games: RawGame[], preds: RawPred[], isMma: boolean): RecapIt
 }
 
 const ITEM_CAP = 6
-const LEADERBOARD_CAP = 5
 
 export function buildRecap(input: {
   poolName: string
@@ -199,6 +206,8 @@ export function buildRecap(input: {
   nextRoundLabel: string | null
   ghostsOnly: boolean
   rankBasis: 'overall' | 'ghosts'
+  scope: 'total' | 'round'
+  showCount: number | 'all'
 }): RecapData {
   const SEGMENT_ORDER: Record<string, number> = { main_card: 0, prelims: 1, prelim_card: 1, early_prelims: 2 }
   const finishedGames = input.roundGames.filter(g => g.finished).sort((a, b) => {
@@ -229,25 +238,69 @@ export function buildRecap(input: {
   // total shown by ScopedLeaderboard's default "all games" view, so a recap doubles as
   // an "and here's where everyone stands overall" artifact, not just this round's tally.
   const allFinishedIds = new Set(input.allFinishedGames.map(g => g.id))
-  const leaderboardFull = activeMembers.map(m => {
-    const points = input.preds
-      .filter(p => p.user_id === m.user_id)
+  const memberStats = activeMembers.map(m => {
+    const ownPreds = input.preds.filter(p => p.user_id === m.user_id)
+    const totalPoints = ownPreds.reduce((sum, p) => sum + (p.points_earned || 0), 0)
+    const roundPoints = ownPreds
+      .filter(p => p.fixture_id != null && roundGameIds.has(p.fixture_id))
       .reduce((sum, p) => sum + (p.points_earned || 0), 0)
-    const pickedIds = new Set(
-      input.preds.filter(p => p.user_id === m.user_id && p.fixture_id != null && allFinishedIds.has(p.fixture_id) && pickKey(p) !== null)
-        .map(p => p.fixture_id as number)
+    // Tiebreak signal: raw points ties happen constantly once a pool's been running a
+    // while (same categories, same point values) — correct-pick count as a secondary sort
+    // is the standard sports-pool tiebreaker, applied at whichever scope is being ranked.
+    const totalCorrect = ownPreds.filter(p => p.fixture_id != null && allFinishedIds.has(p.fixture_id) && p.is_correct === true).length
+    const roundCorrect = ownPreds.filter(p => p.fixture_id != null && roundGameIds.has(p.fixture_id) && p.is_correct === true).length
+
+    const seasonPickedIds = new Set(
+      ownPreds.filter(p => p.fixture_id != null && allFinishedIds.has(p.fixture_id) && pickKey(p) !== null).map(p => p.fixture_id as number)
     )
-    const games = input.isF1
-      ? new Set([...pickedIds].map(id => input.roundByFixtureId[id]).filter(Boolean)).size
-      : pickedIds.size
-    return { display_name: m.display_name, points, games, is_ghost: m.is_ghost, avatar_url: m.avatar_url }
+    const seasonGames = input.isF1
+      ? new Set([...seasonPickedIds].map(id => input.roundByFixtureId[id]).filter(Boolean)).size
+      : seasonPickedIds.size
+    const roundGamesPicked = new Set(
+      ownPreds.filter(p => p.fixture_id != null && roundGameIds.has(p.fixture_id) && pickKey(p) !== null).map(p => p.fixture_id as number)
+    ).size
+
+    return {
+      display_name: m.display_name, is_ghost: m.is_ghost, avatar_url: m.avatar_url,
+      totalPoints, roundPoints, totalCorrect, roundCorrect, seasonGames, roundGamesPicked,
+    }
   })
-    .sort((a, b) => b.points - a.points)
-    .map((row, i): RecapLeaderboardRow => ({ ...row, rank: i + 1 }))
+
+  const primaryPoints = (r: typeof memberStats[number]) => input.scope === 'round' ? r.roundPoints : r.totalPoints
+  const primaryCorrect = (r: typeof memberStats[number]) => input.scope === 'round' ? r.roundCorrect : r.totalCorrect
+  const secondaryPoints = (r: typeof memberStats[number]) => input.scope === 'round' ? r.totalPoints : r.roundPoints
+  const games = (r: typeof memberStats[number]) => input.scope === 'round' ? r.roundGamesPicked : r.seasonGames
+
+  const sorted = [...memberStats].sort((a, b) => {
+    const byPoints = primaryPoints(b) - primaryPoints(a)
+    if (byPoints !== 0) return byPoints
+    const byCorrect = primaryCorrect(b) - primaryCorrect(a)
+    if (byCorrect !== 0) return byCorrect
+    return a.display_name.localeCompare(b.display_name) // final deterministic tiebreak — never a coin flip
+  })
+
+  // Competition ranking (1, 1, 3, 4, 4, 6) — a row only shares the previous row's rank if
+  // it's genuinely tied on both points AND the tiebreaker; anything else gets a real,
+  // distinct rank instead of the old behavior (plain array position, which silently broke
+  // real ties by insertion order with no indication they were ever tied).
+  let rank = 0
+  const leaderboardFull: RecapLeaderboardRow[] = sorted.map((row, i) => {
+    const tiedWithPrev = i > 0 && primaryPoints(row) === primaryPoints(sorted[i - 1]) && primaryCorrect(row) === primaryCorrect(sorted[i - 1])
+    if (!tiedWithPrev) rank = i + 1
+    return {
+      display_name: row.display_name,
+      points: primaryPoints(row),
+      secondaryPoints: secondaryPoints(row),
+      games: games(row),
+      is_ghost: row.is_ghost,
+      avatar_url: row.avatar_url,
+      rank,
+    }
+  })
 
   // Three shapes, per the general/ghosts-only/ghosts-ranked-overall distinction:
-  //  - not ghostsOnly: the general table, ranks 1..N as computed above.
-  //  - ghostsOnly + rankBasis 'ghosts': just the ghost rows, re-ranked 1..N among themselves.
+  //  - not ghostsOnly: the general table, ranks as computed above.
+  //  - ghostsOnly + rankBasis 'ghosts': just the ghost rows, re-ranked among themselves.
   //  - ghostsOnly + rankBasis 'overall': just the ghost rows, keeping their real (non-
   //    consecutive) rank from the general table, plus how many non-ghosts sit alongside them.
   let scopedLeaderboard: RecapLeaderboardRow[]
@@ -255,15 +308,19 @@ export function buildRecap(input: {
   if (!input.ghostsOnly) {
     scopedLeaderboard = leaderboardFull
   } else if (input.rankBasis === 'ghosts') {
-    scopedLeaderboard = leaderboardFull
-      .filter(row => row.is_ghost)
-      .map((row, i) => ({ ...row, rank: i + 1 }))
+    const ghostRows = leaderboardFull.filter(row => row.is_ghost)
+    let ghostRank = 0
+    scopedLeaderboard = ghostRows.map((row, i) => {
+      const tiedWithPrev = i > 0 && row.points === ghostRows[i - 1].points
+      if (!tiedWithPrev) ghostRank = i + 1
+      return { ...row, rank: ghostRank }
+    })
   } else {
     scopedLeaderboard = leaderboardFull.filter(row => row.is_ghost)
     otherCount = leaderboardFull.length - scopedLeaderboard.length
   }
 
-  const leaderboard = scopedLeaderboard.length > 8 ? scopedLeaderboard.slice(0, LEADERBOARD_CAP) : scopedLeaderboard
+  const leaderboard = input.showCount === 'all' ? scopedLeaderboard : scopedLeaderboard.slice(0, input.showCount)
 
   const allItems = empty ? [] : buildItems(finishedGames, input.preds, input.isMma)
   const items = allItems.slice(0, ITEM_CAP)
@@ -284,6 +341,7 @@ export function buildRecap(input: {
     dateLabel: input.roundDate ? shortDate(input.roundDate) : '',
     gameUnit: input.isMma ? null : input.isF1 ? 'round' : 'game',
     leaderboard,
+    scope: input.scope,
     ghostsOnly: input.ghostsOnly,
     rankBasis: input.rankBasis,
     otherCount,
@@ -301,7 +359,11 @@ export function buildRecap(input: {
 export async function loadRecap(
   supabase: SupabaseClient<Database>,
   poolId: string,
-  opts: { round?: string; baseUrl: string; ghostsOnly?: boolean; rankBasis?: 'overall' | 'ghosts' }
+  opts: {
+    round?: string; baseUrl: string
+    ghostsOnly?: boolean; rankBasis?: 'overall' | 'ghosts'
+    scope?: 'total' | 'round'; showCount?: number | 'all'
+  }
 ): Promise<RecapResult> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'unauthorized' }
@@ -412,6 +474,8 @@ export async function loadRecap(
     nextDeadlineIso,
     nextRoundLabel,
     ghostsOnly: !!opts.ghostsOnly,
+    scope: opts.scope || 'total',
+    showCount: opts.showCount ?? 5,
     rankBasis: opts.rankBasis || 'overall',
   })
 

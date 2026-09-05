@@ -11,10 +11,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   const round = request.nextUrl.searchParams.get('round') || undefined
   const ghostsOnly = request.nextUrl.searchParams.get('ghostsOnly') === '1'
   const rankBasis = request.nextUrl.searchParams.get('rankBasis') === 'ghosts' ? 'ghosts' : 'overall'
+  const scope = request.nextUrl.searchParams.get('scope') === 'round' ? 'round' : 'total'
+  const showParam = request.nextUrl.searchParams.get('show')
+  const showCount: number | 'all' = showParam === 'all' ? 'all' : showParam ? parseInt(showParam, 10) : 5
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.pool-em.com'
 
   const supabase = await createClient()
-  const result = await loadRecap(supabase, params.id, { round, baseUrl, ghostsOnly, rankBasis })
+  const result = await loadRecap(supabase, params.id, { round, baseUrl, ghostsOnly, rankBasis, scope, showCount })
 
   if ('error' in result) {
     const status = result.error === 'unauthorized' ? 401 : result.error === 'forbidden' ? 403 : 404
