@@ -202,7 +202,7 @@ export default function RecapPreviewPage({ params }: { params: { id: string } })
                 onChange={e => setGhostsOnly(e.target.value === '1')}
                 style={selectStyle}>
                 <option value="0">everyone</option>
-                <option value="1">ghost entries only</option>
+                <option value="1">predictors only</option>
               </select>
             </label>
             {ghostsOnly && (
@@ -210,7 +210,7 @@ export default function RecapPreviewPage({ params }: { params: { id: string } })
                 ranked by
                 <select value={rankBasis} onChange={e => setRankBasis(e.target.value === 'ghosts' ? 'ghosts' : 'overall')} style={selectStyle}>
                   <option value="overall">overall leaderboard</option>
-                  <option value="ghosts">ghosts only</option>
+                  <option value="ghosts">among predictors</option>
                 </select>
               </label>
             )}

@@ -65,7 +65,7 @@ export default function RecapPoster({ data, scale = 1, interactive = false }: { 
                 themselves or by their real position in the general table, per rankBasis. */}
             <div style={{ display: 'flex', flexDirection: 'column', flexWrap: 'nowrap', marginTop: s(16) }}>
               <div style={{ display: 'flex', fontSize: s(10), fontWeight: 600, color: faint, textTransform: 'uppercase', letterSpacing: 1 }}>
-                {data.ghostsOnly ? 'ghosts' : 'standings'}{data.scope === 'round' ? ` — ${data.roundLabel.toLowerCase()}` : ''}
+                {data.ghostsOnly ? 'predictors' : 'standings'}{data.scope === 'round' ? ` — ${data.roundLabel.toLowerCase()}` : ''}
               </div>
               <div style={{
                 display: 'flex', flexDirection: 'column', flexWrap: 'nowrap', marginTop: s(6),
@@ -139,14 +139,6 @@ export default function RecapPoster({ data, scale = 1, interactive = false }: { 
                 <div style={{ display: 'flex', flexDirection: 'column', flexWrap: 'nowrap', marginTop: s(6) }}>
                   {data.items.map((item, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'flex-start', marginTop: i === 0 ? 0 : s(5) }}>
-                      <span style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        width: s(16), height: s(16), borderRadius: '50%', flexShrink: 0,
-                        background: item.hit ? '#e9f7ea' : '#fdeaea',
-                        fontSize: s(10), fontWeight: 700, color: item.hit ? '#2d7a2d' : red, marginRight: s(7), marginTop: s(1),
-                      }}>
-                        {item.hit ? '✓' : '✗'}
-                      </span>
                       {/* Lead with the pick fact, then the verdict, then the score as
                           context — "9 of 14 picked Liverpool, nailed it, final 2-0" reads
                           as a story; the old "Liverpool 2-0 Chelsea — 9 of 14 picked
