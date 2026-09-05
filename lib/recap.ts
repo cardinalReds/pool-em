@@ -51,22 +51,26 @@ export type RecapData = {
 // clipping a long recap.
 export function estimateHeight(data: RecapData): number {
   let h = 5 // top accent bar
-  h += 24 + 28 // top + bottom content padding
+  h += 18 + 20 // top + bottom content padding
   h += 20 // pool'em wordmark / date row
-  h += 12 + 28 // pool name margin + line
-  h += 9 + 20 // round pill margin + pill
+  h += 9 + 26 // pool name margin + line
+  h += 7 + 20 // round pill margin + pill
   if (data.empty) {
     h += 48 * 2 + 20
   } else {
-    h += 22 + 18 + 8 // "standings" label
-    h += data.leaderboard.length * 44 // each row now carries a secondary points sub-line
+    h += 16 + 18 + 6 // "standings" label
+    h += data.leaderboard.length * 40 // each row now carries a secondary points sub-line
     h += 20 // buffer for the optional otherCount/ghost-disclaimer lines below the table
     if (data.items.length > 0) {
-      h += 22 + 18 + 8 + data.items.length * 23 + (data.itemsOverflow > 0 ? 18 : 0)
+      // Each item's text can now wrap onto a second line on a long pick/team name (the
+      // pick-summary/verdict/score sentence replaced a single short line) — budget for it.
+      h += 16 + 18 + 6 + data.items.length * 34 + (data.itemsOverflow > 0 ? 18 : 0)
     }
   }
-  h += 24 + 40 + 10 + 16 // footer: margin + CTA button + margin + "made with" line
-  return h
+  h += 16 + 36 + 8 + 14 // footer: margin + CTA button + margin + "made with" line
+  return h + 24 // safety buffer — see the interactive preview's own real DOM measurement,
+                // which this estimate no longer needs to match exactly; this only sizes
+                // the static PNG canvas, where a little extra whitespace beats clipping.
 }
 
 export type RecapResult =

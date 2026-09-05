@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { loadRecap, estimateHeight, type RecapData } from '@/lib/recap'
+import { loadRecap, type RecapData } from '@/lib/recap'
 import RecapPoster from '@/components/RecapPoster'
 
 const POSTER_WIDTH = 560
@@ -41,6 +41,25 @@ export default function RecapPreviewPage({ params }: { params: { id: string } })
     window.addEventListener('resize', measure)
     return () => window.removeEventListener('resize', measure)
   }, [])
+
+  // The clipping box below needs to know the poster's real rendered height — it used to use
+  // estimateHeight()'s hand-tuned guess, which drifted from the actual layout (font metrics,
+  // text wrapping, etc. aren't things a static formula can predict exactly) and clipped the
+  // bottom of the poster, including the CTA button, whenever it underestimated. Measuring
+  // the real DOM node instead makes that mismatch impossible by construction; estimateHeight
+  // is still used for the static PNG route, where there's no DOM to measure.
+  const posterInnerRef = useRef<HTMLDivElement>(null)
+  const [posterHeight, setPosterHeight] = useState(0)
+  useEffect(() => {
+    const el = posterInnerRef.current
+    if (!el) return
+    const ro = new ResizeObserver(entries => {
+      const h = entries[0]?.contentRect.height
+      if (h) setPosterHeight(h)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [data])
 
   // Seed initial state from the URL exactly once, so a shared/reloaded link still opens to
   // the same view — after this, state (not the URL) drives everything.
@@ -201,11 +220,13 @@ export default function RecapPreviewPage({ params }: { params: { id: string } })
 
       <div ref={posterWrapRef} style={{ width: '100%', maxWidth: POSTER_WIDTH }}>
         <div className="recap-poster-scale-wrap" style={{
-          width: POSTER_WIDTH * posterScale, height: estimateHeight(data) * posterScale, margin: '0 auto',
+          width: POSTER_WIDTH * posterScale,
+          height: posterHeight ? posterHeight * posterScale : undefined,
+          margin: '0 auto',
           boxShadow: '0 4px 16px rgba(0,0,0,0.08)', borderRadius: 8, overflow: 'hidden',
           opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s',
         }}>
-          <div className="recap-poster-scale" style={{ width: POSTER_WIDTH, transform: `scale(${posterScale})`, transformOrigin: 'top left' }}>
+          <div ref={posterInnerRef} className="recap-poster-scale" style={{ width: POSTER_WIDTH, transform: `scale(${posterScale})`, transformOrigin: 'top left' }}>
             <RecapPoster data={data} interactive />
           </div>
         </div>
