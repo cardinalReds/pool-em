@@ -77,12 +77,12 @@ export function selectBest10(fixtures: Best10Fixture[], rankedTeams?: RankedTeam
   if (fixtures.length === 0) return []
 
   if (rankedTeams && rankedTeams.size > 0) {
+    // Limited to ranked-team games by default — a week with only 6 games involving a
+    // ranked team just has 6 predictable games, not padded out to 10 with unranked filler.
+    // (No-overlap time spreading still applies among the ranked games themselves when
+    // there are more than 10 of them — see compareRankedGames.)
     const ranked = fixtures.filter(f => gameRankScore(f, rankedTeams) !== null)
-    const unranked = fixtures.filter(f => gameRankScore(f, rankedTeams) === null)
-
-    const selected = ranked.length >= N
-      ? [...ranked].sort((a, b) => compareRankedGames(a, b, rankedTeams)).slice(0, N)
-      : [...ranked, ...selectSpread(unranked, N - ranked.length)]
+    const selected = [...ranked].sort((a, b) => compareRankedGames(a, b, rankedTeams)).slice(0, N)
 
     return selected
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a.id - b.id)
