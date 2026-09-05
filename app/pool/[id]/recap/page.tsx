@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { loadRecap, type RecapData } from '@/lib/recap'
+import { loadRecap, estimateHeight, type RecapData } from '@/lib/recap'
 import RecapPoster from '@/components/RecapPoster'
+
+const POSTER_WIDTH = 560
 
 // Controls drive `loadRecap` straight from React state, not from re-parsing the URL each
 // render — a query-param round-trip through router.replace() + useSearchParams() was the
@@ -21,6 +23,23 @@ export default function RecapPreviewPage({ params }: { params: { id: string } })
   const [roundsAvailable, setRoundsAvailable] = useState<string[]>([])
   const [error, setError] = useState<'unauthorized' | 'not_found' | 'forbidden' | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // RecapPoster renders at a fixed 560px wide — it has to, since the same component also
+  // renders through Satori for the PNG export, which can't do responsive units at all. On a
+  // phone-width viewport that fixed width was overflowing the page. Scale it down visually
+  // to fit whatever width is actually available, rather than letting it force horizontal
+  // scroll — the download/PDF paths are untouched, they still use the real 560px version.
+  const posterWrapRef = useRef<HTMLDivElement>(null)
+  const [posterScale, setPosterScale] = useState(1)
+  useEffect(() => {
+    function measure() {
+      const w = posterWrapRef.current?.clientWidth
+      if (w) setPosterScale(Math.min(1, w / POSTER_WIDTH))
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [])
 
   // Seed initial state from the URL exactly once, so a shared/reloaded link still opens to
   // the same view — after this, state (not the URL) drives everything.
@@ -90,7 +109,12 @@ export default function RecapPreviewPage({ params }: { params: { id: string } })
 
   return (
     <div style={{ minHeight: '100vh', background: '#f7f7f5', padding: '32px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', fontFamily: "'Inter', system-ui, sans-serif" }}>
-      <style>{`@media print { .no-print { display: none !important; } body { background: white !important; } }`}</style>
+      <style>{`@media print {
+        .no-print { display: none !important; }
+        body { background: white !important; }
+        .recap-poster-scale-wrap { width: ${POSTER_WIDTH}px !important; height: auto !important; }
+        .recap-poster-scale { transform: none !important; }
+      }`}</style>
 
       <div className="no-print" style={{ width: 560, maxWidth: '100%', marginBottom: 18 }}>
         <a href={`/pool/${params.id}`} style={{ fontSize: 12, color: '#888', textDecoration: 'none' }}>← back to pool</a>
@@ -146,8 +170,16 @@ export default function RecapPreviewPage({ params }: { params: { id: string } })
         </div>
       </div>
 
-      <div style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.08)', borderRadius: 8, overflow: 'hidden', opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s' }}>
-        <RecapPoster data={data} interactive />
+      <div ref={posterWrapRef} style={{ width: '100%', maxWidth: POSTER_WIDTH }}>
+        <div className="recap-poster-scale-wrap" style={{
+          width: POSTER_WIDTH * posterScale, height: estimateHeight(data) * posterScale, margin: '0 auto',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.08)', borderRadius: 8, overflow: 'hidden',
+          opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s',
+        }}>
+          <div className="recap-poster-scale" style={{ width: POSTER_WIDTH, transform: `scale(${posterScale})`, transformOrigin: 'top left' }}>
+            <RecapPoster data={data} interactive />
+          </div>
+        </div>
       </div>
 
       <div className="no-print" style={{ width: 560, maxWidth: '100%', display: 'flex', gap: 8, marginTop: 16 }}>
