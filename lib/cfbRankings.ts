@@ -7,10 +7,14 @@ const CFBD_API_KEY = process.env.CFBD_API_KEY
 // team name -> AP rank (1-25)
 export type RankedTeams = Map<string, number>
 
+// No parenthetical-suffix stripping here — unlike the odds-provider integrations, our own
+// team names use "(OH)"/"(FL)"-style suffixes to distinguish real, different schools (Miami
+// vs Miami (OH)), so stripping it collided the two and had Miami (OH) showing Miami's #7
+// rank. CFBD's own school names don't carry that suffix at all, so there's nothing to strip
+// on either side.
 function normalizeTeamName(name: string): string {
   return name
     .normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '') // strip accents
-    .replace(/\s*\([^)]*\)\s*$/, '') // strip trailing "(FL)"/"(OH)"-style disambiguators
     .toLowerCase()
     .trim()
 }
