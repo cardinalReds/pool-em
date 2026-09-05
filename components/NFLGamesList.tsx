@@ -261,6 +261,28 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
 
   useEffect(() => { load() }, [poolId, userId, tournamentId])
 
+  // Realtime subscription — keep scores/status live as games are updated by the per-minute
+  // score cron, same pattern as components/FixturesList.tsx's 'fixtures-live' channel. This
+  // was missing entirely, so a live game's score just froze at whatever it was when the page
+  // first loaded until a manual refresh — including never actually moving into the "live
+  // now" section if the game went live after the page was opened.
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`nfl-fixtures-live-${tournamentId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'fixtures',
+        filter: `tournament_id=eq.${tournamentId}`,
+      }, (payload) => {
+        const updated = payload.new as NFLFixture
+        setGames(prev => prev.map(g => g.id === updated.id ? { ...g, ...updated } : g))
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [tournamentId])
+
   // Realtime subscription — keep the ghost-entry switcher in sync when the admin
   // adds/removes one from the leaderboard, without needing a full page reload
   useEffect(() => {
