@@ -70,7 +70,7 @@ export default function RecapPreviewPage({ params }: { params: { id: string } })
   }
 
   if (error === 'forbidden') {
-    return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 }}>only the pool admin can share a recap.</div>
+    return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 }}>only pool members can share a recap.</div>
   }
   if (error === 'not_found') {
     return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888', fontSize: 13 }}>pool not found.</div>

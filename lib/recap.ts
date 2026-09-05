@@ -375,7 +375,12 @@ export async function loadRecap(
 
   const { data: pool } = await supabase.from('pools').select('*').eq('id', poolId).maybeSingle()
   if (!pool) return { error: 'not_found' }
-  if (pool.admin_id !== user.id) return { error: 'forbidden' }
+  // Any pool member can share a recap now, not just the admin — but still gated to actual
+  // members, not the open internet, even for a public pool.
+  if (pool.admin_id !== user.id) {
+    const { data: membership } = await supabase.from('pool_members').select('user_id').eq('pool_id', poolId).eq('user_id', user.id).maybeSingle()
+    if (!membership) return { error: 'forbidden' }
+  }
 
   const isF1 = pool.sport === 'f1'
   const isMma = pool.sport === 'mma'

@@ -815,23 +815,21 @@ export default function PoolPage({ params }: { params: { id: string } }) {
         {isAdmin && <span style={{color: '#C8102E', marginLeft: '6px', fontWeight: 600}}>admin</span>}
       </div>
 
-      {/* Edit + share recap buttons — admin only */}
-      {isAdmin && (
-        <div style={{display: 'flex', gap: '8px', marginBottom: '12px'}}>
-          {(!pool.tournament_end_date || new Date() < new Date(pool.tournament_end_date)) && (
-            <a href={`/pool/${pool.id}/edit`}>
-              <button style={{fontSize: '11px', color: '#888', background: 'none', border: '1px solid #ddd', padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit'}}>
-                ✏️ edit pool
-              </button>
-            </a>
-          )}
-          <a href={`/pool/${pool.id}/recap`}>
+      {/* Edit (admin only) + share recap (any player) buttons */}
+      <div style={{display: 'flex', gap: '8px', marginBottom: '12px'}}>
+        {isAdmin && (!pool.tournament_end_date || new Date() < new Date(pool.tournament_end_date)) && (
+          <a href={`/pool/${pool.id}/edit`}>
             <button style={{fontSize: '11px', color: '#888', background: 'none', border: '1px solid #ddd', padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit'}}>
-              share recap
+              ✏️ edit pool
             </button>
           </a>
-        </div>
-      )}
+        )}
+        <a href={`/pool/${pool.id}/recap`}>
+          <button style={{fontSize: '11px', color: '#888', background: 'none', border: '1px solid #ddd', padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit'}}>
+            share recap
+          </button>
+        </a>
+      </div>
 
       {/* Change notifications */}
       {!isAdmin && recentChanges.length > 0 && !changesDismissed && (
@@ -1015,22 +1013,20 @@ export default function PoolPage({ params }: { params: { id: string } }) {
 
           {/* Always-visible summary/notices — mirrors desktop sidebar, shown regardless of active tab */}
           <div style={{padding: '12px 16px 0'}}>
-            {isAdmin && (
-              <div style={{display: 'flex', gap: '8px', marginBottom: '12px'}}>
-                {(!pool.tournament_end_date || new Date() < new Date(pool.tournament_end_date)) && (
-                  <a href={`/pool/${pool.id}/edit`}>
-                    <button style={{fontSize: '11px', color: '#888', background: 'none', border: '1px solid #ddd', padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit'}}>
-                      ✏️ edit pool
-                    </button>
-                  </a>
-                )}
-                <a href={`/pool/${pool.id}/recap`}>
+            <div style={{display: 'flex', gap: '8px', marginBottom: '12px'}}>
+              {isAdmin && (!pool.tournament_end_date || new Date() < new Date(pool.tournament_end_date)) && (
+                <a href={`/pool/${pool.id}/edit`}>
                   <button style={{fontSize: '11px', color: '#888', background: 'none', border: '1px solid #ddd', padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit'}}>
-                    share recap
+                    ✏️ edit pool
                   </button>
                 </a>
-              </div>
-            )}
+              )}
+              <a href={`/pool/${pool.id}/recap`}>
+                <button style={{fontSize: '11px', color: '#888', background: 'none', border: '1px solid #ddd', padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit'}}>
+                  share recap
+                </button>
+              </a>
+            </div>
             {!isAdmin && recentChanges.length > 0 && !changesDismissed && (
               <div style={{background: '#fffbf0', border: '1px solid #f0e0a0', padding: '10px 12px', marginBottom: '12px', fontSize: '11px'}}>
                 <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px'}}>
