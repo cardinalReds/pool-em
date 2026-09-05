@@ -6,6 +6,7 @@ import GhostAccessManager from '@/components/GhostAccessManager'
 import Best5Selector from '@/components/Best5Selector'
 import NCAAFVoteBox from '@/components/NCAAFVoteBox'
 import { formatOdds, type OddsFormat } from '@/lib/oddsFormat'
+import { rankOf, type RankedTeams } from '@/lib/cfbRankings'
 
 interface NFLFixture {
   id: number
@@ -176,6 +177,92 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
   // the ranked-priority algorithm) and that there's an open-voting window beforehand.
   const isVoteModeActive = tournamentId === 'ncaaf_2026' && cfbGameMode === 'vote'
   const isRestrictedMode = isBest10Active || isVoteModeActive
+  const isNCAAF = tournamentId === 'ncaaf_2026'
+
+  // AP Top 25 rank + last-5 form badge under each team name — mirrors
+  // components/FixturesList.tsx's TeamFormStrip for PL, but NCAAF has no per-team
+  // standings table the way pl_teams does, so this only ever shows a rank (nothing at all
+  // for an unranked team — no "NR" placeholder) plus the form strip.
+  const [teamForm, setTeamForm] = useState<Map<string, { opponent: string; result: 'W' | 'D' | 'L'; scoreLabel: string }[]>>(new Map())
+  const [teamRanks, setTeamRanks] = useState<RankedTeams>(new Map())
+
+  useEffect(() => {
+    if (!isNCAAF) { setTeamForm(new Map()); return }
+    let cancelled = false
+    async function loadForm() {
+      const supabase = createClient()
+      const { data: finished } = await supabase.from('fixtures')
+        .select('home_team, away_team, home_score, away_score, date')
+        .eq('tournament_id', tournamentId).eq('status', 'FT').order('date', { ascending: false })
+      if (cancelled) return
+      const byTeam = new Map<string, { opponent: string; result: 'W' | 'D' | 'L'; scoreLabel: string }[]>()
+      for (const f of finished || []) {
+        if (f.home_score == null || f.away_score == null) continue
+        const homeResult: 'W' | 'D' | 'L' = f.home_score > f.away_score ? 'W' : f.home_score < f.away_score ? 'L' : 'D'
+        const awayResult: 'W' | 'D' | 'L' = homeResult === 'W' ? 'L' : homeResult === 'L' ? 'W' : 'D'
+        const scoreLabel = `${f.home_score}-${f.away_score}`
+        const entries: [string, string, 'W' | 'D' | 'L'][] = [[f.home_team, f.away_team, homeResult], [f.away_team, f.home_team, awayResult]]
+        for (const [team, opponent, result] of entries) {
+          const list = byTeam.get(team) || []
+          if (list.length < 5) list.push({ opponent, result, scoreLabel })
+          byTeam.set(team, list)
+        }
+      }
+      for (const [team, list] of byTeam) byTeam.set(team, [...list].reverse())
+      setTeamForm(byTeam)
+    }
+    loadForm()
+    return () => { cancelled = true }
+  }, [isNCAAF, tournamentId])
+
+  // Refetches whenever the displayed week changes, since AP rankings are released weekly.
+  // Recomputes the week label the same way the render body does further down (currentWeek
+  // isn't available yet at this point — it's derived after the loading early-return, which
+  // must come after every hook) — cheap and side-effect-free, fine to derive twice.
+  useEffect(() => {
+    if (!isNCAAF) { setTeamRanks(new Map()); return }
+    const weeksList = [...new Set(games.map(g => g.round))]
+    const idx = Math.min(Math.max(weekIndex, 0), weeksList.length - 1)
+    const week = weeksList[idx]
+    const weekMatch = week?.match(/Week (\d+)/)
+    if (!weekMatch) { setTeamRanks(new Map()); return }
+    let cancelled = false
+    fetch(`/api/ncaaf/rankings?week=${weekMatch[1]}`)
+      .then(r => r.json())
+      .then(j => { if (!cancelled) setTeamRanks(new Map(Object.entries(j.rankings || {}))) })
+      .catch(() => { if (!cancelled) setTeamRanks(new Map()) })
+    return () => { cancelled = true }
+  }, [isNCAAF, games, weekIndex])
+
+  function TeamFormStrip({ team }: { team: string }) {
+    const rank = isNCAAF ? rankOf(teamRanks, team) : null
+    const form = teamForm.get(team) || []
+    if (rank == null && form.length === 0) return null
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', gap: 2, marginTop: 2 }}>
+        {rank != null && (
+          <span title={`AP Top 25 — #${rank}`}
+            style={{ fontSize: '9px', fontWeight: 700, color: '#9a6b00', background: '#fff9ec', padding: '1px 5px', borderRadius: 3 }}>
+            #{rank}
+          </span>
+        )}
+        {form.length > 0 && (
+          <div style={{ display: 'flex', gap: 2 }}>
+            {form.map((f, i) => {
+              const c = f.result === 'W' ? { bg: '#2d7a2d', text: 'white' } : f.result === 'L' ? { bg: '#C8102E', text: 'white' } : { bg: '#ccc', text: '#444' }
+              const word = f.result === 'W' ? 'won' : f.result === 'L' ? 'lost' : 'tied'
+              return (
+                <span key={i} title={`${word} vs ${f.opponent} (${f.scoreLabel})`}
+                  style={{ width: 13, height: 13, borderRadius: 2, background: c.bg, color: c.text, fontSize: '8px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {f.result}
+                </span>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   async function load() {
     const supabase = createClient()
@@ -469,6 +556,7 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
               ? <img src={game.away_logo} alt={game.away_team} style={{ width: 44, height: 44, objectFit: 'contain' as const }} />
               : <span style={{ fontSize: '28px' }}>🏈</span>}
             <span style={{ fontWeight: 700, fontSize: '11px', textAlign: 'center' as const, lineHeight: 1.2 }}>{game.away_team}</span>
+            <TeamFormStrip team={game.away_team} />
           </div>
           {(finished || isLive)
             ? <span style={{ fontWeight: 700, fontSize: isLive ? '22px' : '18px', color: isLive ? '#2d7a2d' : '#111', flexShrink: 0, padding: '0 8px' }}>{game.away_score} – {game.home_score}</span>
@@ -478,6 +566,7 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
               ? <img src={game.home_logo} alt={game.home_team} style={{ width: 44, height: 44, objectFit: 'contain' as const }} />
               : <span style={{ fontSize: '28px' }}>🏈</span>}
             <span style={{ fontWeight: 700, fontSize: '11px', textAlign: 'center' as const, lineHeight: 1.2 }}>{game.home_team}</span>
+            <TeamFormStrip team={game.home_team} />
           </div>
         </div>
 
