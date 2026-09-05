@@ -26,9 +26,12 @@ export default function EditPoolPage() {
   const [visibility, setVisibility] = useState<'admin_only' | 'member_invites' | 'public'>('admin_only')
   const [rulePoints, setRulePoints] = useState<Record<string, { points: number; bonus_points: number }>>({})
   const [deadlineType, setDeadlineType] = useState<'before_weekend' | 'before_each_game'>('before_each_game')
+  const [cfbGameMode, setCfbGameMode] = useState<'every_game' | 'best10' | 'vote'>('every_game')
+  const [cfbBest10Override, setCfbBest10Override] = useState(false)
 
   const hasBuyIn = !!pool && pool.buy_in_amount != null && parseFloat(pool.buy_in_amount) > 0
   const isPL = !!pool && pool.tournament_id?.startsWith('pl_')
+  const isNCAAF = !!pool && pool.tournament_id?.startsWith('ncaaf_')
   // Only PL and NFL pools choose between a matchday-wide lock and a per-game lock — F1
   // pairs before_weekend with before_session (a different axis: one ticket vs. one per
   // session), MMA is fixed to before_tournament, and other soccer pools pair
@@ -51,7 +54,7 @@ export default function EditPoolPage() {
       // briefly receive the full row over the network before the redirect; bank fields
       // (unused on this page — bank details are set once at creation, not edited here)
       // must never be part of that response.
-      const { data: poolData } = await supabase.from('pools').select('admin_fee_percent, admin_id, allow_member_invites, archived, buy_in_amount, created_at, deadline_type, id, invite_code, is_active, is_public, name, package_id, payout_structure, pick_mode, pl_best_weeks, pl_best5_admin_override, pl_game_mode, prize_season, prize_weekly, season_buy_in, season_props_enabled, sport, tournament_id, tournament_scope, updated_at, venmo_handle, weekly_buy_in, weekly_payout_structure, zelle_handle').eq('id', poolId).single()
+      const { data: poolData } = await supabase.from('pools').select('admin_fee_percent, admin_id, allow_member_invites, archived, buy_in_amount, cfb_best10_admin_override, cfb_game_mode, created_at, deadline_type, id, invite_code, is_active, is_public, name, package_id, payout_structure, pick_mode, pl_best_weeks, pl_best5_admin_override, pl_game_mode, prize_season, prize_weekly, season_buy_in, season_props_enabled, sport, tournament_id, tournament_scope, updated_at, venmo_handle, weekly_buy_in, weekly_payout_structure, zelle_handle').eq('id', poolId).single()
       if (!poolData || poolData.admin_id !== user.id) { router.push('/dashboard'); return }
 
       // Block editing once the tournament has ended (per-pool, not a fixed global date)
@@ -66,6 +69,10 @@ export default function EditPoolPage() {
       if (poolData.deadline_type === 'before_weekend' || poolData.deadline_type === 'before_each_game') {
         setDeadlineType(poolData.deadline_type)
       }
+      if (poolData.cfb_game_mode === 'every_game' || poolData.cfb_game_mode === 'best10' || poolData.cfb_game_mode === 'vote') {
+        setCfbGameMode(poolData.cfb_game_mode)
+      }
+      setCfbBest10Override(!!poolData.cfb_best10_admin_override)
 
       // Load scoring rules
       const { data: rulesData } = await supabase
@@ -101,6 +108,10 @@ export default function EditPoolPage() {
     if (newIsPublic !== !!pool.is_public) changes.is_public = { from: !!pool.is_public, to: newIsPublic }
     if (newAllowMemberInvites !== !!pool.allow_member_invites) changes.allow_member_invites = { from: !!pool.allow_member_invites, to: newAllowMemberInvites }
     if (showDeadlineTypeOption && deadlineType !== pool.deadline_type) changes.deadline_type = { from: pool.deadline_type, to: deadlineType }
+    if (isNCAAF && cfbGameMode !== pool.cfb_game_mode) changes.cfb_game_mode = { from: pool.cfb_game_mode, to: cfbGameMode }
+    if (isNCAAF && cfbGameMode === 'best10' && cfbBest10Override !== !!pool.cfb_best10_admin_override) {
+      changes.cfb_best10_admin_override = { from: !!pool.cfb_best10_admin_override, to: cfbBest10Override }
+    }
 
     // Check rule changes
     rules.forEach(r => {
@@ -116,6 +127,7 @@ export default function EditPoolPage() {
       is_public: newIsPublic,
       allow_member_invites: newAllowMemberInvites,
       ...(showDeadlineTypeOption ? { deadline_type: deadlineType } : {}),
+      ...(isNCAAF ? { cfb_game_mode: cfbGameMode, cfb_best10_admin_override: cfbGameMode === 'best10' ? cfbBest10Override : false } : {}),
       updated_at: new Date().toISOString(),
     }).eq('id', poolId)
 
@@ -179,6 +191,46 @@ export default function EditPoolPage() {
               </div>
             </label>
           ))}
+        </section>
+      )}
+
+      {/* NCAAF games-per-week mode */}
+      {isNCAAF && (
+        <section style={{ marginBottom: 28 }}>
+          <label style={{ display: 'block', fontWeight: 600, fontSize: 13, marginBottom: 4 }}>games per week</label>
+          <p style={{ fontSize: 11, color: '#aaa', marginBottom: 10 }}>changes take effect from the next week that hasn't been picked yet — weeks already selected don't change.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: cfbGameMode === 'best10' ? 12 : 0 }}>
+            <button type="button" onClick={() => setCfbGameMode('every_game')}
+              style={{ padding: 12, border: '1px solid', textAlign: 'left', cursor: 'pointer',
+                borderColor: cfbGameMode === 'every_game' ? '#C8102E' : '#e0e0db',
+                background: cfbGameMode === 'every_game' ? '#fff5f5' : 'white' }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: cfbGameMode === 'every_game' ? '#C8102E' : '#111' }}>every game</div>
+              <div style={{ fontSize: 11, color: '#aaa', marginTop: 3 }}>predict the full FBS slate each week — typically 60-100 games</div>
+            </button>
+            <button type="button" onClick={() => setCfbGameMode('best10')}
+              style={{ padding: 12, border: '1px solid', textAlign: 'left', cursor: 'pointer',
+                borderColor: cfbGameMode === 'best10' ? '#C8102E' : '#e0e0db',
+                background: cfbGameMode === 'best10' ? '#fff5f5' : 'white' }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: cfbGameMode === 'best10' ? '#C8102E' : '#111' }}>best 10 games</div>
+              <div style={{ fontSize: 11, color: '#aaa', marginTop: 3 }}>algorithm picks 10 games a week, prioritizing ranked (AP Top 25) matchups, spread across kickoff slots to fill any remaining slots</div>
+            </button>
+            <button type="button" onClick={() => setCfbGameMode('vote')}
+              style={{ padding: 12, border: '1px solid', textAlign: 'left', cursor: 'pointer',
+                borderColor: cfbGameMode === 'vote' ? '#C8102E' : '#e0e0db',
+                background: cfbGameMode === 'vote' ? '#fff5f5' : 'white' }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: cfbGameMode === 'vote' ? '#C8102E' : '#111' }}>let the pool vote</div>
+              <div style={{ fontSize: 11, color: '#aaa', marginTop: 3 }}>each member picks up to 10 games they want predicted that week — voting closes 5 days before kickoff, then the most-voted games win</div>
+            </button>
+          </div>
+          {cfbGameMode === 'best10' && (
+            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', border: '1px solid #e0e0db', cursor: 'pointer' }}>
+              <input type="checkbox" checked={cfbBest10Override} onChange={e => setCfbBest10Override(e.target.checked)} style={{ marginTop: 2 }} />
+              <span>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>allow admin override</div>
+                <div style={{ fontSize: 11, color: '#aaa', marginTop: 3 }}>let yourself swap out any auto-picked game for a different one from that week, until one week before it kicks off</div>
+              </span>
+            </label>
+          )}
         </section>
       )}
 

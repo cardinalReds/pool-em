@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import GhostAccessManager from '@/components/GhostAccessManager'
 import Best5Selector from '@/components/Best5Selector'
+import NCAAFVoteBox from '@/components/NCAAFVoteBox'
 import { formatOdds, type OddsFormat } from '@/lib/oddsFormat'
 
 interface NFLFixture {
@@ -162,11 +163,19 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
     await createClient().from('profiles').update({ odds_always_visible: next }).eq('id', userId)
   }
   const [best10Selections, setBest10Selections] = useState<Record<string, number[]>>({})
+  const [votingOpenByRound, setVotingOpenByRound] = useState<Record<string, boolean>>({})
+  const [voteDeadlineByRound, setVoteDeadlineByRound] = useState<Record<string, string>>({})
   const activeEntryIdRef = useRef(activeEntryId)
   useEffect(() => { activeEntryIdRef.current = activeEntryId }, [activeEntryId])
   // NCAAF "best 10 games" — algorithm/admin picks 10 games a week instead of predicting
   // the full ~60-100 game FBS slate. Mirrors FixturesList's isBest5Active for PL.
   const isBest10Active = tournamentId === 'ncaaf_2026' && cfbGameMode === 'best10'
+  // "Democratize" mode — members vote for 10 games instead of an algorithm/admin picking.
+  // Shares the exact same pool_matchweek_selections storage and app/api/ncaaf/best10-select
+  // tally endpoint as best10 — the only difference is what feeds that endpoint (votes vs.
+  // the ranked-priority algorithm) and that there's an open-voting window beforehand.
+  const isVoteModeActive = tournamentId === 'ncaaf_2026' && cfbGameMode === 'vote'
+  const isRestrictedMode = isBest10Active || isVoteModeActive
 
   async function load() {
     const supabase = createClient()
@@ -200,9 +209,11 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
     })
     setMemberPreds(allPredMap)
 
-    // best10 pools: fetch whatever's already selected, then compute-and-store any week
-    // that hasn't been picked yet — same flow as FixturesList's PL best5 wiring.
-    if (isBest10Active && gamesRes.data && gamesRes.data.length > 0) {
+    // best10/vote pools: fetch whatever's already selected, then compute-and-store any week
+    // that hasn't been picked yet — same flow as FixturesList's PL best5 wiring. For vote
+    // mode, "compute" may just mean "voting's still open" (no selection yet, see
+    // votingOpen/voteDeadline below) rather than actually persisting one.
+    if (isRestrictedMode && gamesRes.data && gamesRes.data.length > 0) {
       const { data: existingRows } = await supabase
         .from('pool_matchweek_selections')
         .select('round, fixture_id')
@@ -213,16 +224,23 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
       }
       const rounds = [...new Set((gamesRes.data as any[]).map(g => g.round))]
       const missingRounds = rounds.filter(r => !selMap[r])
+      const votingOpenMap: Record<string, boolean> = {}
+      const voteDeadlineMap: Record<string, string> = {}
       if (missingRounds.length > 0) {
         const computed = await Promise.all(missingRounds.map(round =>
           fetch('/api/ncaaf/best10-select', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ poolId, round }),
-          }).then(r => r.json()).then(j => ({ round, fixtureIds: j.fixtureIds || [] }))
+          }).then(r => r.json()).then(j => ({ round, fixtureIds: j.fixtureIds || [], votingOpen: !!j.votingOpen, voteDeadline: j.voteDeadline }))
         ))
-        for (const { round, fixtureIds } of computed) selMap[round] = fixtureIds
+        for (const { round, fixtureIds, votingOpen, voteDeadline } of computed) {
+          selMap[round] = fixtureIds
+          if (votingOpen) { votingOpenMap[round] = true; if (voteDeadline) voteDeadlineMap[round] = voteDeadline }
+        }
       }
+      setVotingOpenByRound(votingOpenMap)
+      setVoteDeadlineByRound(voteDeadlineMap)
       setBest10Selections(selMap)
     }
 
@@ -328,15 +346,16 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
   // this list — the rest is plain kickoff-time order.
   const allWeekGames = games.filter(g => g.round === currentWeek && g.status !== 'live')
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-  const weekGames = isBest10Active
+  const weekGames = isRestrictedMode
     ? allWeekGames.filter(g => !best10Selections[currentWeek] || best10Selections[currentWeek].includes(g.id))
     : allWeekGames
-  // best10 pools: a live game only belongs here if it's one of that week's ten selected
+  const currentWeekVotingOpen = isVoteModeActive && !!votingOpenByRound[currentWeek]
+  // best10/vote pools: a live game only belongs here if it's one of that week's ten selected
   // games — otherwise a game the pool never picked (and has no picks to show) surfaces
   // in "live now" regardless of what week is being viewed.
   const liveGames = games.filter(g => {
     if (g.status !== 'live') return false
-    if (isBest10Active) {
+    if (isRestrictedMode) {
       const roundSel = best10Selections[g.round]
       return !roundSel || roundSel.includes(g.id)
     }
@@ -803,8 +822,18 @@ export default function NFLGamesList({ poolId, userId, tournamentId, deadlineTyp
         </div>
       )}
 
-      {/* Games for this week */}
-      {weekGames.map(renderGame)}
+      {/* Games for this week — or, in vote mode before the deadline, the ballot instead */}
+      {currentWeekVotingOpen ? (
+        <NCAAFVoteBox
+          poolId={poolId}
+          round={currentWeek}
+          userId={userId}
+          candidates={games.filter(g => g.round === currentWeek)}
+          deadline={voteDeadlineByRound[currentWeek]}
+        />
+      ) : (
+        weekGames.map(renderGame)
+      )}
     </div>
   )
 }

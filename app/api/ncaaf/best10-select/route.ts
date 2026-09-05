@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { selectBest10 } from '@/lib/best10Selection'
+import { selectBest10, selectByVotes } from '@/lib/best10Selection'
+import { fetchApRankings } from '@/lib/cfbRankings'
+
+const SEASON = 2026
+const VOTE_DEADLINE_DAYS_BEFORE = 5
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -14,8 +18,8 @@ export async function POST(request: NextRequest) {
   }
 
   const { data: pool } = await supabase.from('pools').select('id, tournament_id, cfb_game_mode').eq('id', poolId).maybeSingle()
-  if (!pool || pool.cfb_game_mode !== 'best10') {
-    return NextResponse.json({ error: 'Pool is not in best10 mode' }, { status: 400 })
+  if (!pool || (pool.cfb_game_mode !== 'best10' && pool.cfb_game_mode !== 'vote')) {
+    return NextResponse.json({ error: 'Pool is not in best10 or vote mode' }, { status: 400 })
   }
 
   // Stable once computed — never re-picked out from under members who've already
@@ -27,7 +31,7 @@ export async function POST(request: NextRequest) {
     .eq('pool_id', poolId)
     .eq('round', round)
   if (existing && existing.length > 0) {
-    return NextResponse.json({ ok: true, fixtureIds: existing.map(r => r.fixture_id) })
+    return NextResponse.json({ ok: true, fixtureIds: existing.map(r => r.fixture_id), votingOpen: false })
   }
 
   const { data: fixtures } = await supabase
@@ -37,10 +41,45 @@ export async function POST(request: NextRequest) {
     .eq('round', round)
 
   if (!fixtures || fixtures.length === 0) {
-    return NextResponse.json({ ok: true, fixtureIds: [] })
+    return NextResponse.json({ ok: true, fixtureIds: [], votingOpen: false })
   }
 
-  const fixtureIds = selectBest10(fixtures)
+  // "Week 0", "Week 1"... -> CFBD's own week numbering. Falls back to the pure spread
+  // algorithm (see selectBest10/selectByVotes) if this doesn't parse or the rankings fetch
+  // fails/is unconfigured — never blocks selection on the rankings source being available.
+  const weekMatch = round.match(/Week (\d+)/)
+  const rankedTeams = weekMatch ? await fetchApRankings(SEASON, parseInt(weekMatch[1], 10)) : new Map()
+
+  if (pool.cfb_game_mode === 'vote') {
+    const earliestKickoff = Math.min(...fixtures.map(f => new Date(f.date).getTime()))
+    const deadline = earliestKickoff - VOTE_DEADLINE_DAYS_BEFORE * 24 * 60 * 60 * 1000
+    if (Date.now() < deadline) {
+      // Voting is still open — nothing to select yet. The picks UI shows the vote panel
+      // instead of predictions for this round.
+      return NextResponse.json({ ok: true, fixtureIds: [], votingOpen: true, voteDeadline: new Date(deadline).toISOString() })
+    }
+
+    const { data: votes } = await supabase
+      .from('pool_game_votes')
+      .select('fixture_id')
+      .eq('pool_id', poolId)
+      .eq('round', round)
+    const voteCounts = new Map<number, number>()
+    for (const v of votes || []) voteCounts.set(v.fixture_id, (voteCounts.get(v.fixture_id) ?? 0) + 1)
+
+    const fixtureIds = selectByVotes(fixtures, voteCounts, rankedTeams)
+    const { error } = await supabase.from('pool_matchweek_selections').upsert(
+      fixtureIds.map(fixture_id => ({ pool_id: poolId, round, fixture_id, source: 'vote' })),
+      { onConflict: 'pool_id,round,fixture_id' }
+    )
+    if (error) {
+      console.error('best10-select (vote tally) upsert error:', error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    return NextResponse.json({ ok: true, fixtureIds, votingOpen: false })
+  }
+
+  const fixtureIds = selectBest10(fixtures, rankedTeams)
 
   const { error } = await supabase.from('pool_matchweek_selections').upsert(
     fixtureIds.map(fixture_id => ({ pool_id: poolId, round, fixture_id, source: 'auto' })),
@@ -51,5 +90,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, fixtureIds })
+  return NextResponse.json({ ok: true, fixtureIds, votingOpen: false })
 }

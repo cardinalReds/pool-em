@@ -1,11 +1,13 @@
 // Pure selection logic for NCAAF "best 10 games" pools (pool.cfb_game_mode === 'best10').
 // Storage-agnostic on purpose — app/api/ncaaf/best10-select/route.ts owns persistence.
 //
-// Unlike PL's best5 (lib/best5Selection.ts), there's no standings/rankings data available
-// for college football from the API (coverage.standings === false), so this is spread-only:
-// one game per distinct kickoff slot, so the 10 picked games don't all overlap at the same
-// time — no marquee/rivalry weighting. Self-contained rather than sharing code with
-// best5Selection.ts so PL's already-shipped behavior can't regress from a shared-code change.
+// Ranked (AP Top 25) games take priority and are allowed to overlap each other — a real
+// marquee matchup matters more than avoiding a kickoff-time collision. Only once ranked
+// games are exhausted (or there are more than 10 of them) does the original no-overlap,
+// spread-across-timeslots logic apply — either to fill remaining slots with unranked games,
+// or, if rankings aren't available at all, as the sole selection method exactly as before.
+
+import { rankOf, type RankedTeams } from './cfbRankings'
 
 export interface Best10Fixture {
   id: number
@@ -20,11 +22,30 @@ function compareCandidates(a: Best10Fixture, b: Best10Fixture): number {
   return a.id - b.id
 }
 
-export function selectBest10(fixtures: Best10Fixture[]): number[] {
-  const N = 10
-  if (fixtures.length === 0) return []
+// null = neither team is ranked. Otherwise: how many of the two teams are ranked (a
+// ranked-vs-ranked game outranks a ranked-vs-unranked one), and the better of their two
+// ranks (lower number = better).
+function gameRankScore(f: Best10Fixture, rankedTeams: RankedTeams): { rankedCount: number; bestRank: number } | null {
+  const ranks = [rankOf(rankedTeams, f.home_team), rankOf(rankedTeams, f.away_team)]
+    .filter((r): r is number => r != null)
+  if (ranks.length === 0) return null
+  return { rankedCount: ranks.length, bestRank: Math.min(...ranks) }
+}
 
-  // Group into distinct kickoff timeslots.
+function compareRankedGames(a: Best10Fixture, b: Best10Fixture, rankedTeams: RankedTeams): number {
+  const sa = gameRankScore(a, rankedTeams)!
+  const sb = gameRankScore(b, rankedTeams)!
+  if (sa.rankedCount !== sb.rankedCount) return sb.rankedCount - sa.rankedCount
+  if (sa.bestRank !== sb.bestRank) return sa.bestRank - sb.bestRank
+  return compareCandidates(a, b)
+}
+
+// The original spread-only algorithm — one game per distinct kickoff timeslot, evenly
+// sampled across the week so picks aren't clustered into one time window. Used as-is when
+// no rankings are available, and as the filler for unranked slots once ranked games are set.
+function selectSpread(fixtures: Best10Fixture[], n: number): Best10Fixture[] {
+  if (fixtures.length === 0 || n <= 0) return []
+
   const slotMap = new Map<number, Best10Fixture[]>()
   for (const f of fixtures) {
     const t = new Date(f.date).getTime()
@@ -32,32 +53,83 @@ export function selectBest10(fixtures: Best10Fixture[]): number[] {
     arr.push(f)
     slotMap.set(t, arr)
   }
-
-  // Within each slot, earliest-id-first (arbitrary but stable — no priority signal to sort by).
   const slots = [...slotMap.values()].map(games => [...games].sort((a, b) => a.id - b.id))
 
-  let selected: Best10Fixture[]
-
-  if (slots.length === N) {
-    selected = slots.map(s => s[0])
-  } else if (slots.length > N) {
-    // More timeslots than we need — spread picks evenly across the full slate of slots
-    // (sorted chronologically) rather than just taking the first N, so a 99-game week 1
-    // doesn't end up all early-afternoon games.
+  if (slots.length === n) {
+    return slots.map(s => s[0])
+  } else if (slots.length > n) {
     const chronological = [...slots].sort((a, b) => compareCandidates(a[0], b[0]))
-    const step = chronological.length / N
+    const step = chronological.length / n
     const pickedSlotIdx = new Set<number>()
-    for (let i = 0; i < N; i++) pickedSlotIdx.add(Math.min(chronological.length - 1, Math.floor(i * step)))
-    selected = [...pickedSlotIdx].sort((a, b) => a - b).map(idx => chronological[idx][0])
+    for (let i = 0; i < n; i++) pickedSlotIdx.add(Math.min(chronological.length - 1, Math.floor(i * step)))
+    return [...pickedSlotIdx].sort((a, b) => a - b).map(idx => chronological[idx][0])
   } else {
-    // Fewer than N slots — take every slot's representative, then pad with the best
-    // remaining (non-representative) games across all slots.
     const base = slots.map(s => s[0])
     const leftovers = slots.flatMap(s => s.slice(1))
     leftovers.sort(compareCandidates)
-    const need = Math.max(0, N - base.length)
-    selected = [...base, ...leftovers.slice(0, need)]
+    const need = Math.max(0, n - base.length)
+    return [...base, ...leftovers.slice(0, need)]
   }
+}
+
+export function selectBest10(fixtures: Best10Fixture[], rankedTeams?: RankedTeams): number[] {
+  const N = 10
+  if (fixtures.length === 0) return []
+
+  if (rankedTeams && rankedTeams.size > 0) {
+    const ranked = fixtures.filter(f => gameRankScore(f, rankedTeams) !== null)
+    const unranked = fixtures.filter(f => gameRankScore(f, rankedTeams) === null)
+
+    const selected = ranked.length >= N
+      ? [...ranked].sort((a, b) => compareRankedGames(a, b, rankedTeams)).slice(0, N)
+      : [...ranked, ...selectSpread(unranked, N - ranked.length)]
+
+    return selected
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a.id - b.id)
+      .map(f => f.id)
+  }
+
+  return selectSpread(fixtures, N)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a.id - b.id)
+    .map(f => f.id)
+}
+
+// "Democratize" mode (pool.cfb_game_mode === 'vote') — members vote for up to 10 games each;
+// this tallies raw vote counts once voting has closed. A tie right at the 10th spot is
+// broken by AP ranking (a tied game with a higher-ranked team wins), then by
+// compareCandidates for full determinism. A low-turnout week — fewer than 10 games got any
+// votes at all — pads the remaining slots using the same ranked-priority selection as
+// best10 mode, over whatever games weren't already picked by vote.
+export function selectByVotes(
+  fixtures: Best10Fixture[],
+  voteCounts: Map<number, number>,
+  rankedTeams?: RankedTeams,
+): number[] {
+  const N = 10
+  if (fixtures.length === 0) return []
+
+  const voted = fixtures.filter(f => (voteCounts.get(f.id) ?? 0) > 0)
+  const unvoted = fixtures.filter(f => (voteCounts.get(f.id) ?? 0) === 0)
+
+  const byVotes = [...voted].sort((a, b) => {
+    const voteDiff = (voteCounts.get(b.id) ?? 0) - (voteCounts.get(a.id) ?? 0)
+    if (voteDiff !== 0) return voteDiff
+    if (rankedTeams && rankedTeams.size > 0) {
+      const sa = gameRankScore(a, rankedTeams)
+      const sb = gameRankScore(b, rankedTeams)
+      if (sa && !sb) return -1
+      if (!sa && sb) return 1
+      if (sa && sb) {
+        if (sa.rankedCount !== sb.rankedCount) return sb.rankedCount - sa.rankedCount
+        if (sa.bestRank !== sb.bestRank) return sa.bestRank - sb.bestRank
+      }
+    }
+    return compareCandidates(a, b)
+  })
+
+  const selected = byVotes.length >= N
+    ? byVotes.slice(0, N)
+    : [...byVotes, ...selectBest10(unvoted, rankedTeams).map(id => unvoted.find(f => f.id === id)!).slice(0, N - byVotes.length)]
 
   return selected
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a.id - b.id)

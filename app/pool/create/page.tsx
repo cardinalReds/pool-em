@@ -48,7 +48,7 @@ export default function CreatePoolPage() {
   // games a week" idea as PL's best5, folded into step 1 (right after tournament/deadline
   // selection) instead of its own wizard step, since it's a single toggle rather than
   // PL's whole props/prize system.
-  const [cfbGameMode, setCfbGameMode] = useState<'every_game' | 'best10'>('every_game')
+  const [cfbGameMode, setCfbGameMode] = useState<'every_game' | 'best10' | 'vote'>('every_game')
   const [cfbBest10Override, setCfbBest10Override] = useState(false)
 
   // PL prize structure (step 4 for PL)
@@ -600,7 +600,14 @@ export default function CreatePoolPage() {
                           borderColor: cfbGameMode === 'best10' ? '#C8102E' : '#e0e0db',
                           background: cfbGameMode === 'best10' ? '#fff5f5' : 'white'}}>
                         <div style={{fontWeight: 600, fontSize: '13px', color: cfbGameMode === 'best10' ? '#C8102E' : '#111'}}>best 10 games</div>
-                        <div style={{fontSize: '11px', color: '#aaa', marginTop: 3}}>algorithm picks 10 games a week, spread across kickoff slots so they don't all overlap</div>
+                        <div style={{fontSize: '11px', color: '#aaa', marginTop: 3}}>algorithm picks 10 games a week, prioritizing ranked (AP Top 25) matchups, spread across kickoff slots to fill any remaining slots</div>
+                      </button>
+                      <button type="button" onClick={() => setCfbGameMode('vote')}
+                        style={{padding: '12px', border: '1px solid', textAlign: 'left', cursor: 'pointer',
+                          borderColor: cfbGameMode === 'vote' ? '#C8102E' : '#e0e0db',
+                          background: cfbGameMode === 'vote' ? '#fff5f5' : 'white'}}>
+                        <div style={{fontWeight: 600, fontSize: '13px', color: cfbGameMode === 'vote' ? '#C8102E' : '#111'}}>let the pool vote</div>
+                        <div style={{fontSize: '11px', color: '#aaa', marginTop: 3}}>each member picks up to 10 games they want predicted that week — voting closes 5 days before kickoff, then the most-voted games win</div>
                       </button>
                     </div>
                     {cfbGameMode === 'best10' && (

@@ -1068,6 +1068,41 @@ export type Database = {
           },
         ]
       }
+      pool_game_votes: {
+        Row: {
+          created_at: string
+          fixture_id: number
+          id: string
+          pool_id: string
+          round: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          fixture_id: number
+          id?: string
+          pool_id: string
+          round: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          fixture_id?: number
+          id?: string
+          pool_id?: string
+          round?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pool_game_votes_pool_id_fkey"
+            columns: ["pool_id"]
+            isOneToOne: false
+            referencedRelation: "pools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pool_matchweek_selections: {
         Row: {
           created_at: string | null
