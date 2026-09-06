@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { COMMON_IDS, CATEGORY_GROUPS, ROUND_SPECIALS, groupKeyFor } from '@/lib/categoryGroups'
 
@@ -140,29 +140,25 @@ function predictedTeamLabel(p: WldPick): string {
   return p.predictedWld === 'home' ? p.homeTeam : p.awayTeam
 }
 
-type PickSelection =
-  | { kind: 'all' }
-  | { kind: 'team'; team: string }
-  | { kind: 'person'; personId: string }
-  | { kind: 'personOutcome'; personId: string; outcome: string }
-  | { kind: 'cell'; personId: string; team: string; outcome: string }
-
 interface ExplorerPerson { id: string; label: string; picks: WldPick[] }
 
-// Team × predicted-outcome heatmap over one or more people's graded W/D/L picks — built
-// to be scanned for patterns rather than looked up one filter at a time. With more than
-// one person, each gets its own block of outcome columns (a "you" block, a "roy" block,
-// ...) side by side in the same table, divided by a border, rather than separate tables —
-// so a row (team) is directly comparable across people without scrolling. Click any team,
-// person, result, or cell to drill into the exact picks behind it, including a
-// $1-per-pick P&L using closing odds.
+// A "mad libs" sentence-plus-dropdowns query over one or more people's graded W/D/L picks,
+// replacing an earlier team × outcome heatmap grid that was accurate but unreadable at a
+// glance — a wall of colored cells doesn't answer "am I good at predicting away wins?" any
+// faster than scanning for the one cell that matters. This states the answer as a sentence
+// ("you're 75% (9/12) predicting away wins for Arsenal") with the two variables — outcome
+// and team — as inline dropdowns, so changing the question is one click, not a re-scan. A
+// "best/worst team" line is computed automatically alongside it (single-person view only)
+// since that specific question — "what team am I good at" — was the whole reason the old
+// grid existed, and shouldn't require manually flipping through every team by hand.
 function PicksExplorer({ people, defaultColumns, competitions }: {
-  people: ExplorerPerson[] // one entry per person shown; order determines left-to-right column groups
+  people: ExplorerPerson[] // one entry per person shown
   defaultColumns: OutcomeColumn[] // this sport's normal breakdown, e.g. home/draw/away
   competitions: { id: string; name: string; status: string }[] // union of competitions anyone here has picks in
 }) {
   const isMulti = people.length > 1
-  const [selection, setSelection] = useState<PickSelection>({ kind: 'all' })
+  const [selectedTeam, setSelectedTeam] = useState<string>('all')
+  const [selectedOutcome, setSelectedOutcome] = useState<string>('all')
   const [competitionId, setCompetitionId] = useState<string>(() => {
     // Default to a currently-active competition over a finished one (a completed World
     // Cup run has way more accumulated picks than a season just getting started, but
@@ -248,19 +244,34 @@ function PicksExplorer({ people, defaultColumns, competitions }: {
     return { hits, total: rows.length, pct: rows.length > 0 ? Math.round((hits / rows.length) * 100) : null }
   }
 
-  function matches(personId: string, p: WldPick, sel: PickSelection): boolean {
-    if (sel.kind === 'all') return true
-    if (sel.kind === 'team') return p.homeTeam === sel.team || p.awayTeam === sel.team
-    if (sel.kind === 'person') return personId === sel.personId
-    if (sel.kind === 'personOutcome') return personId === sel.personId && (columns.find(c => c.id === sel.outcome)?.match(p) ?? false)
-    return personId === sel.personId && (p.homeTeam === sel.team || p.awayTeam === sel.team) && (columns.find(c => c.id === sel.outcome)?.match(p) ?? false)
+  const matchesOutcome = (x: WldPick) => selectedOutcome === 'all' || (columns.find(c => c.id === selectedOutcome)?.match(x) ?? false)
+  const matchesTeam = (x: WldPick) => selectedTeam === 'all' || x.homeTeam === selectedTeam || x.awayTeam === selectedTeam
+  const filterPicks = (rows: WldPick[]) => rows.filter(x => matchesTeam(x) && matchesOutcome(x))
+
+  // "What team am I good at predicting" was the whole reason the old heatmap existed — a
+  // sorted bar per team (reacting to the outcome dropdown, ignoring the team dropdown since
+  // its job here is "rank every team", not filter down to one) answers it as a picture
+  // instead of a grid someone has to scan cell by cell.
+  function teamBreakdown(rows: WldPick[]): { team: string; pct: number; hits: number; total: number }[] {
+    const byTeam = new Map<string, WldPick[]>()
+    for (const p of rows.filter(matchesOutcome)) {
+      for (const t of [p.homeTeam, p.awayTeam]) {
+        const list = byTeam.get(t) ?? []
+        list.push(p)
+        byTeam.set(t, list)
+      }
+    }
+    return [...byTeam.entries()]
+      .map(([team, picks]) => ({ team, ...statsFor(picks) }))
+      .filter((r): r is { team: string; pct: number; hits: number; total: number } => r.total > 0 && r.pct != null)
+      .sort((a, b) => b.pct - a.pct)
   }
 
-  const selectedTagged = scoped
-    .flatMap(p => p.scoped.filter(x => matches(p.id, x, selection)).map(x => ({ ...x, ownerId: p.id, ownerLabel: p.label })))
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  const perPerson = scoped.map(p => ({ ...p, stats: statsFor(filterPicks(p.scoped)) }))
 
-  const { hits, total, pct } = statsFor(selectedTagged)
+  const selectedTagged = perPerson
+    .flatMap(p => filterPicks(p.scoped).map(x => ({ ...x, ownerId: p.id, ownerLabel: p.label })))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
   let staked = 0
   let netPnl = 0
@@ -272,33 +283,56 @@ function PicksExplorer({ people, defaultColumns, competitions }: {
     netPnl += p.isCorrect ? (odds - 1) : -1
   }
 
-  const personLabel = (id: string) => people.find(p => p.id === id)?.label ?? '?'
-  // A selection can span more than one person (e.g. clicking a team row shows everyone's
-  // picks for it) — possessive copy only makes sense when exactly one person is in view.
   const scopedOwnerIds = new Set(selectedTagged.map(p => p.ownerId))
-  const singleOwner = scopedOwnerIds.size === 1 ? personLabel([...scopedOwnerIds][0]) : null
-  const possessive = singleOwner ? (singleOwner === 'you' ? 'your' : `${singleOwner}'s`) : "the group's"
+  const singleOwner = scopedOwnerIds.size === 1 ? perPerson.find(p => p.id === [...scopedOwnerIds][0])?.label ?? null : null
   const hadBet = singleOwner ? (singleOwner === 'you' ? "you'd" : `${singleOwner} had`) : 'the group had'
 
-  const selectionLabel = selection.kind === 'all' ? 'all picks'
-    : selection.kind === 'team' ? selection.team
-    : selection.kind === 'person' ? `${personLabel(selection.personId)} · all picks`
-    : selection.kind === 'personOutcome' ? `${personLabel(selection.personId)} · picked ${columns.find(c => c.id === selection.outcome)?.label}`
-    : `${personLabel(selection.personId)} · ${selection.team} · ${columns.find(c => c.id === selection.outcome)?.label}`
+  const isFiltered = selectedTeam !== 'all' || selectedOutcome !== 'all'
+  const outcomeLabel = selectedOutcome === 'all' ? 'any result' : columns.find(c => c.id === selectedOutcome)?.label
+  const selectDots: React.CSSProperties = {
+    fontFamily: 'inherit', fontSize: 'inherit', fontWeight: 700, color: '#C8102E',
+    border: 'none', borderBottom: '1.5px dotted #C8102E', background: 'none',
+    padding: '0 2px', cursor: 'pointer', appearance: 'none' as const, WebkitAppearance: 'none' as const,
+  }
+
+  // Single person: rank every team they've picked, so the chart answers "what am I good
+  // at" directly. Comparing people: rank people instead, at whatever team/outcome the
+  // dropdowns above are set to, so the chart answers "who's better at this" directly.
+  const teamBars = !isMulti ? teamBreakdown(perPerson[0]?.scoped || []) : []
+  const personBars = isMulti
+    ? perPerson.filter(p => p.stats.total > 0).map(p => ({ id: p.id, label: p.label, pct: p.stats.pct as number, hits: p.stats.hits, total: p.stats.total })).sort((a, b) => b.pct - a.pct)
+    : []
+  const teamContext = selectedTeam !== 'all' ? teamStandings.get(selectedTeam) : undefined
+  const teamContextForm = selectedTeam !== 'all' ? teamForm.get(selectedTeam) : undefined
+
+  function BarRow({ label, pct, hits, total, highlighted, onClick }: { label: string; pct: number; hits: number; total: number; highlighted: boolean; onClick?: () => void }) {
+    const style = hitRateStyle(pct)
+    return (
+      <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2.5px 0', cursor: onClick ? 'pointer' : 'default' }}>
+        <span style={{
+          width: 100, flexShrink: 0, fontSize: '0.72rem', whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis',
+          fontWeight: highlighted ? 700 : 400, color: highlighted ? '#111' : '#666',
+        }}>
+          {label}
+        </span>
+        <div style={{ flex: 1, height: 12, background: '#eee', borderRadius: 3, overflow: 'hidden', boxShadow: highlighted ? 'inset 0 0 0 1.5px #C8102E' : 'none' }}>
+          <div style={{ width: `${pct}%`, height: '100%', background: style.bg }} />
+        </div>
+        <span style={{ width: 64, flexShrink: 0, fontSize: '0.68rem', color: '#999', textAlign: 'right' as const }}>{pct}% ({hits}/{total})</span>
+      </div>
+    )
+  }
 
   return (
     <div style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border-light)' }}>
-      <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bbb', marginBottom: '0.15rem' }}>
+      <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#bbb', marginBottom: '0.6rem' }}>
         {isMulti ? 'explore picks' : `explore ${people[0].label === 'you' ? 'your' : `${people[0].label}'s`} picks`}
-      </div>
-      <div style={{ fontSize: '0.72rem', color: '#bbb', marginBottom: '0.55rem' }}>
-        click a team{isMulti ? ', a person' : ''}, a result, or a cell to drill in
       </div>
 
       {competitions.length > 1 && (
         <div style={{ display: 'flex', gap: 6, marginBottom: '0.7rem' }}>
           {competitions.map(c => (
-            <button key={c.id} onClick={() => { setCompetitionId(c.id); setSelection({ kind: 'all' }) }}
+            <button key={c.id} onClick={() => { setCompetitionId(c.id); setSelectedTeam('all'); setSelectedOutcome('all') }}
               style={{
                 fontSize: '0.75rem', padding: '4px 10px', border: '1px solid', fontFamily: 'inherit', cursor: 'pointer',
                 borderColor: competitionId === c.id ? '#C8102E' : 'var(--border)',
@@ -312,168 +346,115 @@ function PicksExplorer({ people, defaultColumns, competitions }: {
         </div>
       )}
 
-      {/* Sequential legend — one hue, light→dark, no series to name so no legend box */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.7rem', fontSize: '0.65rem', color: '#999' }}>
-        <span>hit rate</span>
-        <span style={{ width: 90, height: 8, borderRadius: 2, background: `linear-gradient(to right, ${hitRateStyle(0).bg}, ${hitRateStyle(100).bg})`, border: '1px solid var(--border-light)' }} />
-        <span>0% → 100%</span>
-      </div>
+      {/* The sentence — the two variables (outcome, team) are inline dropdowns, so asking
+          a different question is one click, not a re-scan of a grid. */}
+      <div style={{ background: '#fafafa', border: '1px solid var(--border-light)', padding: '0.75rem 0.9rem' }}>
+        <div style={{ fontSize: '0.95rem', lineHeight: 1.7 }}>
+          predicting{' '}
+          <select value={selectedOutcome} onChange={e => setSelectedOutcome(e.target.value)} style={selectDots}>
+            <option value="all">any result</option>
+            {columns.map(col => <option key={col.id} value={col.id}>{col.label}</option>)}
+          </select>
+          {' '}for{' '}
+          <select value={selectedTeam} onChange={e => setSelectedTeam(e.target.value)} style={selectDots}>
+            <option value="all">any team</option>
+            {teams.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
 
-      <div style={{ overflowX: 'auto' as const }}>
-        <table style={{ borderCollapse: 'collapse', fontSize: '0.75rem' }}>
-          <thead>
-            {isMulti && (
-              <tr>
-                <td style={{ padding: '3px 8px' }} />
-                {scoped.map((p, pi) => {
-                  const active = selection.kind === 'person' && selection.personId === p.id
+        <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column' as const, gap: '0.2rem' }}>
+          {perPerson.map(p => {
+            const name = p.label === 'you' ? 'You' : p.label
+            if (p.stats.total === 0) {
+              return <div key={p.id} style={{ fontSize: '0.85rem', color: '#bbb' }}>{name} {p.label === 'you' ? "haven't" : "hasn't"} made a matching pick.</div>
+            }
+            const style = hitRateStyle(p.stats.pct ?? 0)
+            return (
+              <div key={p.id} style={{ fontSize: '1.05rem', display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' as const }}>
+                <span>
+                  <span style={{ fontWeight: 700 }}>{name}</span>
+                  <span style={{ color: '#888' }}>{p.label === 'you' ? "'re" : "'s"}</span>
+                </span>
+                {/* Sequential-ramp badge (background + paired text color) rather than
+                    using the ramp as bare text color — the light end of that ramp reads
+                    fine as a fill with contrasting text, but is nearly invisible as text
+                    on this panel's own light background. */}
+                <span style={{ fontWeight: 700, background: style.bg, color: style.text, padding: '1px 8px', borderRadius: 4 }}>{p.stats.pct}%</span>
+                <span style={{ color: '#888', fontSize: '0.85rem' }}>({p.stats.hits}/{p.stats.total})</span>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* The visualization — updates live as the sentence's dropdowns change. Single
+            person: one bar per team, ranked, so "what am I good at" is a shape, not a
+            number you have to look up. Comparing people: one bar per person instead, at
+            whatever team/outcome is currently selected, so "who's better at this" is
+            equally a shape. Clicking a team bar selects it in the sentence above. */}
+        {!isMulti && teamBars.length > 0 && (
+          <div style={{ marginTop: '0.6rem', paddingTop: '0.55rem', borderTop: '1px dashed var(--border-light)' }}>
+            <div style={{ fontSize: '0.68rem', color: '#aaa', marginBottom: 5 }}>
+              every team{selectedOutcome !== 'all' ? `, ${outcomeLabel}` : ''} — click a bar to focus it above
+            </div>
+            {teamBars.map(row => (
+              <BarRow key={row.team} label={row.team} pct={row.pct} hits={row.hits} total={row.total}
+                highlighted={selectedTeam === row.team}
+                onClick={() => setSelectedTeam(selectedTeam === row.team ? 'all' : row.team)} />
+            ))}
+          </div>
+        )}
+        {isMulti && personBars.length > 1 && (
+          <div style={{ marginTop: '0.6rem', paddingTop: '0.55rem', borderTop: '1px dashed var(--border-light)' }}>
+            <div style={{ fontSize: '0.68rem', color: '#aaa', marginBottom: 5 }}>by person</div>
+            {personBars.map(row => (
+              <BarRow key={row.id} label={row.label} pct={row.pct} hits={row.hits} total={row.total} highlighted={false} />
+            ))}
+          </div>
+        )}
+
+        {selectedTeam !== 'all' && (teamContext || (teamContextForm?.length ?? 0) > 0) && (
+          <div style={{ marginTop: '0.5rem', paddingTop: '0.45rem', borderTop: '1px dashed var(--border-light)' }}>
+            {teamContext && (
+              <div style={{ fontSize: '0.72rem', color: '#999', marginBottom: teamContextForm?.length ? 4 : 0 }}>
+                #{teamContext.position} · {teamContext.points}pts · GF {teamContext.goalsFor} · GA {teamContext.goalsAgainst}
+              </div>
+            )}
+            {(teamContextForm?.length ?? 0) > 0 && (
+              <div style={{ display: 'flex', gap: 2 }}>
+                {teamContextForm!.map((f, i) => {
+                  const c = f.result === 'W' ? { bg: '#2d7a2d', text: 'white' } : f.result === 'L' ? { bg: '#C8102E', text: 'white' } : { bg: '#ccc', text: '#444' }
+                  const word = f.result === 'W' ? 'won' : f.result === 'L' ? 'lost' : 'drew'
                   return (
-                    <td key={p.id} colSpan={columns.length + (columns.length > 1 ? 1 : 0)}
-                      onClick={() => setSelection(active ? { kind: 'all' } : { kind: 'person', personId: p.id })}
-                      style={{
-                        padding: '3px 8px', textAlign: 'center' as const, cursor: 'pointer', fontWeight: 700,
-                        color: active ? '#C8102E' : '#555',
-                        borderLeft: pi > 0 ? '2px solid var(--border)' : 'none',
-                      }}>
-                      {p.label}
-                    </td>
+                    <span key={i} title={`${word} vs ${f.opponent} (${f.scoreLabel})`}
+                      style={{ width: 16, height: 16, borderRadius: 2, background: c.bg, color: c.text, fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default' }}>
+                      {f.result}
+                    </span>
                   )
                 })}
-              </tr>
+              </div>
             )}
-            <tr>
-              <td style={{ padding: '3px 8px' }} />
-              {scoped.map((p, pi) => (
-                <Fragment key={p.id}>
-                  {columns.map((col, ci) => {
-                    const active = selection.kind === 'personOutcome' && selection.personId === p.id && selection.outcome === col.id
-                    return (
-                      <td key={col.id} onClick={() => setSelection(active ? { kind: 'all' } : { kind: 'personOutcome', personId: p.id, outcome: col.id })}
-                        style={{
-                          padding: '3px 8px', textAlign: 'center' as const, cursor: 'pointer', color: active ? '#111' : '#888',
-                          fontWeight: active ? 700 : 500, textDecoration: active ? 'underline' : 'none', whiteSpace: 'nowrap' as const,
-                          borderLeft: isMulti && ci === 0 && pi > 0 ? '2px solid var(--border)' : 'none',
-                        }}>
-                        {col.label}
-                      </td>
-                    )
-                  })}
-                  {columns.length > 1 && (
-                    <td onClick={() => setSelection(selection.kind === 'person' && selection.personId === p.id ? { kind: 'all' } : { kind: 'person', personId: p.id })}
-                      style={{ padding: '3px 8px', textAlign: 'center' as const, color: '#ccc', cursor: 'pointer' }}>
-                      all
-                    </td>
-                  )}
-                </Fragment>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {teams.map(team => {
-              const rowActive = selection.kind === 'team' && selection.team === team
-              return (
-                <tr key={team}>
-                  <td onClick={() => setSelection(rowActive ? { kind: 'all' } : { kind: 'team', team })}
-                    style={{ padding: '5px 8px', cursor: 'pointer', color: rowActive ? '#111' : '#333', fontWeight: rowActive ? 700 : 500 }}>
-                    <div style={{ whiteSpace: 'nowrap' as const, textDecoration: rowActive ? 'underline' : 'none' }}>{team}</div>
-                    {teamStandings.get(team) && (() => {
-                      const st = teamStandings.get(team)!
-                      return (
-                        <div title={`${st.position}${st.position === 1 ? 'st' : st.position === 2 ? 'nd' : st.position === 3 ? 'rd' : 'th'} place, ${st.points} points, ${st.goalsFor} goals scored, ${st.goalsAgainst} goals conceded`}
-                          style={{ fontSize: '10px', color: '#999', fontWeight: 400, whiteSpace: 'nowrap' as const, marginTop: 1 }}>
-                          #{st.position} · {st.points}pts · GF {st.goalsFor} · GA {st.goalsAgainst}
-                        </div>
-                      )
-                    })()}
-                    {(teamForm.get(team)?.length ?? 0) > 0 && (
-                      <div style={{ display: 'flex', gap: 2, marginTop: 4 }}>
-                        {teamForm.get(team)!.map((f, i) => {
-                          const c = f.result === 'W' ? { bg: '#2d7a2d', text: 'white' } : f.result === 'L' ? { bg: '#C8102E', text: 'white' } : { bg: '#ccc', text: '#444' }
-                          const word = f.result === 'W' ? 'won' : f.result === 'L' ? 'lost' : 'drew'
-                          return (
-                            <span key={i} title={`${word} vs ${f.opponent} (${f.scoreLabel})`}
-                              style={{ width: 16, height: 16, borderRadius: 2, background: c.bg, color: c.text, fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default' }}>
-                              {f.result}
-                            </span>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </td>
-                  {scoped.map((p, pi) => {
-                    const personTeamPicks = p.scoped.filter(x => x.homeTeam === team || x.awayTeam === team)
-                    const rowStats = statsFor(personTeamPicks)
-                    return (
-                      <Fragment key={p.id}>
-                        {columns.map((col, ci) => {
-                          const cellStats = statsFor(personTeamPicks.filter(col.match))
-                          const cellActive = selection.kind === 'cell' && selection.personId === p.id && selection.team === team && selection.outcome === col.id
-                          const style = cellStats.pct != null ? hitRateStyle(cellStats.pct) : { bg: '#f7f7f5', text: '#ccc' }
-                          return (
-                            <td key={col.id}
-                              onClick={() => cellStats.total > 0 && setSelection(cellActive ? { kind: 'all' } : { kind: 'cell', personId: p.id, team, outcome: col.id })}
-                              title={cellStats.total > 0 ? `${p.label} · ${team} · ${col.label}: ${cellStats.hits}/${cellStats.total} (${cellStats.pct}%)` : `${p.label} · ${team} · ${col.label}: no picks`}
-                              style={{
-                                padding: '6px 10px', textAlign: 'center' as const, minWidth: 56,
-                                cursor: cellStats.total > 0 ? 'pointer' : 'default',
-                                background: style.bg, color: style.text,
-                                fontWeight: cellActive ? 700 : 400,
-                                boxShadow: cellActive ? 'inset 0 0 0 2px #C8102E' : 'none',
-                                borderLeft: isMulti && ci === 0 && pi > 0 ? '2px solid var(--border)' : 'none',
-                              }}>
-                              {cellStats.total > 0 ? `${cellStats.hits}/${cellStats.total}` : '—'}
-                            </td>
-                          )
-                        })}
-                        {columns.length > 1 && <td style={{ padding: '6px 10px', textAlign: 'center' as const, color: '#888' }}>{rowStats.total > 0 ? `${rowStats.hits}/${rowStats.total}` : '—'}</td>}
-                      </Fragment>
-                    )
-                  })}
-                </tr>
-              )
-            })}
-            {columns.length > 1 && (
-              <tr>
-                <td style={{ padding: '4px 8px', color: '#ccc' }}>all</td>
-                {scoped.map((p, pi) => (
-                  <Fragment key={p.id}>
-                    {columns.map((col, ci) => {
-                      const colStats = statsFor(p.scoped.filter(col.match))
-                      return (
-                        <td key={col.id} style={{ padding: '4px 8px', textAlign: 'center' as const, color: '#888', borderLeft: isMulti && ci === 0 && pi > 0 ? '2px solid var(--border)' : 'none' }}>
-                          {colStats.total > 0 ? `${colStats.hits}/${colStats.total}` : '—'}
-                        </td>
-                      )
-                    })}
-                    <td style={{ padding: '4px 8px', textAlign: 'center' as const, color: '#ccc' }}>{p.scoped.filter(x => x.isCorrect).length}/{p.scoped.length}</td>
-                  </Fragment>
-                ))}
-              </tr>
-            )}
-          </tbody>
-        </table>
+          </div>
+        )}
       </div>
 
-      {/* Drill-down — exact values behind whatever's selected above */}
+      {/* Drill-down — exact picks behind the sentence above */}
       <div style={{ marginTop: '0.85rem', paddingTop: '0.7rem', borderTop: '1px dashed var(--border-light)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.5rem' }}>
-          <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{selectionLabel}</span>
-          {selection.kind !== 'all' && (
-            <button onClick={() => setSelection({ kind: 'all' })}
+          <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+            {selectedTeam !== 'all' && selectedOutcome !== 'all' ? `${selectedTeam} · ${outcomeLabel}` : selectedTeam !== 'all' ? selectedTeam : selectedOutcome !== 'all' ? outcomeLabel : 'all picks'}
+          </span>
+          {isFiltered && (
+            <button onClick={() => { setSelectedTeam('all'); setSelectedOutcome('all') }}
               style={{ fontSize: '0.7rem', color: '#888', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontFamily: 'inherit' }}>
-              clear selection
+              clear
             </button>
           )}
         </div>
 
-        {total === 0 ? (
+        {selectedTagged.length === 0 ? (
           <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>no picks in this selection.</p>
         ) : (
           <>
-            <div style={{ fontSize: '0.85rem', marginBottom: '0.35rem' }}>
-              <span style={{ fontWeight: 600, color: pct != null && pct >= 50 ? '#2d7a2d' : 'var(--text-dim)' }}>{pct}%</span>
-              <span style={{ color: 'var(--text-dim)' }}> ({hits}/{total} correct)</span>
-            </div>
             {staked > 0 ? (
               <div style={{ fontSize: '0.85rem', marginBottom: '0.6rem' }}>
                 <span style={{ fontWeight: 600, color: netPnl >= 0 ? '#2d7a2d' : '#C8102E' }}>{netPnl >= 0 ? '+' : ''}${netPnl.toFixed(2)}</span>
@@ -665,6 +646,13 @@ function CompareTable({ people }: { people: { id: string; label: string; sportSt
 // price, not scoped to whichever competition toggle happens to be selected in the
 // heatmap below. Sorted by net P&L so it doubles as "who's actually the best bettor."
 function MoneyCompareTable({ people }: { people: { id: string; label: string; picks: WldPick[] }[] }) {
+  // Raw net P&L rewards volume, not skill — someone who staked 40 picks can show a bigger
+  // dollar number than someone who staked 8 purely by having made more picks, even if the
+  // second person's bets performed better per-dollar. ROI (net P&L ÷ picks staked, as a
+  // percentage) is the normalized, volume-independent comparison — a toggle, not a
+  // replacement, since "who actually made/lost the most" is a real question too.
+  const [normalized, setNormalized] = useState(false)
+
   const rows = people.map(p => {
     let staked = 0
     let netPnl = 0
@@ -675,15 +663,30 @@ function MoneyCompareTable({ people }: { people: { id: string; label: string; pi
       staked += 1
       netPnl += pk.isCorrect ? (odds - 1) : -1
     }
-    return { id: p.id, label: p.label, staked, netPnl, oddsMissing }
-  }).filter(r => r.staked > 0).sort((a, b) => b.netPnl - a.netPnl)
+    const roiPct = staked > 0 ? (netPnl / staked) * 100 : 0
+    return { id: p.id, label: p.label, staked, netPnl, roiPct, oddsMissing }
+  }).filter(r => r.staked > 0).sort((a, b) => normalized ? b.roiPct - a.roiPct : b.netPnl - a.netPnl)
 
   if (rows.length === 0) return null
 
   return (
     <div style={{ marginBottom: '1.5rem' }}>
-      <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#bbb', marginBottom: '0.5rem' }}>
-        if everyone bet $1 on each pick
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap' as const, gap: 6 }}>
+        <div style={{ fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.06em', color: '#bbb' }}>
+          if everyone bet $1 on each pick
+        </div>
+        <div style={{ display: 'flex', border: '1px solid var(--border)', fontSize: '0.68rem' }}>
+          <button type="button" onClick={() => setNormalized(false)}
+            title="total dollars won or lost"
+            style={{ padding: '3px 8px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', background: !normalized ? '#111' : 'white', color: !normalized ? 'white' : '#888' }}>
+            total $
+          </button>
+          <button type="button" onClick={() => setNormalized(true)}
+            title="return per $1 staked — fair when people made different numbers of picks"
+            style={{ padding: '3px 8px', border: 'none', borderLeft: '1px solid var(--border)', cursor: 'pointer', fontFamily: 'inherit', background: normalized ? '#111' : 'white', color: normalized ? 'white' : '#888' }}>
+            normalized (ROI)
+          </button>
+        </div>
       </div>
       <div style={{ overflowX: 'auto' as const }}>
         <table style={{ borderCollapse: 'collapse', fontSize: '0.8rem', width: '100%' }}>
@@ -691,7 +694,9 @@ function MoneyCompareTable({ people }: { people: { id: string; label: string; pi
             <tr>
               <td style={{ padding: '5px 10px' }} />
               <td style={{ padding: '5px 10px', textAlign: 'center' as const, color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const }}>picks staked</td>
-              <td style={{ padding: '5px 10px', textAlign: 'center' as const, color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const }}>net P&amp;L</td>
+              <td style={{ padding: '5px 10px', textAlign: 'center' as const, color: '#aaa', fontWeight: 600, whiteSpace: 'nowrap' as const }}>
+                {normalized ? 'ROI per pick' : 'net P&L'}
+              </td>
             </tr>
           </thead>
           <tbody>
@@ -702,8 +707,10 @@ function MoneyCompareTable({ people }: { people: { id: string; label: string; pi
                   {r.staked}
                   {r.oddsMissing > 0 && <span style={{ color: '#ccc' }}> ({r.oddsMissing} no odds)</span>}
                 </td>
-                <td style={{ padding: '6px 10px', textAlign: 'center' as const, fontWeight: 700, color: r.netPnl >= 0 ? '#2d7a2d' : '#C8102E' }}>
-                  {r.netPnl >= 0 ? '+' : ''}${r.netPnl.toFixed(2)}
+                <td style={{ padding: '6px 10px', textAlign: 'center' as const, fontWeight: 700, color: (normalized ? r.roiPct : r.netPnl) >= 0 ? '#2d7a2d' : '#C8102E' }}>
+                  {normalized
+                    ? `${r.roiPct >= 0 ? '+' : ''}${r.roiPct.toFixed(1)}%`
+                    : `${r.netPnl >= 0 ? '+' : ''}$${r.netPnl.toFixed(2)}`}
                 </td>
               </tr>
             ))}
@@ -712,6 +719,7 @@ function MoneyCompareTable({ people }: { people: { id: string; label: string; pi
       </div>
       <p style={{ fontSize: '0.7rem', color: '#bbb', marginTop: '0.5rem' }}>
         at closing odds, across every graded win/draw/loss pick with recorded odds.
+        {normalized && ' ROI = net P&L ÷ picks staked — comparable even when people made different numbers of picks.'}
       </p>
     </div>
   )
@@ -1014,7 +1022,15 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
     })
   }
 
-  if (loading) return <div style={{ padding: '2rem', color: 'var(--text-dim)', fontSize: '0.875rem' }}>loading...</div>
+  // Only blank the page on a true first load (no data at all yet) — a compare-selection
+  // change re-triggers this same fetch and flips loading back to true, but replacing
+  // already-visible content with a two-line placeholder collapses the page height out
+  // from under the reader's scroll position, which is what made "select someone to
+  // compare" feel like it was jumping back to the top every time. A background refresh
+  // just dims what's already there instead.
+  if (loading && statsByUser.size === 0) {
+    return <div style={{ padding: '2rem', color: 'var(--text-dim)', fontSize: '0.875rem' }}>loading...</div>
+  }
 
   const otherCandidates = compareCandidates.filter(c => c.id !== targetUserId)
   const sortedCandidates = [...otherCandidates].sort((a, b) => {
@@ -1145,7 +1161,7 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
   }
 
   return (
-    <div>
+    <div style={{ opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s' }}>
       {compareBlock}
 
       {isComparing && <CompareTable people={comparePeople} />}
