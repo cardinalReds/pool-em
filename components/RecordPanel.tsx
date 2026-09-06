@@ -151,10 +151,14 @@ interface ExplorerPerson { id: string; label: string; picks: WldPick[] }
 // "best/worst team" line is computed automatically alongside it (single-person view only)
 // since that specific question — "what team am I good at" — was the whole reason the old
 // grid existed, and shouldn't require manually flipping through every team by hand.
-function PicksExplorer({ people, defaultColumns, competitions }: {
+function PicksExplorer({ people, defaultColumns, competitions, primaryId, availableToAdd, onAddPerson, onRemovePerson }: {
   people: ExplorerPerson[] // one entry per person shown
   defaultColumns: OutcomeColumn[] // this sport's normal breakdown, e.g. home/draw/away
   competitions: { id: string; name: string; status: string }[] // union of competitions anyone here has picks in
+  primaryId: string // the subject of the page — never removable from the sentence
+  availableToAdd: { id: string; name: string }[] // pool-mates not currently in `people`, offered via "+ add someone"
+  onAddPerson: (id: string) => void
+  onRemovePerson: (id: string) => void
 }) {
   const isMulti = people.length > 1
   const [selectedTeam, setSelectedTeam] = useState<string>('all')
@@ -252,7 +256,7 @@ function PicksExplorer({ people, defaultColumns, competitions }: {
   // sorted bar per team (reacting to the outcome dropdown, ignoring the team dropdown since
   // its job here is "rank every team", not filter down to one) answers it as a picture
   // instead of a grid someone has to scan cell by cell.
-  function teamBreakdown(rows: WldPick[]): { team: string; pct: number; hits: number; total: number }[] {
+  function teamBreakdown(rows: WldPick[]): { team: string; pct: number; hits: number; total: number; picks: WldPick[] }[] {
     const byTeam = new Map<string, WldPick[]>()
     for (const p of rows.filter(matchesOutcome)) {
       for (const t of [p.homeTeam, p.awayTeam]) {
@@ -262,9 +266,37 @@ function PicksExplorer({ people, defaultColumns, competitions }: {
       }
     }
     return [...byTeam.entries()]
-      .map(([team, picks]) => ({ team, ...statsFor(picks) }))
-      .filter((r): r is { team: string; pct: number; hits: number; total: number } => r.total > 0 && r.pct != null)
+      .map(([team, picks]) => ({ team, picks, ...statsFor(picks) }))
+      .filter((r): r is { team: string; picks: WldPick[]; pct: number; hits: number; total: number } => r.total > 0 && r.pct != null)
       .sort((a, b) => b.pct - a.pct)
+  }
+
+  // A bar's length can only ever say "40%" — it can't say which four games those were.
+  // Hover exposes the actual matches so "further detail" is a mouse-rest away instead of
+  // a separate click into the drill-down list below.
+  function fixtureTitle(picks: WldPick[]): string {
+    return [...picks]
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .map(p => `${new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}  ${p.awayTeam} @ ${p.homeTeam} — picked ${predictedTeamLabel(p)} ${p.isCorrect ? '✓' : '✗'}`)
+      .join('\n')
+  }
+
+  // "Tight games with big favorites, or the opposite" — the exact same closing-odds data
+  // already used for the $1-bet simulation splits picks by whether the pick was favored
+  // (implied probability ≥ 50%, i.e. odds ≤ 2.0) or the underdog. This is standard practice
+  // in prediction-model evaluation (see calibration/reliability analysis, and favorite-
+  // longshot-bias studies in sports betting) precisely because raw accuracy alone hides
+  // whether someone's hit rate comes from correctly backing chalk or from calling upsets.
+  function favoriteUnderdogBreakdown(rows: WldPick[]): { key: 'favorite' | 'underdog'; label: string; pct: number; hits: number; total: number; picks: WldPick[] }[] {
+    const buckets: Record<'favorite' | 'underdog', WldPick[]> = { favorite: [], underdog: [] }
+    for (const p of rows) {
+      const odds = p.predictedWld === 'home' ? p.closingOddsHome : p.predictedWld === 'away' ? p.closingOddsAway : p.closingOddsDraw
+      if (odds == null) continue
+      buckets[odds <= 2.0 ? 'favorite' : 'underdog'].push(p)
+    }
+    return (['favorite', 'underdog'] as const)
+      .map(key => ({ key, label: key === 'favorite' ? 'picked the favorite' : 'picked the underdog', picks: buckets[key], ...statsFor(buckets[key]) }))
+      .filter((b): b is { key: 'favorite' | 'underdog'; label: string; picks: WldPick[]; pct: number; hits: number; total: number } => b.total > 0 && b.pct != null)
   }
 
   const perPerson = scoped.map(p => ({ ...p, stats: statsFor(filterPicks(p.scoped)) }))
@@ -300,15 +332,20 @@ function PicksExplorer({ people, defaultColumns, competitions }: {
   // dropdowns above are set to, so the chart answers "who's better at this" directly.
   const teamBars = !isMulti ? teamBreakdown(perPerson[0]?.scoped || []) : []
   const personBars = isMulti
-    ? perPerson.filter(p => p.stats.total > 0).map(p => ({ id: p.id, label: p.label, pct: p.stats.pct as number, hits: p.stats.hits, total: p.stats.total })).sort((a, b) => b.pct - a.pct)
+    ? perPerson.filter(p => p.stats.total > 0).map(p => ({ id: p.id, label: p.label, pct: p.stats.pct as number, hits: p.stats.hits, total: p.stats.total, picks: filterPicks(p.scoped) })).sort((a, b) => b.pct - a.pct)
     : []
   const teamContext = selectedTeam !== 'all' ? teamStandings.get(selectedTeam) : undefined
   const teamContextForm = selectedTeam !== 'all' ? teamForm.get(selectedTeam) : undefined
+  const favBreakdown = favoriteUnderdogBreakdown(selectedTagged)
 
-  function BarRow({ label, pct, hits, total, highlighted, onClick }: { label: string; pct: number; hits: number; total: number; highlighted: boolean; onClick?: () => void }) {
-    const style = hitRateStyle(pct)
+  // Bar length is the ONLY channel encoding pct here — color used to also ramp with pct
+  // (via hitRateStyle), which meant length, fill color, and the text label all repeated
+  // the identical number. Fill is now a flat neutral so color is free to mean something
+  // else: the red inset ring for "currently selected", nothing more. Hover exposes the
+  // underlying picks (native title tooltip) since a bar alone can't show which games it's made of.
+  function BarRow({ label, pct, hits, total, highlighted, onClick, title }: { label: string; pct: number; hits: number; total: number; highlighted: boolean; onClick?: () => void; title?: string }) {
     return (
-      <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2.5px 0', cursor: onClick ? 'pointer' : 'default' }}>
+      <div onClick={onClick} title={title} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2.5px 0', cursor: onClick ? 'pointer' : 'default' }}>
         <span style={{
           width: 100, flexShrink: 0, fontSize: '0.72rem', whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis',
           fontWeight: highlighted ? 700 : 400, color: highlighted ? '#111' : '#666',
@@ -316,7 +353,7 @@ function PicksExplorer({ people, defaultColumns, competitions }: {
           {label}
         </span>
         <div style={{ flex: 1, height: 12, background: '#eee', borderRadius: 3, overflow: 'hidden', boxShadow: highlighted ? 'inset 0 0 0 1.5px #C8102E' : 'none' }}>
-          <div style={{ width: `${pct}%`, height: '100%', background: style.bg }} />
+          <div style={{ width: `${pct}%`, height: '100%', background: highlighted ? '#C8102E' : '#999' }} />
         </div>
         <span style={{ width: 64, flexShrink: 0, fontSize: '0.68rem', color: '#999', textAlign: 'right' as const }}>{pct}% ({hits}/{total})</span>
       </div>
@@ -365,8 +402,17 @@ function PicksExplorer({ people, defaultColumns, competitions }: {
         <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column' as const, gap: '0.2rem' }}>
           {perPerson.map(p => {
             const name = p.label === 'you' ? 'You' : p.label
+            const removable = p.id !== primaryId
+            const removeBtn = removable && (
+              <span onClick={() => onRemovePerson(p.id)} title={`stop comparing ${name}`}
+                style={{ cursor: 'pointer', color: '#ccc', fontWeight: 700, fontSize: '0.8rem', marginLeft: 2 }}>×</span>
+            )
             if (p.stats.total === 0) {
-              return <div key={p.id} style={{ fontSize: '0.85rem', color: '#bbb' }}>{name} {p.label === 'you' ? "haven't" : "hasn't"} made a matching pick.</div>
+              return (
+                <div key={p.id} style={{ fontSize: '0.85rem', color: '#bbb', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {name} {p.label === 'you' ? "haven't" : "hasn't"} made a matching pick. {removeBtn}
+                </div>
+              )
             }
             const style = hitRateStyle(p.stats.pct ?? 0)
             return (
@@ -381,9 +427,21 @@ function PicksExplorer({ people, defaultColumns, competitions }: {
                     on this panel's own light background. */}
                 <span style={{ fontWeight: 700, background: style.bg, color: style.text, padding: '1px 8px', borderRadius: 4 }}>{p.stats.pct}%</span>
                 <span style={{ color: '#888', fontSize: '0.85rem' }}>({p.stats.hits}/{p.stats.total})</span>
+                {removeBtn}
               </div>
             )
           })}
+          {/* Add a pool-mate right from the sentence — mirrors the standalone "compare"
+              panel elsewhere on the page, but inline so comparing someone new doesn't
+              require leaving the question you're currently exploring. */}
+          {availableToAdd.length > 0 && (
+            <div style={{ fontSize: '0.85rem', marginTop: 2 }}>
+              <select value="" onChange={e => { if (e.target.value) onAddPerson(e.target.value) }} style={selectDots}>
+                <option value="">+ add someone to compare</option>
+                {availableToAdd.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* The visualization — updates live as the sentence's dropdowns change. Single
@@ -398,7 +456,7 @@ function PicksExplorer({ people, defaultColumns, competitions }: {
             </div>
             {teamBars.map(row => (
               <BarRow key={row.team} label={row.team} pct={row.pct} hits={row.hits} total={row.total}
-                highlighted={selectedTeam === row.team}
+                highlighted={selectedTeam === row.team} title={fixtureTitle(row.picks)}
                 onClick={() => setSelectedTeam(selectedTeam === row.team ? 'all' : row.team)} />
             ))}
           </div>
@@ -407,7 +465,20 @@ function PicksExplorer({ people, defaultColumns, competitions }: {
           <div style={{ marginTop: '0.6rem', paddingTop: '0.55rem', borderTop: '1px dashed var(--border-light)' }}>
             <div style={{ fontSize: '0.68rem', color: '#aaa', marginBottom: 5 }}>by person</div>
             {personBars.map(row => (
-              <BarRow key={row.id} label={row.label} pct={row.pct} hits={row.hits} total={row.total} highlighted={false} />
+              <BarRow key={row.id} label={row.label} pct={row.pct} hits={row.hits} total={row.total} highlighted={false} title={fixtureTitle(row.picks)} />
+            ))}
+          </div>
+        )}
+
+        {/* Favorite vs. underdog — the same closing-odds data behind the $1-bet number
+            below, split by whether the pick was favored (implied probability ≥ 50%) or
+            not. Answers "am I actually good, or just good at picking chalk" — a question
+            the plain hit-rate above can't answer on its own. */}
+        {favBreakdown.length > 0 && (
+          <div style={{ marginTop: '0.6rem', paddingTop: '0.55rem', borderTop: '1px dashed var(--border-light)' }}>
+            <div style={{ fontSize: '0.68rem', color: '#aaa', marginBottom: 5 }}>favorite vs. underdog, by closing odds</div>
+            {favBreakdown.map(row => (
+              <BarRow key={row.key} label={row.label} pct={row.pct} hits={row.hits} total={row.total} highlighted={false} title={fixtureTitle(row.picks)} />
             ))}
           </div>
         )}
@@ -465,19 +536,23 @@ function PicksExplorer({ people, defaultColumns, competitions }: {
             )}
 
             <div style={{ border: '1px solid var(--border-light)', maxHeight: 240, overflowY: 'auto' as const }}>
-              {selectedTagged.map(p => (
-                <div key={`${p.ownerId}:${p.fixtureId}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '0.4rem 0.6rem', borderTop: '1px solid var(--border-light)', fontSize: '0.78rem' }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
-                    {p.awayTeam} @ {p.homeTeam} <span style={{ color: '#bbb' }}>· {new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}{isMulti ? ` · ${p.ownerLabel}` : ''}</span>
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                    <span style={{ color: '#888' }}>picked {predictedTeamLabel(p)}</span>
-                    <span style={{ fontWeight: 600, color: p.isCorrect ? '#2d7a2d' : '#aaa' }}>
-                      {p.isCorrect ? '✓' : '✗'}{p.pointsEarned != null ? ` +${p.pointsEarned}` : ''}
+              {selectedTagged.map(p => {
+                const odds = p.predictedWld === 'home' ? p.closingOddsHome : p.predictedWld === 'away' ? p.closingOddsAway : p.closingOddsDraw
+                const oddsDetail = odds != null ? `closing odds ${odds.toFixed(2)} (${Math.round(100 / odds)}% implied) — ${odds <= 2.0 ? 'favorite' : 'underdog'}` : 'no closing odds recorded'
+                return (
+                  <div key={`${p.ownerId}:${p.fixtureId}`} title={oddsDetail} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '0.4rem 0.6rem', borderTop: '1px solid var(--border-light)', fontSize: '0.78rem' }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>
+                      {p.awayTeam} @ {p.homeTeam} <span style={{ color: '#bbb' }}>· {new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}{isMulti ? ` · ${p.ownerLabel}` : ''}</span>
                     </span>
-                  </span>
-                </div>
-              ))}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                      <span style={{ color: '#888' }}>picked {predictedTeamLabel(p)}</span>
+                      <span style={{ fontWeight: 600, color: p.isCorrect ? '#2d7a2d' : '#aaa' }}>
+                        {p.isCorrect ? '✓' : '✗'}{p.pointsEarned != null ? ` +${p.pointsEarned}` : ''}
+                      </span>
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           </>
         )}
@@ -1033,6 +1108,9 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
   }
 
   const otherCandidates = compareCandidates.filter(c => c.id !== targetUserId)
+  const availableToAdd = otherCandidates.filter(c => !selectedCompareIds.has(c.id)).map(c => ({ id: c.id, name: c.name }))
+  const addComparePerson = (id: string) => setSelectedCompareIds(prev => new Set(prev).add(id))
+  const removeComparePerson = (id: string) => setSelectedCompareIds(prev => { const next = new Set(prev); next.delete(id); return next })
   const sortedCandidates = [...otherCandidates].sort((a, b) => {
     if (compareSort === 'accuracy') {
       const diff = (b.hitRatePct ?? -1) - (a.hitRatePct ?? -1)
@@ -1231,7 +1309,8 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
 
             {sport === 'soccer' && (() => {
               const { people, competitions } = explorerPeopleFor('soccer')
-              return people.length > 0 && <PicksExplorer people={people} defaultColumns={HOME_DRAW_AWAY_COLUMNS} competitions={competitions} />
+              return people.length > 0 && <PicksExplorer people={people} defaultColumns={HOME_DRAW_AWAY_COLUMNS} competitions={competitions}
+                primaryId={targetUserId} availableToAdd={availableToAdd} onAddPerson={addComparePerson} onRemovePerson={removeComparePerson} />
             })()}
             {sport === 'soccer' && (() => {
               const plPeople = effectiveUserIds
@@ -1241,7 +1320,8 @@ export default function RecordPanel({ targetUserId, poolIds, subjectLabel, viewe
             })()}
             {sport === 'nfl' && (() => {
               const { people, competitions } = explorerPeopleFor('nfl')
-              return people.length > 0 && <PicksExplorer people={people} defaultColumns={HOME_AWAY_COLUMNS} competitions={competitions} />
+              return people.length > 0 && <PicksExplorer people={people} defaultColumns={HOME_AWAY_COLUMNS} competitions={competitions}
+                primaryId={targetUserId} availableToAdd={availableToAdd} onAddPerson={addComparePerson} onRemovePerson={removeComparePerson} />
             })()}
             </>}
           </section>
