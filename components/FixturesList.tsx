@@ -491,7 +491,7 @@ onToggleAlwaysVisible?: (e: React.MouseEvent) => void
                   disabled={locked || finished}
                   onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                    {isPL && fixture.home_logo
+                    {fixture.home_logo
                       ? <img src={fixture.home_logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain', flexShrink: 0 }} />
                       : <Flag team={fixture.home_team} />
                     } {fixture.home_team}
@@ -510,7 +510,7 @@ onToggleAlwaysVisible?: (e: React.MouseEvent) => void
                   disabled={locked || finished}
                   onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                    {isPL && fixture.away_logo
+                    {fixture.away_logo
                       ? <img src={fixture.away_logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain', flexShrink: 0 }} />
                       : <Flag team={fixture.away_team} />
                     } {fixture.away_team}
@@ -541,7 +541,7 @@ onToggleAlwaysVisible?: (e: React.MouseEvent) => void
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', gap: 4 }}>
-              {isPL && fixture.home_logo
+              {fixture.home_logo
                 ? <img src={fixture.home_logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain', flexShrink: 0 }} />
                 : <Flag team={fixture.home_team} />
               } {fixture.home_team}
@@ -556,7 +556,7 @@ onToggleAlwaysVisible?: (e: React.MouseEvent) => void
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', gap: 4 }}>
-              {isPL && fixture.away_logo
+              {fixture.away_logo
                 ? <img src={fixture.away_logo} alt="" style={{ width: 18, height: 18, objectFit: 'contain', flexShrink: 0 }} />
                 : <Flag team={fixture.away_team} />
               } {fixture.away_team}
@@ -577,7 +577,7 @@ onToggleAlwaysVisible?: (e: React.MouseEvent) => void
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-              {isPL && fixture.home_logo ? <img src={fixture.home_logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} /> : <Flag team={fixture.home_team} />} {fixture.home_team}
+              {fixture.home_logo ? <img src={fixture.home_logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} /> : <Flag team={fixture.home_team} />} {fixture.home_team}
             </span>
           </button>
           <button type="button" style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
@@ -589,7 +589,7 @@ onToggleAlwaysVisible?: (e: React.MouseEvent) => void
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-              {isPL && fixture.away_logo ? <img src={fixture.away_logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} /> : <Flag team={fixture.away_team} />} {fixture.away_team}
+              {fixture.away_logo ? <img src={fixture.away_logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} /> : <Flag team={fixture.away_team} />} {fixture.away_team}
             </span>
           </button>
         </div>
@@ -602,7 +602,7 @@ onToggleAlwaysVisible?: (e: React.MouseEvent) => void
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'home' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-              {isPL && fixture.home_logo ? <img src={fixture.home_logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} /> : <Flag team={fixture.home_team} />} {fixture.home_team}
+              {fixture.home_logo ? <img src={fixture.home_logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} /> : <Flag team={fixture.home_team} />} {fixture.home_team}
             </span>
           </button>
           <button type="button" style={{ ...btnStyle('none' as any), borderRight: 'none', flexShrink: 0, flex: '0 0 70px' }}
@@ -614,7 +614,7 @@ onToggleAlwaysVisible?: (e: React.MouseEvent) => void
             disabled={locked || finished}
             onClick={() => !locked && !finished && updateLocal(fixture.id, rule.category_id, { value_wld: 'away' })}>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-              {isPL && fixture.away_logo ? <img src={fixture.away_logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} /> : <Flag team={fixture.away_team} />} {fixture.away_team}
+              {fixture.away_logo ? <img src={fixture.away_logo} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} /> : <Flag team={fixture.away_team} />} {fixture.away_team}
             </span>
           </button>
         </div>
