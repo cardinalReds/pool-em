@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { reportSyncIssue, clearSyncIssue } from '@/lib/syncHealth'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,16 +11,28 @@ const API_KEY = process.env.API_FOOTBALL_KEY!
 const F1_BASE = 'https://v1.formula-1.api-sports.io'
 const TOURNAMENT_ID = 'f1_2026'
 
+// api-sports.io returns HTTP 200 even for a plan/access rejection — e.g. "Free plans do
+// not have access to this season, try from 2022 to 2024" — so a non-empty `errors` body
+// is the actual failure signal, not the HTTP status. This is exactly the failure that let
+// F1 go completely unscored all season: the route saw an empty `response` array, treated
+// it as "nothing happening right now," and moved on with nothing visible anywhere.
 async function fetchSessionStatus(competitionId: number, season: number): Promise<any[]> {
   const res = await fetch(`${F1_BASE}/races?competition=${competitionId}&season=${season}`, {
     headers: { 'x-apisports-key': API_KEY },
   })
-  if (!res.ok) return []
+  if (!res.ok) {
+    await reportSyncIssue('f1_live', `api-sports /races HTTP ${res.status}`)
+    return []
+  }
   const data = await res.json()
   const errors = data.errors
   if (errors && (Array.isArray(errors) ? errors.length : Object.keys(errors).length)) {
+    const message = Array.isArray(errors) ? errors.join('; ') : Object.values(errors).join('; ')
     console.error('F1 live route: api-sports error', JSON.stringify(errors))
+    await reportSyncIssue('f1_live', `api-sports error: ${message}`)
+    return []
   }
+  await clearSyncIssue('f1_live')
   return data.response || []
 }
 

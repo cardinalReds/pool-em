@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { reportSyncIssue, clearSyncIssue } from '@/lib/syncHealth'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,8 +34,22 @@ async function fetchRankings(apiSessionId: number): Promise<DriverResult[]> {
   const res = await fetch(`${F1_BASE}/rankings/races?race=${apiSessionId}`, {
     headers: { 'x-apisports-key': API_KEY },
   })
-  if (!res.ok) return []
+  if (!res.ok) {
+    await reportSyncIssue('f1_score', `api-sports /rankings/races HTTP ${res.status}`)
+    return []
+  }
   const data = await res.json()
+  // Same silent-failure shape as /api/f1/live's fetchSessionStatus — api-sports returns
+  // HTTP 200 with an empty `response` and the real problem tucked into `errors` (e.g. a
+  // plan/season restriction), which an empty-array check alone would treat as "nothing to
+  // score yet" forever.
+  const errors = (data as any).errors
+  if (errors && (Array.isArray(errors) ? errors.length : Object.keys(errors).length)) {
+    const message = Array.isArray(errors) ? errors.join('; ') : Object.values(errors).join('; ')
+    await reportSyncIssue('f1_score', `api-sports error: ${message}`)
+    return []
+  }
+  await clearSyncIssue('f1_score')
   return (data.response || []).map((r: any) => ({
     driver_id: r.driver?.id,
     driver_name: r.driver?.name,

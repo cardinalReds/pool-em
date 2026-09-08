@@ -123,6 +123,37 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // ── Sync issues (e.g. an api-sports product on a plan that doesn't cover the current
+  // season — see lib/syncHealth.ts) not yet emailed. Edge-triggered on notified_at, not
+  // re-sent every 5-minute tick while the underlying problem sits unresolved — this
+  // exists specifically so a routine sync failure can't go a full season without anyone
+  // finding out, the way F1 scoring did.
+  {
+    const { data: openIssues } = await supabase
+      .from('sync_issues')
+      .select('key, message, first_seen_at')
+      .is('notified_at', null)
+      .is('resolved_at', null)
+      .order('first_seen_at', { ascending: true })
+
+    if (openIssues && openIssues.length > 0) {
+      subjectParts.push(`${openIssues.length} sync issue${openIssues.length !== 1 ? 's' : ''}`)
+      sections.push(`
+        <div style="margin-bottom: 24px;">
+          <div style="font-weight: 700; font-size: 13px; margin-bottom: 8px;">⚠️ Sync issues</div>
+          ${openIssues.map(i => `
+            <div style="padding: 8px 0; border-bottom: 1px solid #eee; font-size: 13px;">
+              <strong>${escapeHtml(i.key)}</strong> — ${escapeHtml(i.message)}
+              <div style="color: #888; font-size: 11px; margin-top: 2px;">since ${new Date(i.first_seen_at).toLocaleString('en-US')}</div>
+            </div>
+          `).join('')}
+        </div>
+      `)
+
+      await supabase.from('sync_issues').update({ notified_at: new Date().toISOString() }).in('key', openIssues.map(i => i.key))
+    }
+  }
+
   if (sections.length === 0) {
     return NextResponse.json({ ok: true, sent: false, reason: 'nothing new' })
   }
