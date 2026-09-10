@@ -1972,8 +1972,12 @@ export default function FixturesList({
           </div>
         )}
 
-        {/* Team/Fighter header */}
-        {isPL ? (
+        {/* Team/Fighter header — every soccer competition (PL, World Cup, UCL) gets the
+            big centered logo+form card; only MMA gets the compact fighter-name row. This
+            used to be gated on isPL specifically, which was correct back when PL was the
+            only competition with synced crests, but left UCL (which has them too — see
+            the fixtures sync) stuck on the flag-emoji-only row below. */}
+        {!isMMA ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 10px', borderBottom: perGameRules.length > 0 ? '1px solid #f5f5f5' : 'none', gap: 4 }}>
             {/* Home */}
             <div style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'center', flex: 1, gap: 4 }}>
