@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { reportSyncIssue, clearSyncIssue } from './syncHealth'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -46,8 +47,18 @@ export async function syncOddsApiFootball(
   const res = await fetch(
     `https://api.the-odds-api.com/v4/sports/${sportKey}/odds?apiKey=${ODDS_API_KEY}&regions=us&markets=spreads,totals,h2h&oddsFormat=american`
   )
-  if (!res.ok) throw new Error(`Odds API error: ${res.status} ${await res.text()}`)
+  if (!res.ok) {
+    // A bad/rotated ODDS_API_KEY throws here on every single cron tick with nothing
+    // visible anywhere but a Vercel function log — this is exactly how a production-only
+    // key mismatch (the local key worked; the deployed one had gone stale) went unnoticed
+    // long enough to leave real FBS-vs-FBS spreads missing (api-sports.io's own odds
+    // product doesn't carry them, so this sync is the only source for those games).
+    const body = await res.text()
+    await reportSyncIssue(`oddsapi_${sportKey}`, `Odds API error ${res.status}: ${body.slice(0, 300)}`)
+    throw new Error(`Odds API error: ${res.status} ${body}`)
+  }
   const events: any[] = await res.json()
+  await clearSyncIssue(`oddsapi_${sportKey}`)
 
   let updated = 0
   let matched = 0

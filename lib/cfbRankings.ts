@@ -4,6 +4,8 @@
 // (coverage.standings === false), so this is a second, independent data source.
 const CFBD_API_KEY = process.env.CFBD_API_KEY
 
+import { reportSyncIssue, clearSyncIssue } from './syncHealth'
+
 // team name -> AP rank (1-25)
 export type RankedTeams = Map<string, number>
 
@@ -23,22 +25,34 @@ function normalizeTeamName(name: string): string {
 // week) — callers must treat that as "no ranking signal available" and fall back gracefully,
 // never throw.
 export async function fetchApRankings(season: number, week: number): Promise<RankedTeams> {
-  if (!CFBD_API_KEY) return new Map()
+  // Unlike a merely-not-released-yet poll (an expected, transient empty result — see
+  // best10-select's 'auto_fallback' handling), a missing key is a standing config gap
+  // that's otherwise invisible: this function is designed to never throw, so nothing
+  // upstream would ever surface it on its own.
+  if (!CFBD_API_KEY) {
+    await reportSyncIssue('cfbd_rankings', 'CFBD_API_KEY is not set')
+    return new Map()
+  }
   try {
     const res = await fetch(
       `https://api.collegefootballdata.com/rankings?year=${season}&week=${week}&seasonType=regular`,
       { headers: { Authorization: `Bearer ${CFBD_API_KEY}` } }
     )
-    if (!res.ok) return new Map()
+    if (!res.ok) {
+      await reportSyncIssue('cfbd_rankings', `CFBD /rankings HTTP ${res.status}`)
+      return new Map()
+    }
     const data = await res.json()
     const apPoll = data?.[0]?.polls?.find((p: any) => p.poll === 'AP Top 25')
     const map: RankedTeams = new Map()
     for (const r of apPoll?.ranks || []) {
       if (r.school && r.rank) map.set(normalizeTeamName(r.school), r.rank)
     }
+    await clearSyncIssue('cfbd_rankings')
     return map
   } catch (err) {
     console.error('fetchApRankings error:', err)
+    await reportSyncIssue('cfbd_rankings', `fetchApRankings threw: ${String(err)}`)
     return new Map()
   }
 }

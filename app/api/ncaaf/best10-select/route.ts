@@ -22,18 +22,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Pool is not in best10 or vote mode' }, { status: 400 })
   }
 
-  // Stable once computed — never re-picked out from under members who've already
-  // predicted on it. Only an explicit admin override (a separate write, source: 'admin')
-  // changes a selection after this point.
-  const { data: existing } = await supabase
-    .from('pool_matchweek_selections')
-    .select('fixture_id')
-    .eq('pool_id', poolId)
-    .eq('round', round)
-  if (existing && existing.length > 0) {
-    return NextResponse.json({ ok: true, fixtureIds: existing.map(r => r.fixture_id), votingOpen: false })
-  }
-
   const { data: fixtures } = await supabase
     .from('fixtures')
     .select('id, home_team, away_team, date')
@@ -49,6 +37,35 @@ export async function POST(request: NextRequest) {
   // fails/is unconfigured — never blocks selection on the rankings source being available.
   const weekMatch = round.match(/Week (\d+)/)
   const rankedTeams = weekMatch ? await fetchApRankings(SEASON, parseInt(weekMatch[1], 10)) : new Map()
+
+  // Stable once computed — never re-picked out from under members who've already
+  // predicted on it. Only an explicit admin override (a separate write, source: 'admin')
+  // changes a selection after this point. The one exception: a prior selection made
+  // with source='auto_fallback' (the AP poll — or CFBD_API_KEY — wasn't available yet at
+  // the time, so it fell back to the pure-spread algorithm with zero ranking signal) is
+  // allowed exactly one do-over, and only while it's still safe: rankings have to have
+  // actually become available since, and nobody can have predicted on it yet. Otherwise
+  // this is indistinguishable from any other "auto" selection and is just as stable.
+  const { data: existing } = await supabase
+    .from('pool_matchweek_selections')
+    .select('fixture_id, source')
+    .eq('pool_id', poolId)
+    .eq('round', round)
+  if (existing && existing.length > 0) {
+    const isStaleFallback = existing.every(r => r.source === 'auto_fallback')
+    if (!isStaleFallback || rankedTeams.size === 0) {
+      return NextResponse.json({ ok: true, fixtureIds: existing.map(r => r.fixture_id), votingOpen: false })
+    }
+    const { count } = await supabase
+      .from('predictions_v2')
+      .select('id', { count: 'exact', head: true })
+      .eq('pool_id', poolId)
+      .in('fixture_id', existing.map(r => r.fixture_id))
+    if (count && count > 0) {
+      return NextResponse.json({ ok: true, fixtureIds: existing.map(r => r.fixture_id), votingOpen: false })
+    }
+    await supabase.from('pool_matchweek_selections').delete().eq('pool_id', poolId).eq('round', round)
+  }
 
   if (pool.cfb_game_mode === 'vote') {
     const earliestKickoff = Math.min(...fixtures.map(f => new Date(f.date).getTime()))
@@ -80,9 +97,10 @@ export async function POST(request: NextRequest) {
   }
 
   const fixtureIds = selectBest10(fixtures, rankedTeams)
+  const source = rankedTeams.size > 0 ? 'auto' : 'auto_fallback'
 
   const { error } = await supabase.from('pool_matchweek_selections').upsert(
-    fixtureIds.map(fixture_id => ({ pool_id: poolId, round, fixture_id, source: 'auto' })),
+    fixtureIds.map(fixture_id => ({ pool_id: poolId, round, fixture_id, source })),
     { onConflict: 'pool_id,round,fixture_id' }
   )
   if (error) {
