@@ -81,11 +81,22 @@ export async function POST(request: NextRequest) {
 
       const { data: ourFixture } = await supabase
         .from('fixtures')
-        .select('id, scored, status, odds_home, odds_draw, odds_away, closing_odds_home, line_asian_handicap_home, line_total_goals, line_ht_asian_handicap_home, line_ht_total_points')
+        .select('id, scored, status, home_score, away_score, odds_home, odds_draw, odds_away, closing_odds_home, line_asian_handicap_home, line_total_goals, line_ht_asian_handicap_home, line_ht_total_points')
         .eq('id', g.game.id)
         .maybeSingle()
 
       if (!ourFixture) continue
+
+      // See app/api/ncaaf/score/route.ts's identical guard — same vendor, same bulk
+      // /games endpoint, same observed glitch (a live game's score briefly resets near
+      // zero with a false FT status before self-correcting a minute later). A real score
+      // can never decrease once a fixture has gone live, so skip this tick rather than
+      // trust a drop.
+      if ((ourFixture.status === 'live' || ourFixture.status === 'FT') && ourFixture.home_score != null && ourFixture.away_score != null
+        && (homeTotal < ourFixture.home_score || awayTotal < ourFixture.away_score)) {
+        console.error(`NFL score regression guard: fixture ${ourFixture.id} had ${ourFixture.home_score}-${ourFixture.away_score}, vendor now says ${homeTotal}-${awayTotal} — skipping as a likely vendor glitch`)
+        continue
+      }
 
       const finished = isFinished(g.game.status.short)
       if (ourFixture.scored && finished && !staleFixtureIds.has(ourFixture.id)) continue // already scored, not live — skip (unless a ghost edit left an ungraded pick)

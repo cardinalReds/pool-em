@@ -77,11 +77,25 @@ export async function POST(request: NextRequest) {
 
       const { data: ourFixture } = await supabase
         .from('fixtures')
-        .select('id, scored, status, odds_home, odds_draw, odds_away, closing_odds_home, closing_odds_draw, closing_odds_away, line_asian_handicap_home, line_total_goals, line_ht_asian_handicap_home, line_ht_total_points')
+        .select('id, scored, status, home_score, away_score, odds_home, odds_draw, odds_away, closing_odds_home, closing_odds_draw, closing_odds_away, line_asian_handicap_home, line_total_goals, line_ht_asian_handicap_home, line_ht_total_points')
         .eq('id', g.game.id)
         .maybeSingle()
 
       if (!ourFixture) continue
+
+      // api-sports.io's bulk /games list occasionally returns a glitched snapshot for a
+      // live game — score reset near zero, status falsely reporting FT — that self-corrects
+      // on the very next minute's poll with no other signal it happened. A real score can
+      // never decrease once a fixture has gone live, so treat a drop as a bad read and skip
+      // this tick entirely rather than overwriting good data (or worse, grading everyone's
+      // predictions off a garbage final score). Confirmed live: NC State/Richmond,
+      // Boston College/Rutgers and Kansas/Missouri all briefly dropped to single digits
+      // mid-Q3/Q4 before self-healing a minute later.
+      if ((ourFixture.status === 'live' || ourFixture.status === 'FT') && ourFixture.home_score != null && ourFixture.away_score != null
+        && (homeTotal < ourFixture.home_score || awayTotal < ourFixture.away_score)) {
+        console.error(`NCAAF score regression guard: fixture ${ourFixture.id} had ${ourFixture.home_score}-${ourFixture.away_score}, vendor now says ${homeTotal}-${awayTotal} — skipping as a likely vendor glitch`)
+        continue
+      }
 
       const finished = isFinished(g.game.status.short)
       if (ourFixture.scored && finished && !staleFixtureIds.has(ourFixture.id)) continue // already scored, not live — skip (unless a ghost edit left an ungraded pick)
